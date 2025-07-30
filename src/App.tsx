@@ -1,5 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage } from 'react-icons/fa';
+import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint } from 'react-icons/fa';
+import { Recipe, UsedRecipe } from './types';
+
+// Interface für das Rezeptformular
+interface RecipeForm {
+  name: string;
+  description: string;
+  image: File | null;
+  portions: number;
+  preparationTime: number;
+  difficulty: number;
+  energy: number;
+  materialCosts: number;
+  markupPercentage: number;
+  vatRate: number;
+  sellingPrice: number;
+  ingredients: Array<{
+    id: string;
+    name: string;
+    amount: number;
+    unit: string;
+    price: number;
+  }>;
+  usedRecipes: UsedRecipe[];
+  preparationSteps: Array<{
+    id: string;
+    order: number;
+    description: string;
+  }>;
+}
 
 // Design Templates
 const designTemplates = {
@@ -172,6 +201,9 @@ function App() {
   const [supplierSortField, setSupplierSortField] = useState('name');
   const [supplierSortDirection, setSupplierSortDirection] = useState('asc');
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+
+  // Rezepte State
+  const [recipes, setRecipes] = useState<any[]>([]);
 
   // Lieferanten State
   const [suppliers, setSuppliers] = useState([
@@ -379,6 +411,66 @@ function App() {
     });
   };
 
+  const filteredAndSortedRecipes = () => {
+    // Migriere bestehende Rezepte ohne createdAt
+    const migratedRecipes = recipes.map(recipe => {
+      if (!recipe.createdAt) {
+        return {
+          ...recipe,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastModifiedBy: 'Benutzer'
+        };
+      }
+      return recipe;
+    });
+
+    let filtered = migratedRecipes.filter(recipe => {
+      const matchesSearch = recipe.name.toLowerCase().includes(recipeSearchTerm.toLowerCase()) ||
+                           recipe.description.toLowerCase().includes(recipeSearchTerm.toLowerCase());
+      return matchesSearch;
+    });
+
+    return filtered.sort((a, b) => {
+      let aValue, bValue;
+      switch (recipeSortBy) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'portions':
+          aValue = a.portions;
+          bValue = b.portions;
+          break;
+        case 'costPerPortion':
+          aValue = a.materialCosts / a.portions;
+          bValue = b.materialCosts / b.portions;
+          break;
+        case 'sellingPrice':
+          aValue = a.sellingPrice;
+          bValue = b.sellingPrice;
+          break;
+        case 'energy':
+          aValue = a.energy;
+          bValue = b.energy;
+          break;
+        case 'timestamp':
+          aValue = a.updatedAt;
+          bValue = b.updatedAt;
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+      
+      if (recipeSortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  };
+
   const handleSelectArticle = (articleId: string) => {
     setSelectedArticles(prev => 
       prev.includes(articleId) 
@@ -422,13 +514,16 @@ function App() {
   const handleConfirmDelete = () => {
     if (deleteDialogData) {
       if (deleteDialogData.type === 'bulk' && deleteDialogData.count) {
-        // Prüfe, ob Artikel oder Lieferanten gelöscht werden sollen
+        // Prüfe, ob Artikel, Lieferanten oder Rezepte gelöscht werden sollen
         if (selectedArticles.length > 0) {
           setArticles(prev => prev.filter(article => !selectedArticles.includes(article.id)));
           setSelectedArticles([]);
         } else if (selectedSuppliers.length > 0) {
           setSuppliers(prev => prev.filter(supplier => !selectedSuppliers.includes(supplier.id)));
           setSelectedSuppliers([]);
+        } else if (selectedRecipes.length > 0) {
+          setRecipes(prev => prev.filter(recipe => !selectedRecipes.includes(recipe.id)));
+          setSelectedRecipes([]);
         }
       }
     }
@@ -480,6 +575,68 @@ function App() {
     // Direkte Löschung ohne Sicherheitsabfrage
     setSuppliers(prev => prev.filter(supplier => supplier.id !== supplierId));
     setSelectedSuppliers(prev => prev.filter(id => id !== supplierId));
+  };
+
+  // Rezept-Auswahlfunktionen
+  const handleSelectRecipe = (recipeId: string) => {
+    setSelectedRecipes(prev => 
+      prev.includes(recipeId) 
+        ? prev.filter(id => id !== recipeId)
+        : [...prev, recipeId]
+    );
+  };
+
+  const handleSelectAllRecipes = () => {
+    const filteredRecipes = filteredAndSortedRecipes();
+    if (selectedRecipes.length === filteredRecipes.length) {
+      setSelectedRecipes([]);
+    } else {
+      setSelectedRecipes(filteredRecipes.map(recipe => recipe.id));
+    }
+  };
+
+  const handleDeleteRecipes = () => {
+    if (selectedRecipes.length > 0) {
+      // Sicherheitsabfrage bei mehr als 2 Rezepten
+      if (selectedRecipes.length > 2) {
+        setDeleteDialogData({
+          type: 'bulk',
+          count: selectedRecipes.length
+        });
+        setShowDeleteDialog(true);
+      } else {
+        // Direkte Löschung bei 1-2 Rezepten
+        setRecipes(prev => prev.filter(recipe => !selectedRecipes.includes(recipe.id)));
+        setSelectedRecipes([]);
+      }
+    }
+  };
+
+  const handleDeleteSingleRecipe = (recipeId: string, recipeName: string) => {
+    // Direkte Löschung ohne Sicherheitsabfrage
+    setRecipes(prev => prev.filter(recipe => recipe.id !== recipeId));
+    setSelectedRecipes(prev => prev.filter(id => id !== recipeId));
+  };
+
+  const handleEditRecipe = (recipe: any) => {
+    setEditingRecipe(recipe);
+    setRecipeForm({
+      name: recipe.name,
+      description: recipe.description,
+      image: null,
+      portions: recipe.portions,
+      preparationTime: recipe.preparationTime,
+      difficulty: recipe.difficulty,
+      energy: recipe.energy,
+      materialCosts: recipe.materialCosts,
+      markupPercentage: recipe.markupPercentage,
+      vatRate: recipe.vatRate,
+      sellingPrice: recipe.sellingPrice,
+      ingredients: recipe.ingredients && recipe.ingredients.length > 0 ? [...recipe.ingredients, { id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }] : [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+      usedRecipes: recipe.usedRecipes || [],
+      preparationSteps: recipe.preparationSteps && recipe.preparationSteps.length > 0 ? recipe.preparationSteps : [{ id: Date.now().toString(), order: 1, description: '' }]
+    });
+    setShowRecipeForm(true);
   };
 
   // Import/Export-System Hilfsfunktionen
@@ -1719,12 +1876,15 @@ function App() {
       vatRate: 19,
       sellingPrice: 0,
       ingredients: [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+      usedRecipes: [],
       preparationSteps: [{ id: Date.now().toString(), order: 1, description: '' }]
-    });
+    } as RecipeForm);
   };
 
   const calculateMaterialCosts = () => {
-    return recipeForm.ingredients.reduce((sum, ingredient) => sum + ingredient.price, 0);
+    const ingredientCosts = recipeForm.ingredients.reduce((sum, ingredient) => sum + ingredient.price, 0);
+    const usedRecipeCosts = recipeForm.usedRecipes.reduce((sum, usedRecipe) => sum + usedRecipe.totalCost, 0);
+    return ingredientCosts + usedRecipeCosts;
   };
 
 
@@ -1797,12 +1957,28 @@ function App() {
   const getRecipeIngredients = () => {
     const ingredients = new Set<string>();
     
+    // Inhaltsstoffe von Zutaten
     recipeForm.ingredients.forEach(ingredient => {
       if (ingredient.name && ingredient.name.trim() !== '') {
         const article = articles.find(a => a.name === ingredient.name);
         if (article && article.ingredients) {
           article.ingredients.forEach(ing => ingredients.add(ing));
         }
+      }
+    });
+
+    // Inhaltsstoffe von verwendeten Rezepten
+    recipeForm.usedRecipes.forEach(usedRecipe => {
+      const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
+      if (recipe && recipe.ingredients) {
+        recipe.ingredients.forEach((ingredient: any) => {
+          if (ingredient.name && ingredient.name.trim() !== '') {
+            const article = articles.find(a => a.name === ingredient.name);
+            if (article && article.ingredients) {
+              article.ingredients.forEach(ing => ingredients.add(ing));
+            }
+          }
+        });
       }
     });
     
@@ -1812,12 +1988,21 @@ function App() {
   const getRecipeAllergens = () => {
     const allergens = new Set<string>();
     
+    // Allergene von Zutaten
     recipeForm.ingredients.forEach(ingredient => {
       if (ingredient.name && ingredient.name.trim() !== '') {
         const article = articles.find(a => a.name === ingredient.name);
         if (article && article.allergens) {
           article.allergens.forEach(allergen => allergens.add(allergen));
         }
+      }
+    });
+
+    // Allergene von verwendeten Rezepten
+    recipeForm.usedRecipes.forEach(usedRecipe => {
+      const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
+      if (recipe && recipe.allergens) {
+        recipe.allergens.forEach((allergen: any) => allergens.add(allergen));
       }
     });
     
@@ -1837,6 +2022,7 @@ function App() {
       salt: 0
     };
 
+    // Nährwerte von Zutaten
     recipeForm.ingredients.forEach(ingredient => {
       if (ingredient.name && ingredient.name.trim() !== '' && ingredient.amount > 0) {
         const article = articles.find(a => a.name === ingredient.name);
@@ -1852,6 +2038,23 @@ function App() {
           totalNutrition.sugar += (article.nutritionInfo.sugar || 0) * ratio;
           totalNutrition.salt += (article.nutritionInfo.salt || 0) * ratio;
         }
+      }
+    });
+
+    // Nährwerte von verwendeten Rezepten
+    recipeForm.usedRecipes.forEach(usedRecipe => {
+      const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
+      if (recipe && recipe.totalNutritionInfo) {
+        // Berechne Anteil basierend auf verwendeten Portionen
+        const ratio = usedRecipe.portions / recipe.portions;
+        totalNutrition.calories += (recipe.totalNutritionInfo.calories || 0) * ratio;
+        totalNutrition.kilojoules += (recipe.totalNutritionInfo.kilojoules || 0) * ratio;
+        totalNutrition.protein += (recipe.totalNutritionInfo.protein || 0) * ratio;
+        totalNutrition.fat += (recipe.totalNutritionInfo.fat || 0) * ratio;
+        totalNutrition.carbohydrates += (recipe.totalNutritionInfo.carbohydrates || 0) * ratio;
+        totalNutrition.fiber += (recipe.totalNutritionInfo.fiber || 0) * ratio;
+        totalNutrition.sugar += (recipe.totalNutritionInfo.sugar || 0) * ratio;
+        totalNutrition.salt += (recipe.totalNutritionInfo.salt || 0) * ratio;
       }
     });
 
@@ -1881,43 +2084,78 @@ function App() {
   };
 
   const getFilteredIngredients = () => {
-    if (!ingredientSearchTerm) return articles.slice(0, 10);
+    const results: any[] = [];
     
-    return articles.filter(article =>
-      article.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase())
-    ).slice(0, 10);
+    // Artikel hinzufügen
+    const filteredArticles = ingredientSearchTerm 
+      ? articles.filter(article => article.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase()))
+      : articles.slice(0, 5);
+    
+    results.push(...filteredArticles.map(article => ({ ...article, type: 'article' })));
+    
+    // Rezepte hinzufügen (außer dem aktuell bearbeiteten)
+    const currentRecipeId = editingRecipe?.id;
+    const filteredRecipes = ingredientSearchTerm 
+      ? recipes.filter((recipe: any) => 
+          recipe.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase()) && 
+          recipe.id !== currentRecipeId
+        )
+      : recipes.filter((recipe: any) => recipe.id !== currentRecipeId).slice(0, 5);
+    
+    results.push(...filteredRecipes.map((recipe: any) => ({ ...recipe, type: 'recipe' })));
+    
+    return results.slice(0, 10);
   };
 
-  const handleIngredientSelect = (article: any, ingredientIndex: number) => {
-    setRecipeForm(prev => {
-      const updatedIngredients = prev.ingredients.map((ing, i) => 
-        i === ingredientIndex ? { 
-          ...ing, 
-          name: article.name,
-          unit: article.contentUnit,
-          price: 0
-        } : ing
-      );
-      
-      // Prüfen, ob eine neue leere Zeile hinzugefügt werden soll
-      const shouldAddNewLine = ingredientIndex === prev.ingredients.length - 1 && 
-                              prev.ingredients[prev.ingredients.length - 1].name === '';
-      
-      if (shouldAddNewLine) {
-        updatedIngredients.push({ 
-          id: Date.now().toString(), 
-          name: '', 
-          amount: 0, 
-          unit: 'g', 
-          price: 0 
-        });
-      }
-      
-      return {
-        ...prev,
-        ingredients: updatedIngredients
+  const handleIngredientSelect = (item: any, ingredientIndex: number) => {
+    if (item.type === 'recipe') {
+      // Wenn ein Rezept ausgewählt wurde, füge es zu usedRecipes hinzu
+      const costPerPortion = item.materialCosts / item.portions;
+      const newUsedRecipe = {
+        id: Date.now().toString(),
+        recipeId: item.id,
+        name: item.name,
+        portions: 1, // Standard: 1 Portion
+        costPerPortion: costPerPortion,
+        totalCost: costPerPortion
       };
-    });
+      
+      setRecipeForm(prev => ({
+        ...prev,
+        usedRecipes: [...prev.usedRecipes, newUsedRecipe]
+      }));
+    } else {
+      // Wenn ein Artikel ausgewählt wurde, behalte das alte Verhalten bei
+      setRecipeForm(prev => {
+        const updatedIngredients = prev.ingredients.map((ing, i) => 
+          i === ingredientIndex ? { 
+            ...ing, 
+            name: item.name,
+            unit: item.contentUnit,
+            price: 0
+          } : ing
+        );
+        
+        // Prüfen, ob eine neue leere Zeile hinzugefügt werden soll
+        const shouldAddNewLine = ingredientIndex === prev.ingredients.length - 1 && 
+                                prev.ingredients[prev.ingredients.length - 1].name === '';
+        
+        if (shouldAddNewLine) {
+          updatedIngredients.push({ 
+            id: Date.now().toString(), 
+            name: '', 
+            amount: 0, 
+            unit: 'g', 
+            price: 0 
+          });
+        }
+        
+        return {
+          ...prev,
+          ingredients: updatedIngredients
+        };
+      });
+    }
     
     setIngredientSearchTerm('');
     setShowIngredientDropdown(false);
@@ -2208,27 +2446,54 @@ function App() {
   };
 
   const handleSaveRecipe = () => {
+    if (!recipeForm.name.trim()) {
+      alert('Bitte geben Sie einen Namen für das Rezept ein.');
+      return;
+    }
+
     // Entferne leere Zubereitungsschritte vor dem Speichern
     const cleanedPreparationSteps = recipeForm.preparationSteps
       .filter(step => step.description.trim() !== '')
       .map((step, index) => ({ ...step, order: index + 1 }));
 
+    // Entferne nur Zutaten ohne Namen vor dem Speichern (Menge kann 0 sein)
+    const cleanedIngredients = recipeForm.ingredients
+      .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
+
     if (editingRecipe) {
       // Rezept bearbeiten
-      // Hier würde die Logik für das Bearbeiten implementiert
+      const updatedRecipe = {
+        ...recipeForm,
+        preparationSteps: cleanedPreparationSteps,
+        ingredients: cleanedIngredients,
+        id: editingRecipe.id,
+        materialCosts: calculateMaterialCosts(),
+        totalNutritionInfo: calculateRecipeNutrition(),
+        allergens: getRecipeAllergens(),
+        createdAt: editingRecipe.createdAt,
+        updatedAt: new Date(),
+        lastModifiedBy: 'Benutzer' // Platzhalter für später
+      };
+      setRecipes(prev => prev.map(recipe => 
+        recipe.id === editingRecipe.id ? updatedRecipe : recipe
+      ));
       setEditingRecipe(null);
     } else {
       // Neues Rezept erstellen
       const newRecipe = {
         ...recipeForm,
         preparationSteps: cleanedPreparationSteps,
+        ingredients: cleanedIngredients,
         id: Date.now().toString(),
         materialCosts: calculateMaterialCosts(),
+        totalNutritionInfo: calculateRecipeNutrition(),
+        allergens: getRecipeAllergens(),
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        lastModifiedBy: 'Benutzer' // Platzhalter für später
       };
-      // Hier würde das Rezept gespeichert werden
       console.log('Neues Rezept:', newRecipe);
+      setRecipes(prev => [...prev, newRecipe]);
     }
     setShowRecipeForm(false);
     resetRecipeForm();
@@ -2325,10 +2590,17 @@ function App() {
   // State für Rezept-Formular
   const [showRecipeForm, setShowRecipeForm] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<any>(null);
-  const [recipeForm, setRecipeForm] = useState({
+  
+  // State für Rezeptverwaltung
+  const [recipeSearchTerm, setRecipeSearchTerm] = useState('');
+  const [recipeViewMode, setRecipeViewMode] = useState<'list' | 'grid'>('list');
+  const [selectedRecipes, setSelectedRecipes] = useState<string[]>([]);
+  const [recipeSortBy, setRecipeSortBy] = useState<'name' | 'portions' | 'costPerPortion' | 'sellingPrice' | 'energy' | 'timestamp'>('name');
+  const [recipeSortOrder, setRecipeSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [recipeForm, setRecipeForm] = useState<RecipeForm>({
     name: '',
     description: '',
-    image: null as File | null,
+    image: null,
     portions: 4,
     preparationTime: 30,
     difficulty: 3,
@@ -2338,6 +2610,7 @@ function App() {
     vatRate: 19,
     sellingPrice: 0,
     ingredients: [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+    usedRecipes: [], // Verwendete Rezepte
     preparationSteps: [{ id: Date.now().toString(), order: 1, description: '' }]
   });
 
@@ -3644,6 +3917,8 @@ function App() {
           </div>
         );
       case 'rezepte':
+        const filteredRecipes = filteredAndSortedRecipes();
+        
         return (
           <div className="container-fluid p-4">
             <div style={{
@@ -3654,8 +3929,386 @@ function App() {
               minHeight: 'calc(100vh - 120px)',
               border: `1px solid ${colors.cardBorder}`
             }}>
-              <h1 style={{ color: colors.text }}>Rezeptverwaltung</h1>
-              <p style={{ color: colors.text }}>Hier können später Rezepte verwaltet werden.</p>
+              {/* Header */}
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h1 style={{ color: colors.text, margin: 0 }}>Rezeptverwaltung</h1>
+              </div>
+
+              {/* Suchleiste und Ansichtswechsel */}
+              <div className="row mb-3">
+                <div className="col-md-7">
+                  <div className="input-group">
+                    <span className="input-group-text" style={{
+                      backgroundColor: colors.secondary,
+                      borderColor: colors.cardBorder,
+                      color: colors.text
+                    }}>
+                      <FaSearch />
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Rezepte suchen..."
+                      value={recipeSearchTerm}
+                      onChange={(e) => setRecipeSearchTerm(e.target.value)}
+                      style={{
+                        borderColor: colors.cardBorder,
+                        color: colors.text
+                      }}
+                    />
+                    <button
+                      className="btn btn-primary"
+                      style={{
+                        backgroundColor: colors.accent,
+                        borderColor: colors.accent,
+                        color: 'white'
+                      }}
+                      title="Neues Rezept"
+                      onClick={() => {
+                        resetRecipeForm();
+                        setShowRecipeForm(true);
+                      }}
+                    >
+                      <FaPlus />
+                    </button>
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <div className="btn-group w-100" role="group">
+                    <button
+                      type="button"
+                      className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                      onClick={() => setRecipeViewMode('list')}
+                      style={{
+                        backgroundColor: recipeViewMode === 'list' ? colors.accent : 'transparent',
+                        borderColor: colors.cardBorder,
+                        color: recipeViewMode === 'list' ? 'white' : colors.text
+                      }}
+                    >
+                      <FaList className="me-1" />
+                      Liste
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                      onClick={() => setRecipeViewMode('grid')}
+                      style={{
+                        backgroundColor: recipeViewMode === 'grid' ? colors.accent : 'transparent',
+                        borderColor: colors.cardBorder,
+                        color: recipeViewMode === 'grid' ? 'white' : colors.text
+                      }}
+                    >
+                      <FaTh className="me-1" />
+                      Kacheln
+                    </button>
+                  </div>
+                </div>
+                <div className="col-md-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary w-100"
+                    onClick={() => setShowImportExportModal(true)}
+                    style={{
+                      borderColor: colors.accent,
+                      color: colors.accent
+                    }}
+                  >
+                    <FaSave className="me-1" />
+                    Import/Export
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter und Sortierung */}
+              <div className="row mb-3">
+                <div className="col-md-3">
+                  <select
+                    className="form-select"
+                    value={recipeSortBy}
+                    onChange={(e) => setRecipeSortBy(e.target.value as any)}
+                    style={{
+                      borderColor: colors.cardBorder,
+                      color: colors.text
+                    }}
+                  >
+                    <option value="name">Name</option>
+                    <option value="portions">Portionen</option>
+                    <option value="costPerPortion">Kosten/Portion</option>
+                    <option value="sellingPrice">Verkaufspreis</option>
+                    <option value="energy">Kalorien</option>
+                    <option value="timestamp">Zeitstempel</option>
+                  </select>
+                </div>
+                <div className="col-md-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary w-100"
+                    onClick={() => setRecipeSortOrder(recipeSortOrder === 'asc' ? 'desc' : 'asc')}
+                    style={{
+                      borderColor: colors.cardBorder,
+                      color: colors.text
+                    }}
+                  >
+                    <FaSort className="me-1" />
+                    {recipeSortOrder === 'asc' ? 'A-Z' : 'Z-A'}
+                  </button>
+                </div>
+                <div className="col-md-7">
+                  {selectedRecipes.length > 0 && (
+                    <div className="d-flex gap-2 justify-content-end">
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger"
+                        onClick={handleDeleteRecipes}
+                        style={{
+                          borderColor: '#dc3545',
+                          color: '#dc3545'
+                        }}
+                      >
+                        <FaTrash className="me-1" />
+                        {selectedRecipes.length} löschen
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rezept-Liste */}
+              {recipeViewMode === 'list' ? (
+                <div className="table-responsive">
+                  <table className="table table-hover" style={{
+                    backgroundColor: colors.card,
+                    borderColor: colors.cardBorder
+                  }}>
+                    <thead style={{ backgroundColor: colors.secondary }}>
+                      <tr>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '5%' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedRecipes.length === filteredRecipes.length && filteredRecipes.length > 0}
+                            onChange={handleSelectAllRecipes}
+                            style={{ accentColor: colors.accent }}
+                          />
+                        </th>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '35%' }}>Rezept</th>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '10%' }}>Portionen</th>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '15%' }}>Kosten/Portion</th>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '15%' }}>Verkaufspreis</th>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '10%' }}>Kalorien</th>
+                        <th style={{ borderColor: colors.cardBorder, color: colors.text, width: '10%' }}>Aktionen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecipes.map(recipe => (
+                        <tr 
+                          key={recipe.id} 
+                          style={{ 
+                            borderColor: colors.cardBorder,
+                            cursor: 'pointer'
+                          }}
+                          onDoubleClick={() => handleEditRecipe(recipe)}
+                          title="Doppelklick zum Bearbeiten"
+                        >
+                          <td style={{ borderColor: colors.cardBorder }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedRecipes.includes(recipe.id)}
+                              onChange={() => handleSelectRecipe(recipe.id)}
+                              style={{ accentColor: colors.accent }}
+                            />
+                          </td>
+                          <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                            <div>
+                              <strong>{recipe.name}</strong>
+                              <br />
+                              <small style={{ color: colors.accent }}>{recipe.description}</small>
+                              {(recipe.updatedAt || recipe.createdAt) && (
+                                <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
+                                  {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
+                                </small>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                            {recipe.portions}
+                          </td>
+                          <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                            <strong>{formatPrice(recipe.materialCosts / recipe.portions)}</strong>
+                          </td>
+                          <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                            <strong>{formatPrice(recipe.sellingPrice)}</strong>
+                          </td>
+                          <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                            <strong>{recipe.energy}</strong>
+                          </td>
+                          <td style={{ borderColor: colors.cardBorder }}>
+                            <div className="d-flex gap-2">
+                              <button
+                                className="btn btn-link p-0"
+                                title="Bearbeiten"
+                                style={{
+                                  color: colors.accent,
+                                  textDecoration: 'none',
+                                  fontSize: '14px'
+                                }}
+                                onClick={() => handleEditRecipe(recipe)}
+                              >
+                                <FaPencilAlt />
+                              </button>
+                              <button
+                                className="btn btn-link p-0"
+                                title="Drucken"
+                                style={{
+                                  color: colors.accent,
+                                  textDecoration: 'none',
+                                  fontSize: '14px'
+                                }}
+                                onClick={() => {/* TODO: Druckfunktion */}}
+                              >
+                                <FaPrint />
+                              </button>
+                              <button
+                                className="btn btn-link p-0"
+                                title="Löschen"
+                                style={{
+                                  color: colors.accent,
+                                  textDecoration: 'none',
+                                  fontSize: '14px'
+                                }}
+                                onClick={() => handleDeleteSingleRecipe(recipe.id, recipe.name)}
+                              >
+                                <FaTimes />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                // Grid-Ansicht
+                <div className="row">
+                  {filteredRecipes.map(recipe => (
+                    <div key={recipe.id} className="col-md-4 col-lg-3 mb-4">
+                      <div className="card h-100" style={{
+                        backgroundColor: colors.card,
+                        borderColor: colors.cardBorder,
+                        cursor: 'pointer'
+                      }}
+                      onDoubleClick={() => handleEditRecipe(recipe)}
+                      title="Doppelklick zum Bearbeiten"
+                      >
+                        <div className="card-body">
+                          <div className="d-flex justify-content-between align-items-start mb-2">
+                            <h6 className="card-title mb-0" style={{ color: colors.text }}>
+                              {recipe.name}
+                            </h6>
+                            <input
+                              type="checkbox"
+                              checked={selectedRecipes.includes(recipe.id)}
+                              onChange={() => handleSelectRecipe(recipe.id)}
+                              style={{ accentColor: colors.accent }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          <p className="card-text small" style={{ color: colors.accent }}>
+                            {recipe.description}
+                          </p>
+                          {(recipe.updatedAt || recipe.createdAt) && (
+                            <p className="card-text small" style={{ color: colors.accent, fontSize: '0.7rem' }}>
+                              {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
+                            </p>
+                          )}
+                          <div className="row text-center">
+                            <div className="col-6">
+                              <small style={{ color: colors.text }}>Portionen</small>
+                              <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.portions}</div>
+                            </div>
+                            <div className="col-6">
+                              <small style={{ color: colors.text }}>Kosten/Portion</small>
+                              <div style={{ color: colors.accent, fontWeight: 'bold' }}>{formatPrice(recipe.materialCosts / recipe.portions)}</div>
+                            </div>
+                          </div>
+                          <div className="row text-center mt-2">
+                            <div className="col-6">
+                              <small style={{ color: colors.text }}>Verkaufspreis</small>
+                              <div style={{ color: colors.accent, fontWeight: 'bold' }}>{formatPrice(recipe.sellingPrice)}</div>
+                            </div>
+                            <div className="col-6">
+                              <small style={{ color: colors.text }}>Kalorien</small>
+                              <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.energy} kcal</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="card-footer" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
+                          <div className="d-flex justify-content-between">
+                            <button
+                              className="btn btn-link p-0"
+                              title="Bearbeiten"
+                              style={{
+                                color: colors.accent,
+                                textDecoration: 'none',
+                                fontSize: '12px'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditRecipe(recipe);
+                              }}
+                            >
+                              <FaPencilAlt />
+                            </button>
+                            <button
+                              className="btn btn-link p-0"
+                              title="Drucken"
+                              style={{
+                                color: colors.accent,
+                                textDecoration: 'none',
+                                fontSize: '12px'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                /* TODO: Druckfunktion */
+                              }}
+                            >
+                              <FaPrint />
+                            </button>
+                            <button
+                              className="btn btn-link p-0"
+                              title="Löschen"
+                              style={{
+                                color: colors.accent,
+                                textDecoration: 'none',
+                                fontSize: '12px'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSingleRecipe(recipe.id, recipe.name);
+                              }}
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Leere Liste */}
+              {filteredRecipes.length === 0 && (
+                <div className="text-center py-5">
+                  <FaUtensils style={{ fontSize: '3rem', color: colors.accent, marginBottom: '1rem' }} />
+                  <h5 style={{ color: colors.text }}>Keine Rezepte gefunden</h5>
+                  <p style={{ color: colors.text }}>
+                    {recipeSearchTerm 
+                      ? 'Versuchen Sie andere Suchkriterien.'
+                      : 'Erstellen Sie Ihr erstes Rezept mit dem "Neues Rezept" Button.'
+                    }
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -5758,6 +6411,122 @@ function App() {
                                 )}
                               </div>
 
+                              {/* Verwendete Rezepte */}
+                              {recipeForm.usedRecipes.length > 0 && (
+                                <div className="row mb-4">
+                                  <div className="col-12">
+                                    <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                                      Verwendete Rezepte
+                                    </h6>
+                                  </div>
+                                  <div className="col-12">
+                                    <div className="table-responsive">
+                                      <table className="table table-hover" style={{ 
+                                        backgroundColor: colors.background, 
+                                        borderColor: colors.cardBorder, 
+                                        tableLayout: 'fixed',
+                                        '--bs-table-hover-bg': colors.background,
+                                        '--bs-table-hover-color': colors.text
+                                      } as React.CSSProperties}>
+
+                                        <tbody>
+                                          {recipeForm.usedRecipes.map((usedRecipe, index) => (
+                                            <tr key={usedRecipe.id} style={{ 
+                                              borderColor: colors.cardBorder, 
+                                              backgroundColor: colors.background 
+                                            }}>
+                                              <td style={{ borderColor: colors.cardBorder, padding: '8px', width: '45%' }}>
+                                                <div className="position-relative">
+                                                  <input
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    value={usedRecipe.name}
+                                                    readOnly
+                                                    style={{ 
+                                                      borderColor: colors.cardBorder, 
+                                                      color: colors.text,
+                                                      backgroundColor: colors.background
+                                                    }}
+                                                  />
+                                                </div>
+                                              </td>
+                                              <td style={{ borderColor: colors.cardBorder, padding: '8px', verticalAlign: 'middle', width: '20%' }}>
+                                                <div className="d-flex align-items-center gap-2">
+                                                  <input
+                                                    type="number"
+                                                    className="form-control form-control-sm"
+                                                    value={usedRecipe.portions}
+                                                    onChange={(e) => {
+                                                      const newPortions = parseFloat(e.target.value) || 1;
+                                                      // Verhindere 0 oder negative Werte
+                                                      const validPortions = Math.max(1, newPortions);
+                                                      setRecipeForm(prev => ({
+                                                        ...prev,
+                                                        usedRecipes: prev.usedRecipes.map((ur, i) => 
+                                                          i === index ? { ...ur, portions: validPortions, totalCost: ur.costPerPortion * validPortions } : ur
+                                                        )
+                                                      }));
+                                                      // Neuberechnung basierend auf aktuellem Verkaufspreis
+                                                      setTimeout(() => {
+                                                        const values = calculateAllValues();
+                                                        setRecipeForm(prev => ({ ...prev, markupPercentage: values.markup }));
+                                                      }, 0);
+                                                    }}
+                                                    min="1"
+                                                    step="1"
+                                                    style={{ 
+                                                      borderColor: colors.cardBorder, 
+                                                      color: colors.text, 
+                                                      width: '40%',
+                                                      minWidth: '60px'
+                                                    }}
+                                                  />
+                                                  <span style={{ color: colors.text, fontWeight: 'normal', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                                                    {usedRecipe.portions === 1 ? 'Portion' : 'Portionen'}
+                                                  </span>
+                                                </div>
+                                              </td>
+                                              <td style={{ borderColor: colors.cardBorder, padding: '8px', verticalAlign: 'middle', width: '20%', textAlign: 'right' }}>
+                                                <span style={{ color: colors.text, fontWeight: 'normal' }}>
+                                                  {formatPrice(usedRecipe.totalCost)}
+                                                </span>
+                                              </td>
+                                              <td style={{ borderColor: colors.cardBorder, padding: '8px', verticalAlign: 'middle', width: '15%', textAlign: 'right' }}>
+                                                <div className="d-flex gap-1 justify-content-end">
+                                                  <button
+                                                    type="button"
+                                                    className="btn btn-link p-0"
+                                                    title="Löschen"
+                                                    style={{
+                                                      color: colors.accent,
+                                                      textDecoration: 'none',
+                                                      fontSize: '12px'
+                                                    }}
+                                                    onClick={() => {
+                                                      setRecipeForm(prev => ({
+                                                        ...prev,
+                                                        usedRecipes: prev.usedRecipes.filter((_, i) => i !== index)
+                                                      }));
+                                                      // Neuberechnung basierend auf aktuellem Verkaufspreis
+                                                      setTimeout(() => {
+                                                        const values = calculateAllValues();
+                                                        setRecipeForm(prev => ({ ...prev, markupPercentage: values.markup }));
+                                                      }, 0);
+                                                    }}
+                                                  >
+                                                    <FaTimes />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Zutaten */}
                               <div className="row mb-4">
                                     <div className="col-12">
@@ -5833,9 +6602,14 @@ function App() {
                                                               }
                                                             }}
                                                           >
-                                                            <div className="fw-bold">{article.name}</div>
+                                                            <div className="fw-bold">
+                                                              {article.type === 'recipe' ? '🍽️ ' : '📦 '}{article.name}
+                                                            </div>
                                                             <small style={{ color: colors.accent }}>
-                                                              {formatPrice(article.pricePerUnit)} / {article.contentUnit}
+                                                              {article.type === 'recipe' 
+                                                                ? `${article.portions} Portionen • ${formatPrice(article.materialCosts / article.portions)}/Portion`
+                                                                : `${formatPrice(article.pricePerUnit)} / ${article.contentUnit}`
+                                                              }
                                                             </small>
                                                           </div>
                                                         ))}

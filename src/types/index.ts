@@ -88,6 +88,16 @@ export interface RecipeIngredient {
   price: number; // Preis für diese Menge
 }
 
+// Verwendetes Rezept (für Rezept-in-Rezept Funktionalität)
+export interface UsedRecipe {
+  id: string;
+  recipeId: string; // ID des verwendeten Rezepts
+  name: string; // Name des verwendeten Rezepts
+  portions: number; // Anzahl der verwendeten Portionen
+  costPerPortion: number; // Kosten pro Portion des verwendeten Rezepts
+  totalCost: number; // Gesamtkosten (portions * costPerPortion)
+}
+
 // Zubereitungsschritt
 export interface PreparationStep {
   id: string;
@@ -103,6 +113,7 @@ export interface Recipe extends BaseEntity {
   preparationTime: number; // in Minuten
   difficulty: Difficulty;
   ingredients: RecipeIngredient[];
+  usedRecipes: UsedRecipe[]; // Verwendete Rezepte
   preparationSteps: PreparationStep[];
   materialCosts: number;
   markupPercentage: number; // Standard: 300%
