@@ -1,0 +1,84 @@
+/* Custom styles to override Bootstrap table backgrounds */
+
+/* Override table background colors */
+.table {
+  background-color: transparent !important;
+}
+
+.table thead th {
+  background-color: transparent !important;
+}
+
+.table tbody tr {
+  background-color: transparent !important;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Override any Bootstrap default white backgrounds for tables only */
+.modal-content .table {
+  background-color: transparent !important;
+}
+
+/* Force override for table elements */
+table.table {
+  background-color: transparent !important;
+}
+
+table.table thead th {
+  background-color: transparent !important;
+}
+
+table.table tbody tr {
+  background-color: transparent !important;
+}
+
+/* More specific selectors to override Bootstrap */
+.table > tbody > tr {
+  background-color: transparent !important;
+}
+
+.table > tbody > tr > td {
+  background-color: transparent !important;
+}
+
+.table > thead > tr > th {
+  background-color: transparent !important;
+}
+
+/* Override Bootstrap's table-hover class */
+.table-hover > tbody > tr:hover {
+  background-color: rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Override any remaining white backgrounds */
+.table,
+.table * {
+  background-color: transparent !important;
+}
+
+/* Specific override for modal tables */
+.modal .table,
+.modal .table * {
+  background-color: transparent !important;
+}
+
+/* Exception: Form controls inside tables should NOT be transparent */
+/* This should fix the issue with form controls inheriting transparent backgrounds */
+.table .form-control,
+.table .form-select {
+  background-color: #ffffff !important;
+}
+
+/* Ensure dropdown containers in tables have proper backgrounds */
+.table div[style*="position: absolute"] {
+  background-color: #ffffff !important;
+}
+
+/* Override any transparent backgrounds for dropdown elements */
+.table .form-control + div,
+.table input + div {
+  background-color: #ffffff !important;
+} 

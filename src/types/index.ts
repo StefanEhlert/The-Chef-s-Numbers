@@ -60,7 +60,8 @@ export interface Article extends BaseEntity {
   contentUnit: Unit;
   pricePerUnit: number;
   allergens: string[];
-  ingredients: string[];
+  additives: string[];
+  ingredients?: string;
   nutritionInfo: {
     calories: number; // kcal pro 100g
     kilojoules: number; // kJ pro 100g
@@ -153,8 +154,8 @@ export const ALLERGENS = [
 
 export type Allergen = typeof ALLERGENS[number];
 
-// Inhaltsstoffe (häufige)
-export const COMMON_INGREDIENTS = [
+// Zusatzstoffe (häufige)
+export const COMMON_ADDITIVES = [
   'Zucker',
   'Salz',
   'Pfeffer',
@@ -185,7 +186,7 @@ export const COMMON_INGREDIENTS = [
   'Muscheln'
 ] as const;
 
-export type CommonIngredient = typeof COMMON_INGREDIENTS[number];
+export type CommonAdditive = typeof COMMON_ADDITIVES[number];
 
 // App-Einstellungen
 export interface AppSettings {
