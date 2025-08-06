@@ -1,17 +1,60 @@
-import React, { useEffect, useState } from 'react';
-import { FaBars, FaTimes, FaDownload, FaUpload, FaTrash, FaEdit, FaPlus, FaSearch, FaCog, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint } from 'react-icons/fa';
-import { designTemplates } from '../constants/designTemplates';
-import { categoryManager } from '../utils/categoryManager';
-import { formatPrice } from '../utils/formatters';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint } from 'react-icons/fa';
+import { Recipe, UsedRecipe } from '../types';
+import Dashboard from './Dashboard';
+import Kalkulation from './Kalkulation';
+import Einkauf from './Einkauf';
+import Inventur from './Inventur';
+import { ColorProvider } from '../contexts/ColorContext';
+import ErrorBoundary from './ui/ErrorBoundary';
 import { useStorage } from '../hooks/useStorage';
-import { useAppContext } from '../contexts/AppContext';
-import { useArticleForm } from '../hooks/useArticleForm';
-import { useArticleHandlers } from '../hooks/useArticleHandlers';
-import { useDashboard } from '../hooks/useDashboard';
-import { useEinkauf } from '../hooks/useEinkauf';
-import { useInventur } from '../hooks/useInventur';
-import { useKalkulation } from '../hooks/useKalkulation';
+import LoadingSpinner from './ui/LoadingSpinner';
+import StorageStatus from './ui/StorageStatus';
+import Rezeptverwaltung from './Rezeptverwaltung';
+import Rezeptformular from './Rezeptformular';
+import Artikelverwaltung from './Artikelverwaltung';
+import Lieferantenformular from './Lieferantenformular';
+import Lieferantenverwaltung from './Lieferantenverwaltung';
+import Artikelformular from './Artikelformular';
+import ArtikelDataExchange from './ArtikelDataExchange';
+
+// Import der ausgelagerten Module
+import { designTemplates, DesignTemplateKey } from '../constants/designTemplates';
+import { UNITS, ALLERGENS, CATEGORIES } from '../constants/articleConstants';
 import { useImportExport } from '../hooks/useImportExport';
+import { calculateGrossPrice, calculateNetPrice, isValidUrl, openWebsite, formatPrice, calculateKilojoules, formatAdditivesDisplay, formatAllergensDisplay } from '../utils/helpers';
+import { getRecipeIngredients, getRecipeAllergens } from '../utils/recipeHelpers';
+import { useArticleHandlers } from '../hooks/useArticleHandlers';
+import { useAppContext } from '../contexts/AppContext';
+import { categoryManager } from '../utils/categoryManager';
+
+// Interface für das Rezeptformular
+interface RecipeForm {
+  name: string;
+  description: string;
+  image: File | null;
+  portions: number;
+  preparationTime: number;
+  difficulty: number;
+  energy: number;
+  materialCosts: number;
+  markupPercentage: number;
+  vatRate: number;
+  sellingPrice: number;
+  ingredients: Array<{
+    id: string;
+    name: string;
+    amount: number;
+    unit: string;
+    price: number;
+  }>;
+  usedRecipes: UsedRecipe[];
+  preparationSteps: Array<{
+    id: string;
+    order: number;
+    description: string;
+  }>;
+}
 
 // Design Templates werden jetzt aus constants/designTemplates.ts importiert
 
@@ -86,7 +129,7 @@ function AppContent() {
   };
   
   // Ref für automatischen Fokus auf Artikelname-Feld
-  const articleNameInputRef = React.useRef<HTMLInputElement>(null);
+  const articleNameInputRef = useRef<HTMLInputElement>(null);
 
   // Automatischer Fokus auf Artikelname-Feld wenn Modal geöffnet wird
   useEffect(() => {

@@ -1,150 +1,94 @@
 # The Chef's Numbers
 
-Eine moderne React-Anwendung für die Verwaltung von Artikeln, Lieferanten und Rezepten in der Gastronomie.
+Professionelle Rezeptverwaltung mit Kalkulationsfunktionen für Küchenchefs.
 
-## 🚀 Features
+## 🚀 Deployment auf Netlify
 
-- **Artikelverwaltung**: Vollständige CRUD-Operationen für Artikel mit Kategorisierung
-- **Lieferantenverwaltung**: Verwaltung von Lieferanten mit Kontaktdaten
-- **Rezeptverwaltung**: Erstellung und Verwaltung von Rezepten mit Zutaten
-- **Import/Export**: CSV- und JSON-Import/Export-Funktionalität
-- **Responsive Design**: Optimiert für Desktop und Mobile
-- **Theme-System**: Verschiedene Design-Templates (Modern, Dark, Warm, Professional)
-- **Lokale Speicherung**: Automatische Speicherung im Browser
+### Automatisches Deployment
 
-## 📁 Projektstruktur
+1. **Repository mit GitHub verbinden:**
+   - Gehen Sie zu [Netlify](https://netlify.com)
+   - Klicken Sie auf "New site from Git"
+   - Wählen Sie Ihr GitHub-Repository aus
 
-```
-src/
-├── components/           # React-Komponenten
-│   ├── ui/              # UI-Basis-Komponenten
-│   ├── Artikelformular.tsx
-│   ├── Artikelverwaltung.tsx
-│   ├── Dashboard.tsx
-│   ├── Einkauf.tsx
-│   ├── Inventur.tsx
-│   ├── Kalkulation.tsx
-│   ├── Lieferantenformular.tsx
-│   ├── Lieferantenverwaltung.tsx
-│   ├── Rezeptformular.tsx
-│   └── Rezeptverwaltung.tsx
-├── constants/           # Konstanten und Konfiguration
-│   ├── articleConstants.ts
-│   └── designTemplates.ts
-├── contexts/           # React Contexts
-│   ├── AppContext.tsx
-│   └── ColorContext.tsx
-├── hooks/              # Custom React Hooks
-│   ├── useArticleForm.ts
-│   ├── useArticleHandlers.ts
-│   ├── useDashboard.ts
-│   ├── useEinkauf.ts
-│   ├── useImportExport.ts
-│   ├── useInventur.ts
-│   ├── useKalkulation.ts
-│   ├── useRecipeForm.ts
-│   ├── useStorage.ts
-│   └── useSupplierForm.ts
-├── services/           # Services und API
-│   └── storage.ts
-├── types/              # TypeScript Typdefinitionen
-│   ├── common.ts
-│   ├── einkauf.ts
-│   ├── index.ts
-│   └── inventur.ts
-├── utils/              # Hilfsfunktionen
-│   ├── formatters.ts
-│   ├── helpers.ts
-│   └── recipeHelpers.ts
-├── App.tsx             # Hauptkomponente
-└── index.tsx           # App-Einstiegspunkt
-```
+2. **Build-Einstellungen:**
+   - **Build command:** `npm run build`
+   - **Publish directory:** `build`
+   - **Node version:** `18`
 
-## 🛠️ Technologien
+3. **Umgebungsvariablen (falls benötigt):**
+   - Gehen Sie zu Site settings > Environment variables
+   - Fügen Sie bei Bedarf Umgebungsvariablen hinzu
 
-- **React 18** mit TypeScript
-- **Bootstrap 5** für das UI
-- **React Icons** für Icons
-- **Local Storage** für Datenpersistierung
-- **Custom Hooks** für State Management
+### Manuelles Deployment
 
-## 🎨 Design-System
+1. **Lokaler Build:**
+   ```bash
+   npm install
+   npm run build
+   ```
 
-Die Anwendung unterstützt verschiedene Design-Templates:
+2. **Deploy über Netlify CLI:**
+   ```bash
+   npm install -g netlify-cli
+   netlify login
+   netlify deploy --prod --dir=build
+   ```
 
-- **Modern & Minimal**: Clean Design mit viel Weißraum
-- **Dark Theme**: Dunkles Design mit Akzentfarben
-- **Warm & Gastronomisch**: Braun/Beige Töne, gemütlich
-- **Professional Blue**: Business-Look mit Blau
-
-## 📦 Installation
+## 🛠️ Lokale Entwicklung
 
 ```bash
-# Abhängigkeiten installieren
+# Dependencies installieren
 npm install
 
 # Entwicklungsserver starten
 npm start
 
-# Build für Produktion
+# Production Build erstellen
 npm run build
 ```
 
-## 🔧 Entwicklung
+## 📁 Projektstruktur
 
-### Neue Komponenten hinzufügen
+```
+src/
+├── components/          # React-Komponenten
+├── contexts/           # React Contexts
+├── hooks/              # Custom Hooks
+├── services/           # API-Services
+├── types/              # TypeScript Typen
+└── utils/              # Hilfsfunktionen
+```
 
-1. Erstelle die Komponente in `src/components/`
-2. Füge TypeScript-Typen in `src/types/` hinzu
-3. Erstelle Custom Hooks in `src/hooks/` falls nötig
-4. Aktualisiere die README
+## 🎨 Features
 
-### State Management
+- **Rezeptverwaltung:** Erstellen und verwalten Sie Rezepte
+- **Kalkulation:** Automatische Kostenberechnung
+- **Inventur:** Bestandsverwaltung
+- **Einkauf:** Lieferantenverwaltung
+- **Dashboard:** Übersicht über alle Bereiche
 
-Die Anwendung verwendet eine modulare Struktur:
-- **AppContext**: Zentraler State für die gesamte App
-- **Custom Hooks**: Spezifische Logik für verschiedene Bereiche
-- **Local Storage**: Persistierung der Daten
+## 🔧 Technologien
 
-### Import/Export
+- React 18
+- TypeScript
+- Bootstrap 5
+- IndexedDB (lokale Datenspeicherung)
+- React Router DOM
 
-Die Import/Export-Funktionalität unterstützt:
-- **CSV-Dateien** mit automatischer Trennzeichen-Erkennung
-- **JSON-Dateien** für strukturierte Daten
-- **Automatische Zeichenkodierung-Erkennung** (UTF-8, Windows-1252, etc.)
-- **Feldzuordnung** mit Drag & Drop
-- **Vorschau** vor dem Import
-- **Duplikatsprüfung** und -behandlung
+## 📱 Browser-Support
 
-## 📝 Changelog
+- Chrome (empfohlen)
+- Firefox
+- Safari
+- Edge
 
-### Version 2.0.0
-- ✅ Modulare Struktur implementiert
-- ✅ Design-Templates ausgelagert
-- ✅ Import/Export-Funktionalität in separaten Hook
-- ✅ Hilfsfunktionen in utils/ organisiert
-- ✅ Konstanten in constants/ zentralisiert
-- ✅ Lieferantenverwaltung als separate Komponente
-- ✅ AppContext für zentrales State Management
-- ✅ Custom Hooks für Event Handler
+## 🚨 Wichtige Hinweise
 
-### Version 1.0.0
-- ✅ Grundlegende CRUD-Operationen
-- ✅ Responsive Design
-- ✅ Lokale Speicherung
-
-## 🤝 Beitragen
-
-1. Fork das Repository
-2. Erstelle einen Feature-Branch
-3. Committe deine Änderungen
-4. Push zum Branch
-5. Erstelle einen Pull Request
+- Die App verwendet IndexedDB für lokale Datenspeicherung
+- Alle Daten werden im Browser gespeichert
+- Für Backup/Export-Funktionen siehe die entsprechenden Menüpunkte
 
 ## 📄 Lizenz
 
-Dieses Projekt ist unter der MIT-Lizenz lizenziert.
-
-## 🆘 Support
-
-Bei Fragen oder Problemen erstelle bitte ein Issue im Repository. 
+Dieses Projekt ist für den internen Gebrauch bestimmt. 
