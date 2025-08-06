@@ -55,7 +55,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
   showRecipeForm,
   setShowRecipeForm
 }) => {
-  const { resetRecipeForm, setEditingRecipe, setRecipeForm } = useRecipeForm({
+  const { resetRecipeForm, setEditingRecipe, setRecipeForm, setRecipeForEditing } = useRecipeForm({
     articles,
     recipes,
     setRecipes,
@@ -67,23 +67,8 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
   });
 
   const handleEditRecipe = (recipe: any) => {
-    setEditingRecipe(recipe);
-    setRecipeForm({
-      name: recipe.name,
-      description: recipe.description,
-      image: null,
-      portions: recipe.portions,
-      preparationTime: recipe.preparationTime,
-      difficulty: recipe.difficulty,
-      energy: recipe.energy,
-      materialCosts: recipe.materialCosts,
-      markupPercentage: recipe.markupPercentage,
-      vatRate: recipe.vatRate,
-      sellingPrice: recipe.sellingPrice,
-      ingredients: recipe.ingredients && recipe.ingredients.length > 0 ? [...recipe.ingredients, { id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }] : [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
-      usedRecipes: recipe.usedRecipes || [],
-      preparationSteps: recipe.preparationSteps && recipe.preparationSteps.length > 0 ? recipe.preparationSteps : [{ id: Date.now().toString(), order: 1, description: '' }]
-    });
+    console.log('🎯 handleEditRecipe called with:', recipe);
+    setRecipeForEditing(recipe);
     setShowRecipeForm(true);
   };
 
@@ -295,7 +280,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                         <small style={{ color: colors.accent }}>{recipe.description}</small>
                         {(recipe.updatedAt || recipe.createdAt) && (
                           <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
-                            {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
+                            {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {new Date(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {new Date(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
                           </small>
                         )}
                       </div>
@@ -388,7 +373,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                     </p>
                     {(recipe.updatedAt || recipe.createdAt) && (
                       <p className="card-text small" style={{ color: colors.accent, fontSize: '0.7rem' }}>
-                        {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
+                        {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {new Date(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {new Date(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
                       </p>
                     )}
                     <div className="row text-center">

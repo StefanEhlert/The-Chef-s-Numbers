@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Recipe, UsedRecipe } from '../types';
+import { useAppContext } from '../contexts/AppContext';
 
 // Interface für das Rezeptformular
 interface RecipeForm {
@@ -38,6 +39,7 @@ interface UseRecipeFormProps {
   formatPrice: (price: number | undefined | null) => string;
   showRecipeForm: boolean;
   setShowRecipeForm: (show: boolean) => void;
+  editingRecipe?: any; // Neue Prop für das zu bearbeitende Rezept
 }
 
 export const useRecipeForm = ({
@@ -48,10 +50,13 @@ export const useRecipeForm = ({
   setEditingArticle,
   formatPrice,
   showRecipeForm,
-  setShowRecipeForm
+  setShowRecipeForm,
+  editingRecipe: initialEditingRecipe
 }: UseRecipeFormProps) => {
+  const { dispatch } = useAppContext();
+  
   // State für Rezept-Formular wird jetzt von außen verwaltet
-  const [editingRecipe, setEditingRecipe] = useState<any>(null);
+  const [editingRecipe, setEditingRecipe] = useState<any>(initialEditingRecipe || null);
   const [recipeForm, setRecipeForm] = useState<RecipeForm>({
     name: '',
     description: '',
@@ -78,7 +83,70 @@ export const useRecipeForm = ({
   const [showIngredientDropdown, setShowIngredientDropdown] = useState(false);
   const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(-1);
   const [dropdownSelectionIndex, setDropdownSelectionIndex] = useState(-1);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+
+  // Prüfe, ob das Rezeptformular wieder geöffnet wird und neue Artikel vorhanden sind
+  useEffect(() => {
+    if (showRecipeForm) {
+      // Wenn das Rezeptformular geöffnet wird, prüfe ob ein neuer Artikel erstellt wurde
+      setRecipeForm(prev => ({
+        ...prev,
+        ingredients: prev.ingredients.map(ingredient => {
+          if (ingredient.name) {
+            const article = articles.find(article => article.name === ingredient.name);
+            if (article) {
+              return {
+                ...ingredient,
+                unit: article.contentUnit || ingredient.unit,
+                price: article.pricePerUnit || ingredient.price
+              };
+            }
+          }
+          return ingredient;
+        })
+      }));
+    }
+  }, [showRecipeForm, articles]);
+
+  // Debug: Log editingRecipe changes
+  useEffect(() => {
+    console.log('🔄 editingRecipe changed:', editingRecipe);
+  }, [editingRecipe]);
+
+  // Synchronisiere initialEditingRecipe mit editingRecipe State
+  useEffect(() => {
+    if (initialEditingRecipe && initialEditingRecipe !== editingRecipe) {
+      console.log('🔄 Synchronisiere initialEditingRecipe mit editingRecipe State:', initialEditingRecipe);
+      setEditingRecipe(initialEditingRecipe);
+    }
+  }, [initialEditingRecipe, editingRecipe]);
+
+  // Synchronisiere das editingRecipe State mit dem Formular
+  useEffect(() => {
+    if (editingRecipe) {
+      console.log('🔄 Synchronisiere editingRecipe mit Formular:', editingRecipe);
+      setRecipeForm({
+        name: editingRecipe.name || '',
+        description: editingRecipe.description || '',
+        image: null,
+        portions: editingRecipe.portions || 4,
+        preparationTime: editingRecipe.preparationTime || 30,
+        difficulty: editingRecipe.difficulty || 3,
+        energy: editingRecipe.energy || 0,
+        materialCosts: editingRecipe.materialCosts || 0,
+        markupPercentage: editingRecipe.markupPercentage || 300,
+        vatRate: editingRecipe.vatRate || 19,
+        sellingPrice: editingRecipe.sellingPrice || 0,
+        ingredients: editingRecipe.ingredients && editingRecipe.ingredients.length > 0 
+          ? [...editingRecipe.ingredients, { id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }] 
+          : [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+        usedRecipes: editingRecipe.usedRecipes || [],
+        preparationSteps: editingRecipe.preparationSteps && editingRecipe.preparationSteps.length > 0 
+          ? editingRecipe.preparationSteps 
+          : [{ id: Date.now().toString(), order: 1, description: '' }]
+      });
+      setSellingPriceInput((editingRecipe.sellingPrice || 0).toFixed(2));
+    }
+  }, [editingRecipe]);
 
   // Preisumrechnung Hilfsfunktionen
   const calculateGrossPrice = (netPrice: number, vatRate: number) => {
@@ -94,7 +162,10 @@ export const useRecipeForm = ({
     return Math.round(calories * 4.184 * 100) / 100; // Auf 2 Nachkommastellen gerundet
   };
 
-  const resetRecipeForm = () => {
+  const resetRecipeForm = (resetEditingRecipe: boolean = true) => {
+    if (resetEditingRecipe) {
+      setEditingRecipe(null);
+    }
     setRecipeForm({
       name: '',
       description: '',
@@ -111,6 +182,16 @@ export const useRecipeForm = ({
       usedRecipes: [],
       preparationSteps: [{ id: Date.now().toString(), order: 1, description: '' }]
     } as RecipeForm);
+  };
+
+  const setRecipeForEditing = (recipe: any) => {
+    console.log('🔍 setRecipeForEditing called with:', recipe);
+    console.log('🔍 setRecipeForEditing - recipe.id:', recipe?.id);
+    
+    // Setze das editingRecipe State - der useEffect wird die Synchronisation übernehmen
+    setEditingRecipe(recipe);
+    
+    console.log('✅ setRecipeForEditing - editingRecipe set to:', recipe);
   };
 
   const calculateMaterialCosts = () => {
@@ -359,8 +440,8 @@ export const useRecipeForm = ({
           i === ingredientIndex ? { 
             ...ing, 
             name: item.name,
-            unit: item.contentUnit,
-            price: 0
+            unit: item.contentUnit || ing.unit,
+            price: item.pricePerUnit || ing.price
           } : ing
         );
         
@@ -389,7 +470,6 @@ export const useRecipeForm = ({
     setShowIngredientDropdown(false);
     setSelectedIngredientIndex(-1);
     setDropdownSelectionIndex(-1);
-    setDropdownPosition({ top: 0, left: 0 });
     
     // Neuberechnung basierend auf aktuellem Verkaufspreis
     setTimeout(() => {
@@ -418,16 +498,6 @@ export const useRecipeForm = ({
     setShowIngredientDropdown(true);
     setSelectedIngredientIndex(ingredientIndex);
     setDropdownSelectionIndex(-1);
-    
-    // Position des Dropdowns aktualisieren
-    const inputElement = document.querySelector(`input[data-ingredient-index="${ingredientIndex}"]`) as HTMLInputElement;
-    if (inputElement) {
-      const rect = inputElement.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom,
-        left: rect.left
-      });
-    }
   };
 
   const handleIngredientInputBlur = () => {
@@ -444,9 +514,8 @@ export const useRecipeForm = ({
         setShowIngredientDropdown(false);
         setSelectedIngredientIndex(-1);
         setDropdownSelectionIndex(-1);
-        setDropdownPosition({ top: 0, left: 0 });
       }
-    }, 300);
+    }, 200);
   };
 
   const handleIngredientKeyDown = (e: React.KeyboardEvent, ingredientIndex: number) => {
@@ -486,22 +555,20 @@ export const useRecipeForm = ({
         e.preventDefault();
         setShowIngredientDropdown(false);
         setDropdownSelectionIndex(-1);
-        setDropdownPosition({ top: 0, left: 0 });
         break;
       
       case 'Tab':
         setShowIngredientDropdown(false);
         setDropdownSelectionIndex(-1);
-        setDropdownPosition({ top: 0, left: 0 });
         break;
     }
   };
 
   const handleCreateNewArticle = (articleName: string, ingredientIndex: number) => {
-    setShowRecipeForm(false);
-    setEditingArticle(null);
-    setShowArticleForm(true);
+    // Setze den Artikelnamen im AppContext
+    dispatch({ type: 'SET_NEW_ARTICLE_NAME', payload: articleName });
     
+    // Setze den Artikelnamen im Rezeptformular
     setRecipeForm(prev => ({
       ...prev,
       ingredients: prev.ingredients.map((ing, i) => 
@@ -509,17 +576,15 @@ export const useRecipeForm = ({
       )
     }));
     
+    // Schließe das Rezeptformular und öffne das Artikelformular
+    setShowRecipeForm(false);
+    setEditingArticle(null);
+    setShowArticleForm(true);
+    
     setIngredientSearchTerm('');
     setShowIngredientDropdown(false);
     setSelectedIngredientIndex(-1);
     setDropdownSelectionIndex(-1);
-    setDropdownPosition({ top: 0, left: 0 });
-    
-    // Neuberechnung basierend auf aktuellem Verkaufspreis
-    setTimeout(() => {
-      const values = calculateAllValues();
-      setRecipeForm(prev => ({ ...prev, markupPercentage: values.markup }));
-    }, 0);
   };
 
   const handleIngredientFocus = (ingredientIndex: number) => {
@@ -527,16 +592,6 @@ export const useRecipeForm = ({
     setIngredientSearchTerm(recipeForm.ingredients[ingredientIndex].name);
     setShowIngredientDropdown(true);
     setDropdownSelectionIndex(-1);
-    
-    // Position des Dropdowns sofort berechnen
-    const inputElement = document.querySelector(`input[data-ingredient-index="${ingredientIndex}"]`) as HTMLInputElement;
-    if (inputElement) {
-      const rect = inputElement.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom,
-        left: rect.left
-      });
-    }
   };
 
   const handleEditIngredient = (ingredientIndex: number) => {
@@ -663,6 +718,10 @@ export const useRecipeForm = ({
       return;
     }
 
+    console.log('🚀 handleSaveRecipe - editingRecipe:', editingRecipe);
+    console.log('🚀 handleSaveRecipe - editingRecipe exists:', !!editingRecipe);
+    console.log('🚀 handleSaveRecipe - editingRecipe.id:', editingRecipe?.id);
+
     // Entferne leere Zubereitungsschritte vor dem Speichern
     const cleanedPreparationSteps = recipeForm.preparationSteps
       .filter(step => step.description.trim() !== '')
@@ -672,41 +731,33 @@ export const useRecipeForm = ({
     const cleanedIngredients = recipeForm.ingredients
       .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
 
+    const recipeToSave = {
+      ...recipeForm,
+      preparationSteps: cleanedPreparationSteps,
+      ingredients: cleanedIngredients,
+      id: editingRecipe ? editingRecipe.id : Date.now().toString(),
+      materialCosts: calculateMaterialCosts(),
+      totalNutritionInfo: calculateRecipeNutrition(),
+      allergens: getRecipeAllergens(),
+      createdAt: editingRecipe ? editingRecipe.createdAt : new Date(),
+      updatedAt: new Date(),
+      lastModifiedBy: 'Benutzer' // Platzhalter für später
+    };
+
+    console.log('📝 recipeToSave:', recipeToSave);
+
     if (editingRecipe) {
       // Rezept bearbeiten
-      const updatedRecipe = {
-        ...recipeForm,
-        preparationSteps: cleanedPreparationSteps,
-        ingredients: cleanedIngredients,
-        id: editingRecipe.id,
-        materialCosts: calculateMaterialCosts(),
-        totalNutritionInfo: calculateRecipeNutrition(),
-        allergens: getRecipeAllergens(),
-        createdAt: editingRecipe.createdAt,
-        updatedAt: new Date(),
-        lastModifiedBy: 'Benutzer' // Platzhalter für später
-      };
+      console.log('✏️ Bearbeite Rezept:', editingRecipe.id);
       setRecipes((prev: any[]) => prev.map((recipe: any) => 
-        recipe.id === editingRecipe.id ? updatedRecipe : recipe
+        recipe.id === editingRecipe.id ? recipeToSave : recipe
       ));
-      setEditingRecipe(null);
     } else {
       // Neues Rezept erstellen
-      const newRecipe = {
-        ...recipeForm,
-        preparationSteps: cleanedPreparationSteps,
-        ingredients: cleanedIngredients,
-        id: Date.now().toString(),
-        materialCosts: calculateMaterialCosts(),
-        totalNutritionInfo: calculateRecipeNutrition(),
-        allergens: getRecipeAllergens(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastModifiedBy: 'Benutzer' // Platzhalter für später
-      };
-      console.log('Neues Rezept:', newRecipe);
-      setRecipes((prev: any[]) => [...prev, newRecipe]);
+      console.log('🆕 Erstelle neues Rezept');
+      setRecipes((prev: any[]) => [...prev, recipeToSave]);
     }
+
     setShowRecipeForm(false);
     resetRecipeForm();
   };
@@ -735,10 +786,10 @@ export const useRecipeForm = ({
     selectedIngredientIndex,
     dropdownSelectionIndex,
     setDropdownSelectionIndex,
-    dropdownPosition,
 
     // Functions
     resetRecipeForm,
+    setRecipeForEditing,
     calculateMaterialCosts,
     handleMarkupChange,
     handleSellingPriceChange,

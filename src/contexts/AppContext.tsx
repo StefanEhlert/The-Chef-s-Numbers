@@ -41,6 +41,7 @@ interface AppState {
   // Formulare
   showArticleForm: boolean;
   editingArticle: any;
+  newArticleName: string; // Neuer State für den Artikelnamen beim Erstellen
   showSupplierForm: boolean;
   editingSupplierId: string | null;
   showRecipeForm: boolean;
@@ -79,6 +80,7 @@ type AppAction =
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | { type: 'SET_SHOW_ARTICLE_FORM'; payload: boolean }
   | { type: 'SET_EDITING_ARTICLE'; payload: any }
+  | { type: 'SET_NEW_ARTICLE_NAME'; payload: string }
   | { type: 'SET_SHOW_SUPPLIER_FORM'; payload: boolean }
   | { type: 'SET_EDITING_SUPPLIER_ID'; payload: string | null }
   | { type: 'SET_SHOW_RECIPE_FORM'; payload: boolean }
@@ -127,6 +129,7 @@ const initialState: AppState = {
   recipeSortOrder: 'asc',
   showArticleForm: false,
   editingArticle: null,
+  newArticleName: '', // Initialize newArticleName
   showSupplierForm: false,
   editingSupplierId: null,
   showRecipeForm: false,
@@ -218,6 +221,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, showArticleForm: action.payload };
     case 'SET_EDITING_ARTICLE':
       return { ...state, editingArticle: action.payload };
+    case 'SET_NEW_ARTICLE_NAME':
+      return { ...state, newArticleName: action.payload };
     case 'SET_SHOW_SUPPLIER_FORM':
       return { ...state, showSupplierForm: action.payload };
     case 'SET_EDITING_SUPPLIER_ID':

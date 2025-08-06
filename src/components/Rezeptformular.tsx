@@ -12,6 +12,8 @@ interface RezeptformularProps {
   getCurrentColors: () => any;
   showRecipeForm: boolean;
   setShowRecipeForm: (show: boolean) => void;
+  editingRecipe?: any; // Neue Prop für das zu bearbeitende Rezept
+  onClose?: () => void; // Neue Callback-Funktion für das Schließen
 }
 
 const Rezeptformular: React.FC<RezeptformularProps> = ({
@@ -23,11 +25,13 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   formatPrice,
   getCurrentColors,
   showRecipeForm,
-  setShowRecipeForm
+  setShowRecipeForm,
+  editingRecipe,
+  onClose
 }) => {
   const {
     // States
-    editingRecipe,
+    editingRecipe: formEditingRecipe,
     setEditingRecipe,
     recipeForm,
     setRecipeForm,
@@ -40,7 +44,6 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
     selectedIngredientIndex,
     dropdownSelectionIndex,
     setDropdownSelectionIndex,
-    dropdownPosition,
 
     // Functions
     resetRecipeForm,
@@ -81,7 +84,8 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
     setEditingArticle,
     formatPrice,
     showRecipeForm,
-    setShowRecipeForm
+    setShowRecipeForm,
+    editingRecipe
   });
 
   if (!showRecipeForm) {
@@ -102,11 +106,15 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
             <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
               <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  {editingRecipe ? 'Rezept bearbeiten' : 'Neues Rezept erstellen'}
+                  {formEditingRecipe ? 'Rezept bearbeiten' : 'Neues Rezept erstellen'}
                 </h5>
                 <button
                   className="btn btn-link p-0"
-                  onClick={() => setShowRecipeForm(false)}
+                  onClick={() => {
+                    setShowRecipeForm(false);
+                    setEditingRecipe(null);
+                    onClose?.();
+                  }}
                   style={{ color: colors.text, textDecoration: 'none' }}
                 >
                   <FaClose />
@@ -676,31 +684,13 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   {/* Zutaten */}
                   <div className="row mb-4">
                     <div className="col-12">
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
-                          Zutaten
-                        </h6>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={addIngredient}
-                          style={{
-                            backgroundColor: colors.accent,
-                            borderColor: colors.accent,
-                            color: 'white'
-                          }}
-                        >
-                          <FaPlus className="me-1" />
-                          Zutat hinzufügen
-                        </button>
-                      </div>
+                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                        Zutaten
+                      </h6>
                       
                       {recipeForm.ingredients.map((ingredient: any, index: number) => (
-                        <div key={ingredient.id} className="row mb-3 align-items-end">
-                          <div className="col-md-4">
-                            <label className="form-label" style={{ color: colors.text }}>
-                              Zutat {index + 1}
-                            </label>
+                        <div key={ingredient.id} className="row mb-3 align-items-center">
+                          <div className="col-md-5">
                             <div className="position-relative">
                               <input
                                 type="text"
@@ -714,48 +704,71 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                                 style={{ borderColor: colors.cardBorder, color: colors.text }}
                               />
                               {showIngredientDropdown && selectedIngredientIndex === index && (
-                                <div
-                                  className="position-absolute w-100 border rounded"
-                                  style={{
-                                    top: dropdownPosition.top,
-                                    left: dropdownPosition.left,
-                                    backgroundColor: colors.card,
-                                    borderColor: colors.cardBorder,
-                                    maxHeight: '200px',
-                                    overflowY: 'auto',
-                                    zIndex: 1000
-                                  }}
-                                >
-                                  {getFilteredIngredients().map((item: any, itemIndex: number) => (
-                                    <div
-                                      key={item.id}
-                                      className="px-3 py-2 cursor-pointer"
-                                      style={{
-                                        backgroundColor: dropdownSelectionIndex === itemIndex ? colors.accent : 'transparent',
-                                        color: dropdownSelectionIndex === itemIndex ? 'white' : colors.text,
-                                        cursor: 'pointer'
-                                      }}
-                                      onMouseEnter={() => setDropdownSelectionIndex(itemIndex)}
-                                      onClick={() => handleIngredientSelect(item, index)}
-                                    >
-                                      {item.name}
+                                <div className="position-absolute w-100" style={{
+                                  top: '100%',
+                                  left: 0,
+                                  zIndex: 1000,
+                                  maxHeight: '200px',
+                                  overflowY: 'auto',
+                                  backgroundColor: colors.card,
+                                  border: `1px solid ${colors.cardBorder}`,
+                                  borderRadius: '0 0 0.375rem 0.375rem',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                }}>
+                                  {getFilteredIngredients().length > 0 ? (
+                                    getFilteredIngredients().map((item: any, itemIndex: number) => (
+                                      <div
+                                        key={item.id}
+                                        className="dropdown-item"
+                                        onClick={() => handleIngredientSelect(item, index)}
+                                        style={{
+                                          padding: '8px 12px',
+                                          cursor: 'pointer',
+                                          backgroundColor: dropdownSelectionIndex === itemIndex ? colors.accent + '20' : 'transparent',
+                                          color: colors.text,
+                                          fontSize: '0.9rem',
+                                          borderBottom: itemIndex < getFilteredIngredients().length - 1 ? `1px solid ${colors.cardBorder}` : 'none'
+                                        }}
+                                        onMouseEnter={() => setDropdownSelectionIndex(itemIndex)}
+                                      >
+                                        {item.name}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div style={{ padding: '8px 12px', color: colors.textSecondary, fontSize: '0.9rem' }}>
+                                      Keine Zutaten gefunden
                                     </div>
-                                  ))}
+                                  )}
+                                  
+                                  {/* Option für neue Zutat */}
                                   {ingredientSearchTerm && !getFilteredIngredients().find((item: any) => 
                                     item.name.toLowerCase() === ingredientSearchTerm.toLowerCase()
                                   ) && (
                                     <div
-                                      className="px-3 py-2 cursor-pointer border-top"
-                                      style={{
-                                        backgroundColor: dropdownSelectionIndex === getFilteredIngredients().length ? colors.accent : 'transparent',
-                                        color: dropdownSelectionIndex === getFilteredIngredients().length ? 'white' : colors.text,
-                                        cursor: 'pointer',
-                                        borderColor: colors.cardBorder
-                                      }}
-                                      onMouseEnter={() => setDropdownSelectionIndex(getFilteredIngredients().length)}
+                                      className="dropdown-item"
                                       onClick={() => handleCreateNewArticle(ingredientSearchTerm, index)}
+                                      style={{
+                                        padding: '8px 12px',
+                                        cursor: 'pointer',
+                                        backgroundColor: dropdownSelectionIndex === getFilteredIngredients().length ? colors.accent + '20' : 'transparent',
+                                        color: colors.accent,
+                                        fontSize: '0.9rem',
+                                        fontWeight: '500',
+                                        borderTop: `2px solid ${colors.cardBorder}`,
+                                        borderBottom: `1px solid ${colors.cardBorder}`
+                                      }}
+                                      onMouseEnter={() => {
+                                        if (dropdownSelectionIndex !== getFilteredIngredients().length) {
+                                          setDropdownSelectionIndex(getFilteredIngredients().length);
+                                        }
+                                      }}
+                                      onMouseLeave={() => {
+                                        if (dropdownSelectionIndex !== getFilteredIngredients().length) {
+                                          setDropdownSelectionIndex(-1);
+                                        }
+                                      }}
                                     >
-                                      <FaPlus className="me-2" />
+                                      <FaPlus style={{ marginRight: '8px', fontSize: '0.8rem' }} />
                                       "{ingredientSearchTerm}" erstellen
                                     </div>
                                   )}
@@ -764,9 +777,6 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                             </div>
                           </div>
                           <div className="col-md-2">
-                            <label className="form-label" style={{ color: colors.text }}>
-                              Menge
-                            </label>
                             <input
                               type="number"
                               className="form-control"
@@ -781,40 +791,23 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                               }}
                               step="0.1"
                               min="0"
+                              placeholder="Menge"
                               style={{ borderColor: colors.cardBorder, color: colors.text }}
                             />
                           </div>
                           <div className="col-md-2">
-                            <label className="form-label" style={{ color: colors.text }}>
-                              Einheit
-                            </label>
-                            <select
-                              className="form-control"
-                              value={ingredient.unit}
-                              onChange={(e) => {
-                                const newIngredients = [...recipeForm.ingredients];
-                                newIngredients[index] = {
-                                  ...newIngredients[index],
-                                  unit: e.target.value
-                                };
-                                setRecipeForm((prev: any) => ({ ...prev, ingredients: newIngredients }));
-                              }}
-                              style={{ borderColor: colors.cardBorder, color: colors.text }}
-                            >
-                              <option value="g">g</option>
-                              <option value="kg">kg</option>
-                              <option value="ml">ml</option>
-                              <option value="l">l</option>
-                              <option value="Stück">Stück</option>
-                              <option value="EL">EL</option>
-                              <option value="TL">TL</option>
-                              <option value="Prise">Prise</option>
-                            </select>
+                            <div className="form-control" style={{ 
+                              borderColor: colors.cardBorder, 
+                              color: colors.text, 
+                              backgroundColor: colors.secondary,
+                              display: 'flex',
+                              alignItems: 'center',
+                              height: 'calc(1.5em + 0.75rem + 2px)'
+                            }}>
+                              {ingredient.unit}
+                            </div>
                           </div>
                           <div className="col-md-2">
-                            <label className="form-label" style={{ color: colors.text }}>
-                              Preis
-                            </label>
                             <div className="form-control" style={{ 
                               borderColor: colors.cardBorder, 
                               color: colors.text, 
@@ -826,12 +819,17 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                               {calculateIngredientPrice(ingredient).toFixed(2)} €
                             </div>
                           </div>
-                          <div className="col-md-1">
+                          <div className="col-md-1 d-flex justify-content-end align-items-center h-100">
                             <button
                               type="button"
-                              className="btn btn-outline-danger btn-sm"
+                              className="btn btn-link p-0"
+                              title="Löschen"
                               onClick={() => removeIngredient(index)}
-                              style={{ borderColor: colors.cardBorder, color: colors.text }}
+                              style={{
+                                color: '#dc3545',
+                                textDecoration: 'none',
+                                fontSize: '14px'
+                              }}
                             >
                               <FaClose />
                             </button>
@@ -844,24 +842,9 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   {/* Zubereitung */}
                   <div className="row mb-4">
                     <div className="col-12">
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
-                          Zubereitung
-                        </h6>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={addPreparationStep}
-                          style={{
-                            backgroundColor: colors.accent,
-                            borderColor: colors.accent,
-                            color: 'white'
-                          }}
-                        >
-                          <FaPlus className="me-1" />
-                          Schritt hinzufügen
-                        </button>
-                      </div>
+                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                        Zubereitung
+                      </h6>
                       
                       {recipeForm.preparationSteps.map((step: any, index: number) => (
                         <div key={step.id} className="row mb-3 align-items-start">
@@ -913,7 +896,11 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowRecipeForm(false)}
+                  onClick={() => {
+                    resetRecipeForm(true);
+                    setShowRecipeForm(false);
+                    onClose?.();
+                  }}
                   style={{
                     backgroundColor: colors.cardBorder,
                     borderColor: colors.cardBorder,
@@ -925,7 +912,11 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={handleSaveRecipe}
+                  onClick={() => {
+                    handleSaveRecipe();
+                    setEditingRecipe(null);
+                    onClose?.();
+                  }}
                   style={{
                     backgroundColor: colors.accent,
                     borderColor: colors.accent,

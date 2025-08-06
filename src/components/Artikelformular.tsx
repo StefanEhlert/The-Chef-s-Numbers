@@ -39,8 +39,9 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   onReset,
   onNewSupplier
 }) => {
-  const { state } = useAppContext();
+  const { state, dispatch } = useAppContext();
   const [showNutritionSearch, setShowNutritionSearch] = useState(false);
+  const [isFromRecipeForm, setIsFromRecipeForm] = useState(false);
   const articleNameRef = useRef<HTMLInputElement>(null);
   const {
     // State
@@ -141,8 +142,18 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   useEffect(() => {
     if (state.editingArticle) {
       setArticleForEditing(state.editingArticle);
+      setIsFromRecipeForm(false);
+    } else if (state.newArticleName && !editingArticle) {
+      // Wenn ein neuer Artikelname gesetzt ist, verwende ihn
+      setArticleForm(prev => ({
+        ...prev,
+        name: state.newArticleName
+      }));
+      setIsFromRecipeForm(true);
+      // Lösche den newArticleName aus dem Context
+      dispatch({ type: 'SET_NEW_ARTICLE_NAME', payload: '' });
     }
-  }, [state.editingArticle, setArticleForEditing]);
+  }, [state.editingArticle, state.newArticleName, setArticleForEditing, editingArticle, dispatch]);
 
   // Verhindere Scrolling im Hintergrund
   useEffect(() => {
@@ -177,17 +188,28 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     };
     onSave(articleToSave);
     resetForm();
+    
     // Reset global editing state
     if (state.editingArticle) {
       onReset();
     }
+    
     // Schließe das Modal nach dem Speichern
     onClose();
+    
+    // Wenn der Artikel aus dem Rezeptformular erstellt wurde, kehre dorthin zurück
+    if (isFromRecipeForm) {
+      // Öffne das Rezeptformular wieder
+      dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: true });
+      dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: false });
+      setIsFromRecipeForm(false);
+    }
   };
 
   const handleClose = () => {
     onClose();
     resetForm();
+    setIsFromRecipeForm(false);
     // Reset global editing state
     if (state.editingArticle) {
       onReset();
