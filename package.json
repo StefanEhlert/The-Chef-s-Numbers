@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Professionelle Rezeptverwaltung mit Kalkulationsfunktionen für Küchenchefs",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",
@@ -43,5 +46,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
 }

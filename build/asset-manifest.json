@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/static/css/main.8f6f7baa.css",
-    "main.js": "/static/js/main.548e4b71.js",
-    "index.html": "/index.html",
-    "main.8f6f7baa.css.map": "/static/css/main.8f6f7baa.css.map",
-    "main.548e4b71.js.map": "/static/js/main.548e4b71.js.map"
+    "main.css": "/The-Chef-s-Numbers/static/css/main.8f6f7baa.css",
+    "main.js": "/The-Chef-s-Numbers/static/js/main.bed93a1c.js",
+    "index.html": "/The-Chef-s-Numbers/index.html",
+    "main.8f6f7baa.css.map": "/The-Chef-s-Numbers/static/css/main.8f6f7baa.css.map",
+    "main.bed93a1c.js.map": "/The-Chef-s-Numbers/static/js/main.bed93a1c.js.map"
   },
   "entrypoints": [
     "static/css/main.8f6f7baa.css",
-    "static/js/main.548e4b71.js"
+    "static/js/main.bed93a1c.js"
   ]
 }
