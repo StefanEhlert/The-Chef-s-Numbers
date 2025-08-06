@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaTrash, FaPencilAlt, FaPrint, FaTimes, FaUtensils, FaSave } from 'react-icons/fa';
-import { useRecipeForm } from '../hooks/useRecipeForm';
+import { useAppContext } from '../contexts/AppContext';
 
 interface RezeptverwaltungProps {
   recipes: any[];
@@ -25,8 +25,6 @@ interface RezeptverwaltungProps {
   setRecipes: React.Dispatch<React.SetStateAction<any[]>>;
   setShowArticleForm: (show: boolean) => void;
   setEditingArticle: (article: any) => void;
-  showRecipeForm: boolean;
-  setShowRecipeForm: (show: boolean) => void;
 }
 
 const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
@@ -51,25 +49,19 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
   articles,
   setRecipes,
   setShowArticleForm,
-  setEditingArticle,
-  showRecipeForm,
-  setShowRecipeForm
+  setEditingArticle
 }) => {
-  const { resetRecipeForm, setEditingRecipe, setRecipeForm, setRecipeForEditing } = useRecipeForm({
-    articles,
-    recipes,
-    setRecipes,
-    setShowArticleForm,
-    setEditingArticle,
-    formatPrice,
-    showRecipeForm,
-    setShowRecipeForm
-  });
+  const { dispatch } = useAppContext();
 
   const handleEditRecipe = (recipe: any) => {
     console.log('🎯 handleEditRecipe called with:', recipe);
-    setRecipeForEditing(recipe);
-    setShowRecipeForm(true);
+    dispatch({ type: 'SET_EDITING_RECIPE', payload: recipe });
+    dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: true });
+  };
+
+  const handleNewRecipe = () => {
+    dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+    dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: true });
   };
 
   const colors = getCurrentColors();
@@ -120,10 +112,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                   color: 'white'
                 }}
                 title="Neues Rezept"
-                onClick={() => {
-                  resetRecipeForm();
-                  setShowRecipeForm(true);
-                }}
+                onClick={handleNewRecipe}
               >
                 <FaPlus />
               </button>

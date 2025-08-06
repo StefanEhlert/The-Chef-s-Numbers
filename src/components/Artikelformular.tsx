@@ -270,7 +270,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
          className="position-fixed top-0 start-0 w-100 h-100" 
          style={{
            background: 'rgba(0,0,0,0.5)',
-           zIndex: 3000,
+           zIndex: 4000,
            top: 56
          }}
        >

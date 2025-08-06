@@ -37,6 +37,9 @@ interface UseRecipeFormProps {
   setShowArticleForm: (show: boolean) => void;
   setEditingArticle: (article: any) => void;
   formatPrice: (price: number | undefined | null) => string;
+  showRecipeForm: boolean;
+  setShowRecipeForm: (show: boolean) => void;
+  editingRecipe?: any; // Neue Prop für das zu bearbeitende Rezept
 }
 
 export const useRecipeForm = ({
@@ -45,12 +48,15 @@ export const useRecipeForm = ({
   setRecipes,
   setShowArticleForm,
   setEditingArticle,
-  formatPrice
+  formatPrice,
+  showRecipeForm,
+  setShowRecipeForm,
+  editingRecipe: initialEditingRecipe
 }: UseRecipeFormProps) => {
-  const { dispatch, state } = useAppContext();
+  const { dispatch } = useAppContext();
   
-  // State für Rezept-Formular
-  const [editingRecipe, setEditingRecipe] = useState<any>(null);
+  // State für Rezept-Formular wird jetzt von außen verwaltet
+  const [editingRecipe, setEditingRecipe] = useState<any>(initialEditingRecipe || null);
   const [recipeForm, setRecipeForm] = useState<RecipeForm>({
     name: '',
     description: '',
@@ -78,12 +84,41 @@ export const useRecipeForm = ({
   const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(-1);
   const [dropdownSelectionIndex, setDropdownSelectionIndex] = useState(-1);
 
-  // Synchronisiere mit dem globalen editingRecipe State
+  // Prüfe, ob das Rezeptformular wieder geöffnet wird und neue Artikel vorhanden sind
   useEffect(() => {
-    if (state.editingRecipe) {
-      setEditingRecipe(state.editingRecipe);
+    if (showRecipeForm) {
+      // Wenn das Rezeptformular geöffnet wird, prüfe ob ein neuer Artikel erstellt wurde
+      setRecipeForm(prev => ({
+        ...prev,
+        ingredients: prev.ingredients.map(ingredient => {
+          if (ingredient.name) {
+            const article = articles.find(article => article.name === ingredient.name);
+            if (article) {
+              return {
+                ...ingredient,
+                unit: article.contentUnit || ingredient.unit,
+                price: article.pricePerUnit || ingredient.price
+              };
+            }
+          }
+          return ingredient;
+        })
+      }));
     }
-  }, [state.editingRecipe]);
+  }, [showRecipeForm, articles]);
+
+  // Debug: Log editingRecipe changes
+  useEffect(() => {
+    console.log('🔄 editingRecipe changed:', editingRecipe);
+  }, [editingRecipe]);
+
+  // Synchronisiere initialEditingRecipe mit editingRecipe State
+  useEffect(() => {
+    if (initialEditingRecipe && initialEditingRecipe !== editingRecipe) {
+      console.log('🔄 Synchronisiere initialEditingRecipe mit editingRecipe State:', initialEditingRecipe);
+      setEditingRecipe(initialEditingRecipe);
+    }
+  }, [initialEditingRecipe, editingRecipe]);
 
   // Synchronisiere das editingRecipe State mit dem Formular
   useEffect(() => {
@@ -130,7 +165,6 @@ export const useRecipeForm = ({
   const resetRecipeForm = (resetEditingRecipe: boolean = true) => {
     if (resetEditingRecipe) {
       setEditingRecipe(null);
-      dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
     }
     setRecipeForm({
       name: '',
@@ -152,8 +186,12 @@ export const useRecipeForm = ({
 
   const setRecipeForEditing = (recipe: any) => {
     console.log('🔍 setRecipeForEditing called with:', recipe);
+    console.log('🔍 setRecipeForEditing - recipe.id:', recipe?.id);
+    
+    // Setze das editingRecipe State - der useEffect wird die Synchronisation übernehmen
     setEditingRecipe(recipe);
-    dispatch({ type: 'SET_EDITING_RECIPE', payload: recipe });
+    
+    console.log('✅ setRecipeForEditing - editingRecipe set to:', recipe);
   };
 
   const calculateMaterialCosts = () => {
@@ -293,52 +331,21 @@ export const useRecipeForm = ({
       salt: 0
     };
 
-    // Hilfsfunktion zur Einheitenumrechnung
-    const convertToGrams = (amount: number, unit: string): number | null => {
-      const normalizedUnit = unit.toLowerCase().trim();
-      
-      switch (normalizedUnit) {
-        case 'g':
-        case 'gramm':
-        case 'gram':
-          return amount;
-        case 'kg':
-        case 'kilo':
-        case 'kilogramm':
-        case 'kilogram':
-          return amount * 1000;
-        case 'ml':
-        case 'milliliter':
-          return amount; // 1ml ≈ 1g für die meisten Flüssigkeiten
-        case 'l':
-        case 'liter':
-          return amount * 1000; // 1l = 1000ml ≈ 1000g
-        default:
-          // Nicht unterstützte Einheiten ignorieren
-          return null;
-      }
-    };
-
     // Nährwerte von Zutaten
     recipeForm.ingredients.forEach(ingredient => {
       if (ingredient.name && ingredient.name.trim() !== '' && ingredient.amount > 0) {
         const article = articles.find(a => a.name === ingredient.name);
         if (article && article.nutritionInfo) {
-          // Konvertiere die Menge in Gramm
-          const amountInGrams = convertToGrams(ingredient.amount, ingredient.unit);
-          
-          if (amountInGrams !== null) {
-            // Berechne Anteil basierend auf Menge (pro 100g)
-            const ratio = amountInGrams / 100;
-            totalNutrition.calories += (article.nutritionInfo.calories || 0) * ratio;
-            totalNutrition.kilojoules += (article.nutritionInfo.kilojoules || 0) * ratio;
-            totalNutrition.protein += (article.nutritionInfo.protein || 0) * ratio;
-            totalNutrition.fat += (article.nutritionInfo.fat || 0) * ratio;
-            totalNutrition.carbohydrates += (article.nutritionInfo.carbohydrates || 0) * ratio;
-            totalNutrition.fiber += (article.nutritionInfo.fiber || 0) * ratio;
-            totalNutrition.sugar += (article.nutritionInfo.sugar || 0) * ratio;
-            totalNutrition.salt += (article.nutritionInfo.salt || 0) * ratio;
-          }
+          // Berechne Anteil basierend auf Menge (pro 100g)
+          const ratio = ingredient.amount / 100;
+          totalNutrition.calories += (article.nutritionInfo.calories || 0) * ratio;
+          totalNutrition.kilojoules += (article.nutritionInfo.kilojoules || 0) * ratio;
+          totalNutrition.protein += (article.nutritionInfo.protein || 0) * ratio;
+          totalNutrition.fat += (article.nutritionInfo.fat || 0) * ratio;
+          totalNutrition.carbohydrates += (article.nutritionInfo.carbohydrates || 0) * ratio;
+          totalNutrition.fiber += (article.nutritionInfo.fiber || 0) * ratio;
+          totalNutrition.sugar += (article.nutritionInfo.sugar || 0) * ratio;
+          totalNutrition.salt += (article.nutritionInfo.salt || 0) * ratio;
         }
       }
     });
@@ -404,11 +411,7 @@ export const useRecipeForm = ({
         )
       : recipes.filter((recipe: any) => recipe.id !== currentRecipeId).slice(0, 5);
     
-    results.push(...filteredRecipes.map((recipe: any) => ({ 
-      ...recipe, 
-      type: 'recipe',
-      displayName: `Rezept: ${recipe.name}` // Kennzeichnung als Rezept
-    })));
+    results.push(...filteredRecipes.map((recipe: any) => ({ ...recipe, type: 'recipe' })));
     
     return results.slice(0, 10);
   };
@@ -430,16 +433,6 @@ export const useRecipeForm = ({
         ...prev,
         usedRecipes: [...prev.usedRecipes, newUsedRecipe]
       }));
-
-      // Das Eingabefeld leeren, da das Rezept zu usedRecipes hinzugefügt wurde
-      setRecipeForm(prev => ({
-        ...prev,
-        ingredients: prev.ingredients.map((ing, i) => 
-          i === ingredientIndex ? { ...ing, name: '' } : ing
-        )
-      }));
-
-      // Keine neue Zeile hinzufügen, da die aktuelle Zeile bereits leer ist
     } else {
       // Wenn ein Artikel ausgewählt wurde, behalte das alte Verhalten bei
       setRecipeForm(prev => {
@@ -453,10 +446,8 @@ export const useRecipeForm = ({
         );
         
         // Prüfen, ob eine neue leere Zeile hinzugefügt werden soll
-        // Neue Zeile hinzufügen, wenn:
-        // 1. Die ausgewählte Zutat die letzte in der Liste ist ODER
-        // 2. Die ausgewählte Zutat die letzte ist und das letzte Feld leer war
-        const shouldAddNewLine = ingredientIndex === prev.ingredients.length - 1;
+        const shouldAddNewLine = ingredientIndex === prev.ingredients.length - 1 && 
+                                prev.ingredients[prev.ingredients.length - 1].name === '';
         
         if (shouldAddNewLine) {
           updatedIngredients.push({ 
@@ -578,69 +569,22 @@ export const useRecipeForm = ({
     dispatch({ type: 'SET_NEW_ARTICLE_NAME', payload: articleName });
     
     // Setze den Artikelnamen im Rezeptformular
-    setRecipeForm(prev => {
-      const updatedIngredients = prev.ingredients.map((ing, i) => 
+    setRecipeForm(prev => ({
+      ...prev,
+      ingredients: prev.ingredients.map((ing, i) => 
         i === ingredientIndex ? { ...ing, name: articleName } : ing
-      );
-      
-      // Prüfen, ob eine neue leere Zeile hinzugefügt werden soll
-      // Neue Zeile hinzufügen, wenn der neue Artikel in der letzten Zeile erstellt wird
-      const shouldAddNewLine = ingredientIndex === prev.ingredients.length - 1;
-      
-      if (shouldAddNewLine) {
-        updatedIngredients.push({ 
-          id: Date.now().toString(), 
-          name: '', 
-          amount: 0, 
-          unit: 'g', 
-          price: 0 
-        });
-      }
-      
-      return {
-        ...prev,
-        ingredients: updatedIngredients
-      };
-    });
+      )
+    }));
     
     // Schließe das Rezeptformular und öffne das Artikelformular
-    dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
-    dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
-    dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: true });
+    setShowRecipeForm(false);
+    setEditingArticle(null);
+    setShowArticleForm(true);
     
     setIngredientSearchTerm('');
     setShowIngredientDropdown(false);
     setSelectedIngredientIndex(-1);
     setDropdownSelectionIndex(-1);
-  };
-
-  const updateIngredientFromArticle = (ingredientIndex: number) => {
-    // Finde die Zutat an der angegebenen Position
-    const ingredient = recipeForm.ingredients[ingredientIndex];
-    if (!ingredient || !ingredient.name) return;
-    
-    // Finde den Artikel basierend auf dem Namen
-    const article = articles.find(a => a.name === ingredient.name);
-    if (!article) return;
-    
-    // Aktualisiere die Zutat mit den Artikeldaten
-    setRecipeForm(prev => ({
-      ...prev,
-      ingredients: prev.ingredients.map((ing, i) => 
-        i === ingredientIndex ? { 
-          ...ing, 
-          name: article.name,
-          unit: article.contentUnit || ing.unit,
-          price: article.pricePerUnit || ing.price
-        } : ing
-      )
-    }));
-    
-    // Neuberechnung basierend auf aktuellem Verkaufspreis
-    setTimeout(() => {
-      const values = calculateAllValues();
-      setRecipeForm(prev => ({ ...prev, markupPercentage: values.markup }));
-    }, 0);
   };
 
   const handleIngredientFocus = (ingredientIndex: number) => {
@@ -659,9 +603,9 @@ export const useRecipeForm = ({
     
     if (articleToEdit) {
       // Artikelformular mit den Daten des zu bearbeitenden Artikels öffnen
-      dispatch({ type: 'SET_EDITING_ARTICLE', payload: articleToEdit });
-      dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: true });
-      dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
+      setEditingArticle(articleToEdit);
+      setShowArticleForm(true);
+      setShowRecipeForm(false);
     } else {
       // Falls kein Artikel gefunden wird, zeige eine Meldung
       alert('Artikel nicht gefunden. Bitte wählen Sie zuerst einen Artikel aus.');
@@ -694,19 +638,6 @@ export const useRecipeForm = ({
     setRecipeForm(prev => ({
       ...prev,
       ingredients: prev.ingredients.filter((_, i) => i !== index)
-    }));
-    
-    // Neuberechnung basierend auf aktuellem Verkaufspreis
-    setTimeout(() => {
-      const values = calculateAllValues();
-      setRecipeForm(prev => ({ ...prev, markupPercentage: values.markup }));
-    }, 0);
-  };
-
-  const removeUsedRecipe = (index: number) => {
-    setRecipeForm(prev => ({
-      ...prev,
-      usedRecipes: prev.usedRecipes.filter((_, i) => i !== index)
     }));
     
     // Neuberechnung basierend auf aktuellem Verkaufspreis
@@ -788,6 +719,8 @@ export const useRecipeForm = ({
     }
 
     console.log('🚀 handleSaveRecipe - editingRecipe:', editingRecipe);
+    console.log('🚀 handleSaveRecipe - editingRecipe exists:', !!editingRecipe);
+    console.log('🚀 handleSaveRecipe - editingRecipe.id:', editingRecipe?.id);
 
     // Entferne leere Zubereitungsschritte vor dem Speichern
     const cleanedPreparationSteps = recipeForm.preparationSteps
@@ -825,35 +758,17 @@ export const useRecipeForm = ({
       setRecipes((prev: any[]) => [...prev, recipeToSave]);
     }
 
-    // Schließe das Formular und reset
-    dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
-    dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+    setShowRecipeForm(false);
     resetRecipeForm();
   };
 
   // Hilfsfunktionen für Dropdowns
   const formatAdditivesDisplay = (additives: string[]) => {
-    if (additives.length === 0) return 'Keine Zusatzstoffe gefunden';
-    
-    // Extrahiere nur die Zahlen aus den Zusatzstoffen
-    const numbers = additives.map(additive => {
-      const match = additive.match(/^(\d+)/);
-      return match ? match[1] : '';
-    }).filter(num => num !== '');
-    
-    return numbers.join(', ');
+    return additives.length > 0 ? additives.join(', ') : 'Keine ausgewählt';
   };
 
   const formatAllergensDisplay = (allergens: string[]) => {
-    if (allergens.length === 0) return 'Keine Allergene gefunden';
-    
-    // Extrahiere nur die Buchstaben aus den Allergenen
-    const letters = allergens.map(allergen => {
-      const match = allergen.match(/^([A-Z])/);
-      return match ? match[1] : '';
-    }).filter(letter => letter !== '');
-    
-    return letters.join(', ');
+    return allergens.length > 0 ? allergens.join(', ') : 'Keine ausgewählt';
   };
 
   return {
@@ -894,7 +809,6 @@ export const useRecipeForm = ({
     handleEditIngredient,
     addIngredient,
     removeIngredient,
-    removeUsedRecipe,
     addPreparationStep,
     handlePreparationStepChange,
     handleRecipeImageUpload,
@@ -904,7 +818,6 @@ export const useRecipeForm = ({
     formatAllergensDisplay,
     calculateKilojoules,
     calculateGrossPrice,
-    calculateNetPrice,
-    updateIngredientFromArticle
+    calculateNetPrice
   };
 }; 

@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint } from 'react-icons/fa';
-import { Recipe, UsedRecipe } from '../types';
 import Dashboard from './Dashboard';
 import Kalkulation from './Kalkulation';
 import Einkauf from './Einkauf';
@@ -28,42 +27,9 @@ import { useArticleHandlers } from '../hooks/useArticleHandlers';
 import { useAppContext } from '../contexts/AppContext';
 import { categoryManager } from '../utils/categoryManager';
 
-// Interface für das Rezeptformular
-interface RecipeForm {
-  name: string;
-  description: string;
-  image: File | null;
-  portions: number;
-  preparationTime: number;
-  difficulty: number;
-  energy: number;
-  materialCosts: number;
-  markupPercentage: number;
-  vatRate: number;
-  sellingPrice: number;
-  ingredients: Array<{
-    id: string;
-    name: string;
-    amount: number;
-    unit: string;
-    price: number;
-  }>;
-  usedRecipes: UsedRecipe[];
-  preparationSteps: Array<{
-    id: string;
-    order: number;
-    description: string;
-  }>;
-}
-
-// Design Templates werden jetzt aus constants/designTemplates.ts importiert
-
 function AppContent() {
   const { state, dispatch } = useAppContext();
   const { loadAppData, saveAppData, isLoading, lastSaved, storageInfo } = useStorage();
-  
-  // Lokaler State für das zu bearbeitende Rezept
-  const [editingRecipe, setEditingRecipe] = useState<any>(null);
   
   // Import/Export-System wird jetzt über den useImportExport Hook verwaltet
   const importExport = useImportExport();
@@ -410,7 +376,6 @@ function AppContent() {
             recipes={state.recipes}
             getCurrentColors={getCurrentColors}
             setShowArticleForm={(show) => dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: show })}
-            setShowRecipeForm={(show) => dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: show })}
             setShowSupplierForm={(show) => dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: show })}
             setCurrentPage={(page) => dispatch({ type: 'SET_CURRENT_PAGE', payload: page })}
             handleEditArticle={(article) => {
@@ -418,8 +383,7 @@ function AppContent() {
               dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: true });
             }}
             handleEditRecipe={(recipe) => {
-              // Setze das zu bearbeitende Rezept und öffne das Formular
-              setEditingRecipe(recipe);
+              dispatch({ type: 'SET_EDITING_RECIPE', payload: recipe });
               dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: true });
             }}
             handleEditSupplier={(supplier) => dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: supplier.id })}
@@ -577,13 +541,6 @@ function AppContent() {
             }}
             setShowArticleForm={(show) => dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: show })}
             setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
-            showRecipeForm={state.showRecipeForm}
-            setShowRecipeForm={(show) => {
-              dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: show });
-              if (!show) {
-                setEditingRecipe(null);
-              }
-            }}
           />
         );
       case 'einkauf':
@@ -839,15 +796,23 @@ function AppContent() {
             setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
             formatPrice={formatPrice}
             getCurrentColors={getCurrentColors}
-            showRecipeForm={state.showRecipeForm}
-            setShowRecipeForm={(show) => {
-              dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: show });
-              if (!show) {
-                setEditingRecipe(null);
+            show={state.showRecipeForm || !!state.editingRecipe}
+            onClose={() => {
+              dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
+              dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+            }}
+            onSave={(recipe) => {
+              if (state.editingRecipe) {
+                // Rezept bearbeiten
+                dispatch({ type: 'UPDATE_RECIPE', payload: { id: state.editingRecipe.id, recipe } });
+              } else {
+                // Neues Rezept erstellen
+                dispatch({ type: 'ADD_RECIPE', payload: recipe });
               }
             }}
-            editingRecipe={editingRecipe}
-            onClose={() => setEditingRecipe(null)}
+            onReset={() => {
+              dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+            }}
           />
 
           {/* Enhanced Sidebar */}

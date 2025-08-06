@@ -45,6 +45,7 @@ interface AppState {
   showSupplierForm: boolean;
   editingSupplierId: string | null;
   showRecipeForm: boolean;
+  editingRecipe: any; // Neuer State für das zu bearbeitende Rezept
   
   // Dialoge
   showDeleteDialog: boolean;
@@ -84,6 +85,7 @@ type AppAction =
   | { type: 'SET_SHOW_SUPPLIER_FORM'; payload: boolean }
   | { type: 'SET_EDITING_SUPPLIER_ID'; payload: string | null }
   | { type: 'SET_SHOW_RECIPE_FORM'; payload: boolean }
+  | { type: 'SET_EDITING_RECIPE'; payload: any }
   | { type: 'SET_SHOW_DELETE_DIALOG'; payload: boolean }
   | { type: 'SET_DELETE_DIALOG_DATA'; payload: any }
   // Lieferanten-spezifische Actions
@@ -133,6 +135,7 @@ const initialState: AppState = {
   showSupplierForm: false,
   editingSupplierId: null,
   showRecipeForm: false,
+  editingRecipe: null,
   showDeleteDialog: false,
   deleteDialogData: null,
 };
@@ -229,6 +232,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, editingSupplierId: action.payload };
     case 'SET_SHOW_RECIPE_FORM':
       return { ...state, showRecipeForm: action.payload };
+    case 'SET_EDITING_RECIPE':
+      return { ...state, editingRecipe: action.payload };
     case 'SET_SHOW_DELETE_DIALOG':
       return { ...state, showDeleteDialog: action.payload };
     case 'SET_DELETE_DIALOG_DATA':

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { FaPlus, FaSearch, FaUtensils, FaChartLine, FaClock, FaStar } from 'react-icons/fa';
+import { useAppContext } from '../contexts/AppContext';
 import StorageStatus from './ui/StorageStatus';
 
 interface DashboardProps {
@@ -8,7 +9,6 @@ interface DashboardProps {
   recipes: any[];
   getCurrentColors: () => any;
   setShowArticleForm: (show: boolean) => void;
-  setShowRecipeForm: (show: boolean) => void;
   setShowSupplierForm: (show: boolean) => void;
   setCurrentPage: (page: string) => void;
   handleEditArticle: (article: any) => void;
@@ -30,7 +30,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   recipes,
   getCurrentColors,
   setShowArticleForm,
-  setShowRecipeForm,
   setShowSupplierForm,
   setCurrentPage,
   handleEditArticle,
@@ -41,7 +40,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   storageInfo,
   isStorageAvailable
 }) => {
+  const { dispatch } = useAppContext();
   const colors = getCurrentColors();
+  
+  const handleNewRecipe = () => {
+    dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+    dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: true });
+  };
   
   // Dashboard-Logik direkt in der Komponente
   const statistics = useMemo(() => {
@@ -215,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </button>
             <button 
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => setShowRecipeForm(true)}
+              onClick={handleNewRecipe}
               style={{ borderColor: colors.accent, color: colors.accent }}
             >
               <FaUtensils className="me-1" />
@@ -263,7 +268,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="col-md-3 mb-3">
                 <button 
                   className="btn btn-outline-primary w-100 p-3" 
-                  onClick={() => setShowRecipeForm(true)}
+                  onClick={handleNewRecipe}
                   style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
                 >
                   <FaUtensils className="me-2" />
