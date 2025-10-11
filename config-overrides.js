@@ -1,6 +1,12 @@
 const webpack = require('webpack');
+const path = require('path');
 
 module.exports = function override(config, env) {
+  // Entferne ModuleScopePlugin, um Imports außerhalb von src/ zu erlauben
+  config.resolve.plugins = config.resolve.plugins.filter(
+    plugin => plugin.constructor.name !== 'ModuleScopePlugin'
+  );
+
   // Füge Polyfills für Node.js-Module hinzu
   config.resolve.fallback = {
     ...config.resolve.fallback,
