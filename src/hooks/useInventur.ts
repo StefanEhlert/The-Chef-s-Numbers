@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { generateId, createEntity } from '../utils/storageUtils';
 import { InventurItem } from '../types/inventur';
-import { storageService } from '../services/storage';
+import { StorageLayer } from '../services/storageLayer';
 
 export const useInventur = () => {
   const [inventurListe, setInventurListe] = useState<InventurItem[]>([]);
@@ -9,15 +10,31 @@ export const useInventur = () => {
 
   // Lade gespeicherte Daten beim Start
   useEffect(() => {
-    const savedData = storageService.loadData('inventurListe');
-    if (Array.isArray(savedData)) {
-      setInventurListe(savedData);
-    }
+    const loadData = async () => {
+      try {
+        const storageLayer = StorageLayer.getInstance();
+        const savedData = await storageLayer.load('inventurListe');
+        if (Array.isArray(savedData)) {
+          setInventurListe(savedData as InventurItem[]);
+        }
+      } catch (error) {
+        console.error('Fehler beim Laden der Inventurliste:', error);
+      }
+    };
+    loadData();
   }, []);
 
   // Speichere Daten bei Änderungen
   useEffect(() => {
-    storageService.saveData('inventurListe', inventurListe);
+    const saveData = async () => {
+      try {
+        const storageLayer = StorageLayer.getInstance();
+        await storageLayer.save('inventurListe', inventurListe as any);
+      } catch (error) {
+        console.error('Fehler beim Speichern der Inventurliste:', error);
+      }
+    };
+    saveData();
   }, [inventurListe]);
 
   const startInventur = () => {
@@ -29,14 +46,13 @@ export const useInventur = () => {
     setInventurAktiv(false);
   };
 
-  const addInventurItem = (item: Omit<InventurItem, 'id' | 'inventurDatum' | 'differenz'>) => {
+  const addInventurItem = (item: Omit<InventurItem, 'id' | 'inventurDatum' | 'differenz' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy' | 'lastModifiedBy'>) => {
     const differenz = item.istBestand - item.sollBestand;
-    const newItem: InventurItem = {
+    const newItem = createEntity<InventurItem>({
       ...item,
-      id: Date.now().toString(),
       inventurDatum: new Date(),
       differenz
-    };
+    });
     setInventurListe(prev => [...prev, newItem]);
   };
 

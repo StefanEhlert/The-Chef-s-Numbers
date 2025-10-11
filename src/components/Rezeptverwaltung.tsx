@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaTrash, FaPencilAlt, FaPrint, FaTimes, FaUtensils, FaSave } from 'react-icons/fa';
 import { useAppContext } from '../contexts/AppContext';
+import { Recipe } from '../types';
 
 interface RezeptverwaltungProps {
-  recipes: any[];
+  recipes: Recipe[];
   recipeSearchTerm: string;
   setRecipeSearchTerm: (term: string) => void;
   recipeViewMode: 'list' | 'grid';
@@ -17,12 +18,12 @@ interface RezeptverwaltungProps {
   setShowImportExportModal: (show: boolean) => void;
   handleSelectRecipe: (recipeId: string) => void;
   handleSelectAllRecipes: () => void;
-  handleDeleteRecipes: () => void;
+  handleDeleteRecipes: (onProgress?: (current: number, total: number) => void) => void;
   handleDeleteSingleRecipe: (recipeId: string, recipeName: string) => void;
   formatPrice: (price: number | undefined | null) => string;
-  filteredAndSortedRecipes: () => any[];
+  filteredAndSortedRecipes: () => Recipe[];
   articles: any[];
-  setRecipes: React.Dispatch<React.SetStateAction<any[]>>;
+  setRecipes: React.Dispatch<React.SetStateAction<Recipe[]>>;
   setShowArticleForm: (show: boolean) => void;
   setEditingArticle: (article: any) => void;
 }
@@ -52,6 +53,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
   setEditingArticle
 }) => {
   const { dispatch } = useAppContext();
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
 
   const handleEditRecipe = (recipe: any) => {
     console.log('🎯 handleEditRecipe called with:', recipe);
@@ -198,25 +200,79 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
               {recipeSortOrder === 'asc' ? 'A-Z' : 'Z-A'}
             </button>
           </div>
-          <div className="col-md-7">
-            {selectedRecipes.length > 0 && (
-              <div className="d-flex gap-2 justify-content-end">
-                <button
-                  type="button"
-                  className="btn btn-outline-danger"
-                  onClick={handleDeleteRecipes}
+          <div className="col-md-7 text-end">
+            <span style={{ color: colors.text }}>
+              {filteredRecipes.length} Rezept{filteredRecipes.length !== 1 ? 'e' : ''} gefunden
+            </span>
+          </div>
+        </div>
+
+        {/* Bulk-Aktionen */}
+        {selectedRecipes.length > 0 && (
+          <div className="alert alert-warning mb-3" style={{
+            backgroundColor: colors.secondary,
+            borderColor: colors.cardBorder,
+            color: colors.text,
+            paddingBottom: bulkProgress ? '0.75rem' : '1rem',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <span>{selectedRecipes.length} Rezept{selectedRecipes.length !== 1 ? 'e' : ''} ausgewählt</span>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={async () => {
+                  try {
+                    setBulkProgress({ current: 0, total: selectedRecipes.length });
+                    
+                    // Kurze Verzögerung damit der initiale State sichtbar wird
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    
+                    // Rufe handleDeleteRecipes mit Progress-Callback auf
+                    await handleDeleteRecipes((current, total) => {
+                      setBulkProgress({ current, total });
+                    });
+                    
+                    // Verstecke Fortschritt nach kurzer Zeit
+                    setTimeout(() => setBulkProgress(null), 1200);
+                  } catch (error) {
+                    console.error('❌ Fehler beim Bulk-Löschen:', error);
+                    setBulkProgress(null);
+                  }
+                }}
+                disabled={!!bulkProgress}
+              >
+                <FaTrash className="me-1" />
+                Löschen
+              </button>
+            </div>
+            
+            {/* Dezenter Fortschrittsbalken */}
+            {bulkProgress && (
+              <div 
+                className="position-absolute bottom-0 start-0 end-0"
+                style={{
+                  height: '4px',
+                  backgroundColor: 'rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                  borderBottomLeftRadius: '4px',
+                  borderBottomRightRadius: '4px'
+                }}
+              >
+                <div
                   style={{
-                    borderColor: '#dc3545',
-                    color: '#dc3545'
+                    height: '100%',
+                    width: `${bulkProgress.total > 0 ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%`,
+                    backgroundColor: colors.accent,
+                    transition: 'width 0.2s ease-out',
+                    boxShadow: `0 0 10px ${colors.accent}`,
+                    minWidth: bulkProgress.current > 0 ? '2%' : '0%'
                   }}
-                >
-                  <FaTrash className="me-1" />
-                  {selectedRecipes.length} löschen
-                </button>
+                />
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* Rezept-Liste */}
         {recipeViewMode === 'list' ? (
@@ -267,11 +323,16 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                         <strong>{recipe.name}</strong>
                         <br />
                         <small style={{ color: colors.accent }}>{recipe.description}</small>
-                        {(recipe.updatedAt || recipe.createdAt) && (
-                          <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
-                            {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {new Date(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {new Date(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
-                          </small>
-                        )}
+                        {(recipe.updatedAt || recipe.createdAt) && (() => {
+                          const timestamp = recipe.updatedAt || recipe.createdAt;
+                          if (!timestamp) return null;
+                          const date = new Date(timestamp);
+                          return (
+                            <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
+                              {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {date.toLocaleDateString('de-DE')} um {date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
+                            </small>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
@@ -284,7 +345,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                       <strong>{formatPrice(recipe.sellingPrice)}</strong>
                     </td>
                     <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <strong>{recipe.energy}</strong>
+                      <strong>{recipe.totalNutritionInfo?.calories || 0}</strong>
                     </td>
                     <td style={{ borderColor: colors.cardBorder }}>
                       <div className="d-flex gap-2">
@@ -360,11 +421,16 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                     <p className="card-text small" style={{ color: colors.accent }}>
                       {recipe.description}
                     </p>
-                    {(recipe.updatedAt || recipe.createdAt) && (
-                      <p className="card-text small" style={{ color: colors.accent, fontSize: '0.7rem' }}>
-                        {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {new Date(recipe.updatedAt || recipe.createdAt).toLocaleDateString('de-DE')} um {new Date(recipe.updatedAt || recipe.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
-                      </p>
-                    )}
+                    {(recipe.updatedAt || recipe.createdAt) && (() => {
+                      const timestamp = recipe.updatedAt || recipe.createdAt;
+                      if (!timestamp) return null;
+                      const date = new Date(timestamp);
+                      return (
+                        <p className="card-text small" style={{ color: colors.accent, fontSize: '0.7rem' }}>
+                          {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {date.toLocaleDateString('de-DE')} um {date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
+                        </p>
+                      );
+                    })()}
                     <div className="row text-center">
                       <div className="col-6">
                         <small style={{ color: colors.text }}>Portionen</small>
@@ -382,7 +448,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                       </div>
                       <div className="col-6">
                         <small style={{ color: colors.text }}>Kalorien</small>
-                        <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.energy} kcal</div>
+                        <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.totalNutritionInfo?.calories || 0} kcal</div>
                       </div>
                     </div>
                   </div>

@@ -3,6 +3,8 @@ import { FaFileUpload, FaDownload, FaTimes, FaFolderOpen, FaCheckCircle, FaExcla
 import { UNITS } from '../constants/articleConstants';
 import { suggestCategory, generateArticleNumber } from '../utils/helpers';
 import { categoryManager } from '../utils/categoryManager';
+import { generateId } from '../utils/storageUtils';
+import { UUIDUtils } from '../utils/uuidUtils';
 
 interface ArtikelDataExchangeProps {
   show: boolean;
@@ -342,11 +344,8 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
       
                           // Lieferant-Filter - using the same logic as AppContent.tsx
                     if (exportFilters.supplierFilter) {
-                      // Get the article's supplier name using the same logic as AppContent
+                      // Get the article's supplier name using supplierId
                       const getArticleSupplierName = (article: any) => {
-                        if (article.supplier && typeof article.supplier === 'object' && article.supplier.name) {
-                          return article.supplier.name;
-                        }
                         if (article.supplierId) {
                           const supplier = suppliers.find(s => s.id === article.supplierId);
                           return supplier ? supplier.name : null;
@@ -772,14 +771,25 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
         if (!row || Object.values(row).every(v => !v)) continue; // Leere Zeile überspringen
 
         // Artikel-Objekt erstellen
+        const generatedId = UUIDUtils.generateId(); // Frontend-ID (eindeutig pro Artikel)
         const article: any = {
-          id: `article_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          id: generatedId,
+          isNew: true,
+          isDirty: true,
+          syncStatus: 'pending'
+          // Keine Timestamps - werden von PostgreSQL automatisch gesetzt
         };
+        
+        console.log(`🆕 Erstelle Artikel-Objekt #${i + 1} mit ID: ${generatedId}`);
         
         // Für jedes Artikelfeld den Wert ermitteln
         articleFields.forEach(field => {
+          // WICHTIG: Überspringe System-Felder - diese werden nie aus CSV/JSON importiert
+          const systemFields = ['id', 'dbId', 'isNew', 'isDirty', 'syncStatus', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'lastModifiedBy'];
+          if (systemFields.includes(field)) {
+            return; // Überspringe System-Felder
+          }
+          
           const mapping = fieldMappings[field];
           
           if (mapping === '__DEFAULT__') {
@@ -795,6 +805,14 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
             }
           }
         });
+        
+        // Stelle sicher, dass die generierte ID nicht überschrieben wurde
+        if (!article.id || article.id !== generatedId) {
+          console.error(`❌ KRITISCHER FEHLER: ID wurde überschrieben! Original: ${generatedId}, Aktuell: ${article.id}`);
+          article.id = generatedId; // Wiederherstellung der ursprünglichen ID
+        }
+        
+        console.log(`✅ Artikel-ID nach Mapping: ${article.id} (Name: ${article.name || 'unbekannt'})`);
         
         // Debugging: Log the values for price fields
         if (article.bundlePrice || article.pricePerUnit) {
@@ -812,7 +830,10 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
           if (!supplierMap.has(supplierNameLower)) {
             // Neuer Lieferant - erstellen
             const newSupplier = {
-              id: `supplier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              id: UUIDUtils.generateId(), // Frontend-ID (eindeutig pro Lieferant)
+              isNew: true,
+              isDirty: true,
+              syncStatus: 'pending',
               name: supplierName,
               contactPerson: '',
               email: '',
@@ -824,9 +845,8 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                 country: ''
               },
               phoneNumbers: [],
-              notes: '',
-              createdAt: new Date(),
-              updatedAt: new Date()
+              notes: ''
+              // Keine Timestamps - werden von PostgreSQL automatisch gesetzt
             };
             
             newSuppliers.push(newSupplier);
@@ -839,6 +859,9 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
             article.supplierId = existingSupplierId;
             console.log(`Bestehender Lieferant gefunden: "${supplierName}" mit ID: ${existingSupplierId}`);
           }
+          
+          // WICHTIG: Entferne das alte 'supplier'-Feld nach der Verarbeitung
+          delete article.supplier;
         } else {
           // Kein Lieferant angegeben - Standardwert oder Fehler
           console.warn(`Artikel "${article.name}" hat keinen Lieferanten angegeben`);
@@ -899,7 +922,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
 } else if (!article.additives) {
   article.additives = [];
 }
-        if (!article.bundlePriceType) article.bundlePriceType = 'brutto';
+    
         
         // Preise als Zahlen konvertieren (deutsche Zahlenformate unterstützen)
         if (article.bundlePrice) {
@@ -1022,9 +1045,49 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
 
         // Nur Artikel mit allen erforderlichen Feldern hinzufügen
         if (article.name && article.supplierId && article.bundlePrice) {
-          importedArticles.push(article);
+          // Duplikat-Erkennung: Prüfe auf gleichen Namen oder Artikelnummer beim gleichen Lieferanten
+          // 1. Gegen bereits importierte Artikel in dieser Session
+          const isDuplicateInImport = importedArticles.some(existingArticle => {
+            // Gleicher Name beim gleichen Lieferanten
+            const sameNameSameSupplier = existingArticle.name.toLowerCase() === article.name.toLowerCase() && 
+                                       existingArticle.supplierId === article.supplierId;
+            
+            // Gleiche Artikelnummer beim gleichen Lieferanten (falls Artikelnummer vorhanden)
+            const sameArticleNumberSameSupplier = article.supplierArticleNumber && 
+                                                existingArticle.supplierArticleNumber &&
+                                                existingArticle.supplierArticleNumber.toLowerCase() === article.supplierArticleNumber.toLowerCase() && 
+                                                existingArticle.supplierId === article.supplierId;
+            
+            return sameNameSameSupplier || sameArticleNumberSameSupplier;
+          });
+          
+          // 2. Gegen bestehende Artikel in der App
+          const isDuplicateInExisting = articles.some(existingArticle => {
+            // Gleicher Name beim gleichen Lieferanten
+            const sameNameSameSupplier = existingArticle.name.toLowerCase() === article.name.toLowerCase() && 
+                                       existingArticle.supplierId === article.supplierId;
+            
+            // Gleiche Artikelnummer beim gleichen Lieferanten (falls Artikelnummer vorhanden)
+            const sameArticleNumberSameSupplier = article.supplierArticleNumber && 
+                                                existingArticle.supplierArticleNumber &&
+                                                existingArticle.supplierArticleNumber.toLowerCase() === article.supplierArticleNumber.toLowerCase() && 
+                                                existingArticle.supplierId === article.supplierId;
+            
+            return sameNameSameSupplier || sameArticleNumberSameSupplier;
+          });
+          
+          if (isDuplicateInImport) {
+            console.warn(`⚠️ Artikel "${article.name}" (${article.supplierArticleNumber || 'keine Artikelnummer'}) wurde übersprungen - Duplikat in der Import-Datei gefunden`);
+            continue; // Überspringe diesen Artikel
+          } else if (isDuplicateInExisting) {
+            console.warn(`⚠️ Artikel "${article.name}" (${article.supplierArticleNumber || 'keine Artikelnummer'}) wurde übersprungen - bereits in der App vorhanden`);
+            continue; // Überspringe diesen Artikel
+          } else {
+            importedArticles.push(article);
+            console.log(`✅ Artikel "${article.name}" erfolgreich zur Import-Liste hinzugefügt`);
+          }
         } else {
-          console.warn(`Artikel "${article.name}" wurde nicht importiert - fehlende erforderliche Felder:`, {
+          console.warn(`⚠️ Artikel "${article.name}" wurde nicht importiert - fehlende erforderliche Felder:`, {
             name: !!article.name,
             supplierId: !!article.supplierId,
             bundlePrice: !!article.bundlePrice
@@ -1043,7 +1106,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
       const message = `Import erfolgreich!\n\n` +
         `- ${importedArticles.length} Artikel importiert\n` +
         `- ${newSuppliers.length} neue Lieferanten erstellt\n` +
-        `- ${dataRows.length - importedArticles.length} Artikel übersprungen (fehlende erforderliche Felder)\n\n` +
+        `- ${dataRows.length - importedArticles.length} Artikel übersprungen (fehlende erforderliche Felder oder Duplikate)\n\n` +
         `Die Daten wurden zu Ihrer Artikelliste hinzugefügt.`;
       
       showMessage('success', 'Erfolg', message);
@@ -1810,7 +1873,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                                                >
                                                 {filteredOptions[field]?.map((option, index) => (
                                                   <div
-                                                    key={index}
+                                                    key={`option-${field}-${index}-${option}`}
                                                     onClick={() => handleOptionSelect(field, option)}
                                                     style={{
                                                       padding: '0.5rem 0.75rem',
@@ -1882,7 +1945,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                                  <tr>
                                    <th style={{ borderColor: colors.cardBorder, color: colors.text }}>#</th>
                                    {csvHeaders.map((header, index) => (
-                                     <th key={index} style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                                     <th key={`header-${index}-${header}`} style={{ borderColor: colors.cardBorder, color: colors.text }}>
                                        {header}
                                      </th>
                                    ))}
@@ -1891,7 +1954,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                                <tbody>
                                  {previewData.map((row, rowIndex) => (
                                    <tr 
-                                     key={rowIndex} 
+                                     key={`preview-row-${rowIndex}`}
                                      style={{ 
                                        borderColor: colors.cardBorder,
                                        cursor: 'pointer'
@@ -1901,7 +1964,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                                        {rowIndex + 1}
                                      </td>
                                      {csvHeaders.map((header, colIndex) => (
-                                       <td key={colIndex} style={{ borderColor: colors.cardBorder, color: colors.text }}>
+                                       <td key={`preview-cell-${rowIndex}-${colIndex}-${header}`} style={{ borderColor: colors.cardBorder, color: colors.text }}>
                                          {row[header] || '-'}
                                        </td>
                                      ))}
@@ -2138,7 +2201,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                         >
                           <div className="row">
                             {exportFields.map((field, index) => (
-                              <div key={field} className="col-md-6 col-lg-4 mb-2">
+                              <div key={`export-field-${index}-${field}`} className="col-md-6 col-lg-4 mb-2">
                                 <div className="form-check">
                                   <input
                                     className="form-check-input"
@@ -2297,7 +2360,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                                       )
                                       .map((category, index) => (
                                         <div
-                                          key={index}
+                                          key={`filter-category-${index}-${category}`}
                                           onClick={() => {
                                             handleFilterChange('categoryFilter', category);
                                             setShowCategoryDropdown(false);
@@ -2354,8 +2417,8 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                                 }}
                               >
                                 <option value="">Alle Lieferanten</option>
-                                {suppliers.map(supplier => (
-                                  <option key={supplier.name} value={supplier.name}>{supplier.name}</option>
+                                {suppliers.map((supplier, index) => (
+                                  <option key={`filter-supplier-${index}-${supplier.name}`} value={supplier.name}>{supplier.name}</option>
                                 ))}
                               </select>
                             </div>

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { FaPlus, FaSearch, FaUtensils, FaChartLine, FaClock, FaStar } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaUtensils, FaChartLine, FaClock, FaStar, FaCloud } from 'react-icons/fa';
 import { useAppContext } from '../contexts/AppContext';
 import StorageStatus from './ui/StorageStatus';
 
@@ -82,8 +82,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     
     // Top-Lieferanten (nach Anzahl der Artikel)
     const supplierCounts = articles.reduce((acc, article) => {
-      if (article.supplier) {
-        acc[article.supplier] = (acc[article.supplier] || 0) + 1;
+      if (article.supplierId) {
+        // Finde Lieferanten-Namen anhand der supplierId
+        const supplier = suppliers.find(s => s.id === article.supplierId);
+        const supplierName = supplier?.name || 'Unbekannter Lieferant';
+        acc[supplierName] = (acc[supplierName] || 0) + 1;
       }
       return acc;
     }, {} as Record<string, number>);
@@ -135,14 +138,41 @@ const Dashboard: React.FC<DashboardProps> = ({
     return new Date(timestamp).toLocaleDateString('de-DE');
   };
   
-  const renderStatCard = (icon: string | React.ReactElement, title: string, value: string | number, subtitle: string, additionalInfo?: string) => (
-    <div className="col-md-3 mb-4">
-      <div className="card h-100" style={{ 
-        backgroundColor: colors.card, 
-        borderColor: colors.cardBorder,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        borderRadius: '8px'
-      }}>
+  const renderStatCard = (
+    icon: string | React.ReactElement, 
+    title: string, 
+    value: string | number, 
+    subtitle: string, 
+    additionalInfo?: string,
+    onClick?: () => void
+  ) => (
+    <div className="col-md-4 mb-4">
+      <div 
+        className="card h-100" 
+        style={{ 
+          backgroundColor: colors.card, 
+          borderColor: colors.cardBorder,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          borderRadius: '8px',
+          cursor: onClick ? 'pointer' : 'default',
+          transition: 'all 0.2s ease'
+        }}
+        onClick={onClick}
+        onMouseEnter={(e) => {
+          if (onClick) {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
+            e.currentTarget.style.borderColor = colors.accent;
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (onClick) {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+            e.currentTarget.style.borderColor = colors.cardBorder;
+          }
+        }}
+      >
         <div className="card-body text-center">
           <div style={{ 
             width: 60, 
@@ -202,52 +232,84 @@ const Dashboard: React.FC<DashboardProps> = ({
         {/* Header */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h1 style={{ color: colors.text, margin: 0 }}>Dashboard</h1>
-          <div className="d-flex gap-2 align-items-center">
-            {lastSaved && storageInfo && (
-              <StorageStatus 
-                lastSaved={lastSaved}
-                storageInfo={storageInfo}
-                isStorageAvailable={isStorageAvailable || false}
-              />
-            )}
-            <button 
-              className="btn btn-outline-secondary btn-sm"
-              onClick={() => setShowArticleForm(true)}
-              style={{ borderColor: colors.accent, color: colors.accent }}
-            >
-              <FaPlus className="me-1" />
-              Neuer Artikel
-            </button>
-            <button 
-              className="btn btn-outline-secondary btn-sm"
-              onClick={handleNewRecipe}
-              style={{ borderColor: colors.accent, color: colors.accent }}
-            >
-              <FaUtensils className="me-1" />
-              Neues Rezept
-            </button>
-            <button 
-              className="btn btn-outline-secondary btn-sm"
-              onClick={() => setShowSupplierForm(true)}
-              style={{ borderColor: colors.accent, color: colors.accent }}
-            >
-              <FaPlus className="me-1" />
-              Neuer Lieferant
-            </button>
+          
+          {/* Speicher-Info mit Link */}
+          <div 
+            className="d-flex align-items-center gap-2 px-3 py-2 rounded"
+            style={{
+              backgroundColor: colors.secondary,
+              border: `1px solid ${colors.cardBorder}`,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={() => setCurrentPage('storage-management')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = colors.accent;
+              e.currentTarget.style.backgroundColor = colors.accent + '20';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = colors.cardBorder;
+              e.currentTarget.style.backgroundColor = colors.secondary;
+            }}
+            title="Speicherverwaltung öffnen"
+          >
+            <FaCloud style={{ color: colors.accent, fontSize: '1.2rem' }} />
+            <div>
+              <div style={{ fontSize: '0.75rem', color: colors.textSecondary }}>Speichermodus</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: colors.text }}>
+                {(() => {
+                  const storageManagement = localStorage.getItem('storageManagement');
+                  if (storageManagement) {
+                    try {
+                      const parsed = JSON.parse(storageManagement);
+                      const mode = parsed.currentStorage?.currentStorageMode || 'local';
+                      const dataStorage = parsed.currentStorage?.currentDataStorage || 'SQLite';
+                      const pictureStorage = parsed.currentStorage?.currentPictureStorage || 'LocalPath';
+                      
+                      if (mode === 'local') {
+                        return 'Lokal (Browser)';
+                      } else if (mode === 'cloud') {
+                        return `Cloud (${dataStorage} + ${pictureStorage})`;
+                      } else {
+                        return `Hybrid (${dataStorage} + ${pictureStorage})`;
+                      }
+                    } catch (e) {
+                      return 'Lokal (Browser)';
+                    }
+                  }
+                  return 'Lokal (Browser)';
+                })()}
+              </div>
+            </div>
           </div>
         </div>
         
         {/* Hauptstatistiken */}
         <div className="row">
-          {renderStatCard('📦', 'Artikel', articles.length, 'Verfügbare Artikel', `Ø ${formatPrice(statistics.averageArticlePrice)}`)}
-          {renderStatCard('👥', 'Lieferanten', suppliers.length, 'Aktive Partner')}
-          {renderStatCard('🏷️', 'Kategorien', statistics.categoryCount, 'Verwendete Kategorien')}
-          {renderStatCard('💰', 'Gesamtwert', formatPrice(statistics.totalValue), 'Lagerwert')}
-        </div>
-
-        {/* Zusätzliche Statistiken */}
-        <div className="row">
-          {renderStatCard(<FaUtensils />, 'Rezepte', statistics.recipeCount, 'Verfügbare Rezepte', `Ø ${formatPrice(statistics.averageRecipeCost)}`)}
+          {renderStatCard(
+            '📦', 
+            'Artikel', 
+            articles.length, 
+            'Verfügbare Artikel', 
+            `Ø ${formatPrice(statistics.averageArticlePrice)}`,
+            () => setCurrentPage('artikel')
+          )}
+          {renderStatCard(
+            '👥', 
+            'Lieferanten', 
+            suppliers.length, 
+            'Aktive Partner',
+            undefined,
+            () => setCurrentPage('lieferanten')
+          )}
+          {renderStatCard(
+            <FaUtensils />, 
+            'Rezepte', 
+            recipes.length, 
+            'Verfügbare Rezepte', 
+            `Ø ${formatPrice(statistics.averageRecipeCost)}`,
+            () => setCurrentPage('rezepte')
+          )}
         </div>
 
         {/* Quick Actions */}
@@ -255,7 +317,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div className="col-12">
             <h3 style={{ color: colors.text, marginBottom: '1rem' }}>Schnellzugriff</h3>
             <div className="row">
-              <div className="col-md-3 mb-3">
+              <div className="col-md-6 mb-3">
                 <button 
                   className="btn btn-outline-primary w-100 p-3" 
                   onClick={() => setShowArticleForm(true)}
@@ -265,7 +327,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   Neuen Artikel anlegen
                 </button>
               </div>
-              <div className="col-md-3 mb-3">
+              <div className="col-md-6 mb-3">
                 <button 
                   className="btn btn-outline-primary w-100 p-3" 
                   onClick={handleNewRecipe}
@@ -273,26 +335,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 >
                   <FaUtensils className="me-2" />
                   Neues Rezept erstellen
-                </button>
-              </div>
-              <div className="col-md-3 mb-3">
-                <button 
-                  className="btn btn-outline-primary w-100 p-3" 
-                  onClick={() => setCurrentPage('artikel')}
-                  style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
-                >
-                  <FaSearch className="me-2" />
-                  Artikel durchsuchen
-                </button>
-              </div>
-              <div className="col-md-3 mb-3">
-                <button 
-                  className="btn btn-outline-primary w-100 p-3" 
-                  onClick={() => setCurrentPage('rezeptverwaltung')}
-                  style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
-                >
-                  <FaChartLine className="me-2" />
-                  Rezepte verwalten
                 </button>
               </div>
             </div>
@@ -318,9 +360,9 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="card-body">
                 {statistics.newestArticles.length > 0 ? (
                   <div className="list-group list-group-flush">
-                    {statistics.newestArticles.map((article) => (
+                    {statistics.newestArticles.map((article, index) => (
                       <div 
-                        key={article.id} 
+                        key={article.id || `newest-article-${index}`} 
                         className="list-group-item d-flex justify-content-between align-items-center"
                         style={{ 
                           backgroundColor: 'transparent', 
@@ -368,9 +410,9 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="card-body">
                 {statistics.mostExpensiveArticles.length > 0 ? (
                   <div className="list-group list-group-flush">
-                    {statistics.mostExpensiveArticles.map((article) => (
+                    {statistics.mostExpensiveArticles.map((article, index) => (
                       <div 
-                        key={article.id} 
+                        key={article.id || `expensive-article-${index}`} 
                         className="list-group-item d-flex justify-content-between align-items-center"
                         style={{ 
                           backgroundColor: 'transparent', 
@@ -402,52 +444,9 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Top-Kategorien und Lieferanten */}
+        {/* Top-Lieferanten */}
         <div className="row">
-          <div className="col-md-6 mb-4">
-            <div className="card" style={{ 
-              backgroundColor: colors.card, 
-              borderColor: colors.cardBorder,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              borderRadius: '8px'
-            }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
-                <h5 className="mb-0" style={{ color: colors.text }}>
-                  Top-Kategorien
-                </h5>
-              </div>
-              <div className="card-body">
-                {statistics.topCategories.length > 0 ? (
-                  <div className="list-group list-group-flush">
-                    {statistics.topCategories.map((item) => (
-                      <div
-                        key={item.category}
-                        style={{ 
-                          backgroundColor: 'transparent', 
-                          borderColor: colors.cardBorder,
-                          padding: '0.75rem 1.25rem',
-                          borderBottom: `1px solid ${colors.cardBorder}`,
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <span style={{ color: colors.text }}>
-                          {item.category} - {String(item.count)} Artikel
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ color: colors.text, textAlign: 'center', margin: 0 }}>
-                    Keine Kategorien vorhanden
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-6 mb-4">
+          <div className="col-md-12 mb-4">
             <div className="card" style={{ 
               backgroundColor: colors.card, 
               borderColor: colors.cardBorder,
@@ -462,22 +461,29 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="card-body">
                 {statistics.topSuppliers.length > 0 ? (
                   <div className="list-group list-group-flush">
-                    {statistics.topSuppliers.map((item) => (
+                    {statistics.topSuppliers.map((item, index) => (
                       <div
-                        key={item.supplier}
+                        key={`top-supplier-${index}-${item.supplier}`}
                         style={{ 
                           backgroundColor: 'transparent', 
                           borderColor: colors.cardBorder,
                           padding: '0.75rem 1.25rem',
-                          borderBottom: `1px solid ${colors.cardBorder}`,
+                          borderBottom: index < statistics.topSuppliers.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s ease'
                         }}
                         onClick={() => {
                           const supplier = suppliers.find(s => s.name === item.supplier);
                           if (supplier) handleEditSupplier(supplier);
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = colors.secondary;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
                         }}
                       >
                         <span style={{ color: colors.text }}>

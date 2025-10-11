@@ -2,25 +2,28 @@ import React from 'react';
 import { FaTimes as FaClose, FaSave, FaArrowLeft, FaPlus, FaGlobe, FaSearch } from 'react-icons/fa';
 import { useSupplierForm } from '../hooks/useSupplierForm';
 import { useAppContext } from '../contexts/AppContext';
+import { storageLayer } from '../services/storageLayer';
+import { Supplier, PhoneType } from '../types';
+import { UUIDUtils } from '../utils/uuidUtils';
 
 interface LieferantenformularProps {
-  suppliers: any[];
-  setSuppliers: React.Dispatch<React.SetStateAction<any[]>>;
+  suppliers: Supplier[];
   showSupplierForm: boolean;
   setShowSupplierForm: (show: boolean) => void;
   getCurrentColors: () => any;
   isValidUrl: (url: string) => boolean;
   openWebsite: (url: string) => void;
+  onReset: () => void;
 }
 
 const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   suppliers,
-  setSuppliers,
   showSupplierForm,
   setShowSupplierForm,
   getCurrentColors,
   isValidUrl,
-  openWebsite
+  openWebsite,
+  onReset
 }) => {
   const { state, dispatch } = useAppContext();
   const { editingSupplierId } = state;
@@ -44,11 +47,12 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
     updatePhoneNumber
   } = useSupplierForm({
     suppliers,
-    setSuppliers,
+    setSuppliers: () => {}, // Dummy-Funktion, da wir jetzt über StorageLayer speichern
     showSupplierForm,
     setShowSupplierForm,
     isValidUrl,
-    openWebsite
+    openWebsite,
+    saveAppData: undefined // Nicht mehr benötigt
   });
 
   // Wenn das Formular geöffnet wird, setze editingSupplier basierend auf editingSupplierId
@@ -72,33 +76,95 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
     dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: null });
   };
 
-  const handleSaveAndClose = () => {
-    handleSaveSupplier();
-    dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: null });
+  const handleSaveAndClose = async () => {
+    try {
+      // Erstelle Lieferant mit Hybrid-ID-System
+      const supplierToSave: Supplier = {
+        ...supplierForm,
+        id: editingSupplier ? editingSupplier.id : UUIDUtils.generateId(), // Frontend-ID (eindeutig)
+        dbId: editingSupplier?.dbId, // DB-ID falls vorhanden (für Updates)
+        isNew: !editingSupplier,
+        isDirty: true,
+        syncStatus: 'pending',
+        phoneNumbers: supplierForm.phoneNumbers.map(phone => ({
+          id: UUIDUtils.generateId(),
+          type: phone.type as PhoneType, // Type-Assertion für PhoneType
+          number: phone.number
+        }))
+        // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
+      };
+      
+      console.log('💾 Speichere Lieferant über StorageLayer:', {
+        name: supplierToSave.name,
+        id: supplierToSave.id,
+        isNew: supplierToSave.isNew,
+        hasDbId: !!supplierToSave.dbId
+      });
+      
+      // Speichere über StorageLayer
+      const success = await storageLayer.save('suppliers', [supplierToSave]);
+      
+      if (!success) {
+        throw new Error('Fehler beim Speichern des Lieferanten');
+      }
+      
+      console.log('✅ Lieferant erfolgreich über StorageLayer gespeichert');
+      
+      // Aktualisiere den globalen State
+      if (editingSupplier) {
+        // Bestehender Lieferant wird bearbeitet
+        dispatch({ type: 'UPDATE_SUPPLIER', payload: { id: editingSupplier.id, supplier: supplierToSave } });
+      } else {
+        // Neuer Lieferant wird hinzugefügt
+        dispatch({ type: 'ADD_SUPPLIER', payload: supplierToSave });
+      }
+      
+      // Reset und schließen
+      setShowSupplierForm(false);
+      dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: null });
+      onReset();
+      
+    } catch (error: any) {
+      console.error('❌ Fehler beim Speichern des Lieferanten:', error);
+      alert(`Fehler beim Speichern: ${error.message || 'Unbekannter Fehler'}`);
+    }
   };
 
   const handleSearchCompany = () => {
+    console.log('🔍 handleSearchCompany aufgerufen, Firmenname:', supplierForm.name);
+    
     if (supplierForm.name.trim()) {
       const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(supplierForm.name.trim())}`;
+      console.log('🔍 Öffne Suche:', searchUrl);
       window.open(searchUrl, '_blank');
       
       // Aktiviere Zwischenablage-Auswertung für den nächsten Fokus
+      console.log('📋 Aktiviere Zwischenablage-Auswertung für nächsten Fokus');
       setShouldEvaluateClipboard(true);
+    } else {
+      console.log('⚠️ Kein Firmenname eingegeben');
     }
   };
 
   // Neue Funktion: Zwischenablage-Inhalt auswerten
   const evaluateClipboardContent = async () => {
+    console.log('📋 evaluateClipboardContent aufgerufen, shouldEvaluateClipboard:', shouldEvaluateClipboard);
+    
     if (!shouldEvaluateClipboard) {
+      console.log('📋 Zwischenablage-Auswertung nicht aktiviert, überspringe');
       return;
     }
 
+    console.log('📋 Starte Zwischenablage-Auswertung...');
     setIsEvaluatingClipboard(true);
 
     try {
+      console.log('📋 Versuche Zwischenablage zu lesen...');
       const clipboardText = await navigator.clipboard.readText();
+      console.log('📋 Zwischenablage-Inhalt:', clipboardText?.substring(0, 100) + '...');
 
       if (!clipboardText || clipboardText.trim().length < 5) {
+        console.log('📋 Zwischenablage leer oder zu kurz, breche ab');
         setShouldEvaluateClipboard(false);
         setIsEvaluatingClipboard(false);
         return;
@@ -106,18 +172,43 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
 
       // Speichere den Text in einer neuen Variable für weitere Verarbeitung
       const extractedText = clipboardText.trim();
+      console.log('📋 Zwischenablage-Text (gekürzt):', extractedText.substring(0, 200));
 
       // Starte intelligente Daten-Extraktion
+      console.log('📋 Starte Daten-Extraktion...');
       const extractedData = await extractDataFromText(extractedText);
+      console.log('📋 Extrahierte Daten:', extractedData);
 
       // 11. Formularfelder mit extrahierten Daten befüllen
+      console.log('📋 Aktuelles Formular:', supplierForm);
       const updatedForm = { ...supplierForm };
+      
+      // WICHTIG: Prüfe ob address ein String ist (JSON-serialisiert) und parse es
+      if (typeof updatedForm.address === 'string') {
+        try {
+          updatedForm.address = JSON.parse(updatedForm.address);
+          console.log('📋 Address-Feld war String, wurde geparst:', updatedForm.address);
+        } catch (e) {
+          console.warn('⚠️ Konnte Address-String nicht parsen, verwende Default-Objekt');
+          updatedForm.address = { street: '', zipCode: '', city: '', country: '' };
+        }
+      }
+      
+      // Stelle sicher, dass address ein Objekt ist
+      if (!updatedForm.address || typeof updatedForm.address !== 'object') {
+        updatedForm.address = { street: '', zipCode: '', city: '', country: '' };
+      }
+      
       let hasChanges = false;
 
       // Firmenname (nur wenn noch leer oder wenn extrahierter Name länger/qualitativ besser ist)
+      console.log(`📋 Prüfe Firmenname: extractedData.companyName="${extractedData.companyName}", updatedForm.name="${updatedForm.name}"`);
       if (extractedData.companyName && (!updatedForm.name || extractedData.companyName.length > updatedForm.name.length)) {
+        console.log(`📋 ✅ Übernehme Firmenname: ${extractedData.companyName}`);
         updatedForm.name = extractedData.companyName;
         hasChanges = true;
+      } else {
+        console.log(`📋 ❌ Firmenname wird nicht übernommen`);
       }
 
       // E-Mail (nur wenn noch leer)
@@ -194,26 +285,29 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
         }
       }
 
-      // Formular aktualisieren, falls Änderungen vorhanden
-      if (hasChanges) {
-        setSupplierForm(updatedForm);
+      // 12. Notizen-Feld mit rawText aus JSON-String befüllen (VOR dem Formular-Update)
+      if (extractedData.rawText && (!updatedForm.notes || !updatedForm.notes.includes(extractedData.rawText))) {
+        const combinedNotes = updatedForm.notes 
+          ? `${updatedForm.notes}\n\n${extractedData.rawText}`
+          : extractedData.rawText;
+        
+        updatedForm.notes = combinedNotes;
+        hasChanges = true;
       }
 
-      // 12. Notizen-Feld mit rawText aus JSON-String befüllen
-      if (extractedData.rawText && (!supplierForm.notes || !supplierForm.notes.includes(extractedData.rawText))) {
-        const combinedNotes = supplierForm.notes 
-          ? `${supplierForm.notes}\n\n${extractedData.rawText}`
-          : extractedData.rawText;
-
-        setSupplierForm(prev => ({
-          ...prev,
-          notes: combinedNotes
-        }));
+      // Formular aktualisieren, falls Änderungen vorhanden (nur EIN State-Update!)
+      if (hasChanges) {
+        console.log('📋 Übernehme extrahierte Daten ins Formular:', updatedForm);
+        setSupplierForm(updatedForm);
+      } else {
+        console.log('📋 Keine Änderungen in der Zwischenablage gefunden');
       }
 
     } catch (error) {
-      // Silent error handling
+      console.error('❌ Fehler bei der Zwischenablage-Auswertung:', error);
+      alert(`Fehler bei der Zwischenablage-Auswertung: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
     } finally {
+      console.log('📋 Zwischenablage-Auswertung beendet');
       setIsEvaluatingClipboard(false);
       setShouldEvaluateClipboard(false);
     }
@@ -829,12 +923,17 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
 
   // Event-Handler für Fokus auf das Formular
   const handleFormFocus = () => {
+    console.log('🎯 handleFormFocus aufgerufen, shouldEvaluateClipboard:', shouldEvaluateClipboard);
+    
     // Nur auswerten, wenn der Button gedrückt wurde
     if (shouldEvaluateClipboard) {
+      console.log('📋 Zwischenablage-Auswertung aktiviert, starte in 500ms...');
       // Verzögerung für bessere UX und um sicherzustellen, dass der Fokus vollständig ist
       setTimeout(() => {
         evaluateClipboardContent();
       }, 500);
+    } else {
+      console.log('📋 Zwischenablage-Auswertung nicht aktiviert');
     }
   };
 
@@ -992,7 +1091,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                       </h6>
                     </div>
                     {supplierForm.phoneNumbers.map((phone, index) => (
-                      <div key={index} className="col-12 mb-3">
+                      <div key={`phone-${index}-${phone.type}-${phone.number}`} className="col-12 mb-3">
                         <div className="row">
                           <div className="col-md-3">
                             <select

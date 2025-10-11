@@ -1,8 +1,27 @@
-// Basis-Interfaces
+// Sync-Status für Hybrid-ID-System
+export type SyncStatus = 'synced' | 'pending' | 'error' | 'conflict';
+
+// Basis-Interfaces mit Hybrid-ID-System
 export interface BaseEntity {
+  // Frontend-ID (bleibt konstant für State-Management)
   id: string;
-  createdAt: Date;
-  updatedAt: Date;
+  
+  // DB-ID (nur für Datenbank-Operationen)
+  dbId?: string;
+  
+  // Sync-Informationen
+  isDirty?: boolean; // Wurde geändert?
+  isNew?: boolean; // Neuer Datensatz?
+  syncStatus?: SyncStatus; // Sync-Status
+  
+  // Zeitstempel (optional - werden von PostgreSQL automatisch gesetzt)
+  createdAt?: Date;
+  updatedAt?: Date;
+  
+  // Benutzer-Tracking für spätere Multi-User-Funktionalität
+  createdBy?: string; // Benutzer-ID der erstellt hat
+  updatedBy?: string; // Benutzer-ID der zuletzt geändert hat
+  lastModifiedBy?: string; // Benutzer-ID der zuletzt modifiziert hat
 }
 
 // Telefonnummer-Typen (wie in Outlook)
@@ -55,10 +74,12 @@ export interface Article extends BaseEntity {
   supplierArticleNumber?: string;
   bundleUnit: Unit;
   bundlePrice: number;
-  bundlePriceType: 'brutto' | 'netto';
+  bundleEanCode?: string; // EAN-Code für das Gebinde (z.B. Karton)
   content: number;
   contentUnit: Unit;
+  contentEanCode?: string; // EAN-Code für den Inhalt (z.B. Flaschen im Karton)
   pricePerUnit: number;
+  vatRate: number; // MwSt-Satz
   allergens: string[];
   additives: string[];
   ingredients?: string;
@@ -72,6 +93,7 @@ export interface Article extends BaseEntity {
     sugar?: number; // g pro 100g
     salt?: number; // g pro 100g
   };
+  openFoodFactsCode?: string; // Open Food Facts Produkt-Code für Rückverfolgbarkeit
   notes?: string;
 }
 
@@ -113,6 +135,8 @@ export interface Recipe extends BaseEntity {
   portions: number;
   preparationTime: number; // in Minuten
   difficulty: Difficulty;
+  energy?: number; // Energieverbrauch in kWh
+  image?: File; // Rezeptbild (nur für Frontend-Upload)
   ingredients: RecipeIngredient[];
   usedRecipes: UsedRecipe[]; // Verwendete Rezepte
   preparationSteps: PreparationStep[];
@@ -202,4 +226,7 @@ export interface DatabaseSchema {
   articles: Article[];
   recipes: Recipe[];
   settings: AppSettings;
-} 
+}
+
+// Storage-Konfiguration (neu)
+export * from './storage'; 

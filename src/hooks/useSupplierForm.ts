@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { generateId } from '../utils/storageUtils';
 
 interface SupplierForm {
   name: string;
@@ -25,6 +26,7 @@ interface UseSupplierFormProps {
   setShowSupplierForm: (show: boolean) => void;
   isValidUrl: (url: string) => boolean;
   openWebsite: (url: string) => void;
+  saveAppData?: (data: any) => Promise<boolean>;
 }
 
 export const useSupplierForm = ({
@@ -33,7 +35,8 @@ export const useSupplierForm = ({
   showSupplierForm,
   setShowSupplierForm,
   isValidUrl,
-  openWebsite
+  openWebsite,
+  saveAppData
 }: UseSupplierFormProps) => {
   // States
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
@@ -95,25 +98,121 @@ export const useSupplierForm = ({
     setShowSupplierForm(true);
   };
 
-  const handleSaveSupplier = () => {
-    if (editingSupplier) {
-      // Lieferant bearbeiten
-      setSuppliers(prev => prev.map(supplier => 
-        supplier.id === editingSupplier.id 
-          ? { ...supplierForm, id: supplier.id }
-          : supplier
-      ));
+  const handleSaveSupplier = async () => {
+    try {
+      // Prüfe den aktuellen Speichermodus
+      const currentStorageMode = localStorage.getItem('chef_storage_mode') as string;
+      
+      if (currentStorageMode === 'cloud') {
+        // Speichere Lieferant über Cloud-API
+        console.log(`💾 Speichere Lieferant über Cloud-API: ${supplierForm.name}`);
+        
+        const method = editingSupplier ? 'PUT' : 'POST';
+        const url = editingSupplier 
+          ? `http://localhost:3001/api/v1/suppliers/${editingSupplier.id}`
+          : 'http://localhost:3001/api/v1/suppliers';
+        
+        const supplierToSave = {
+          ...supplierForm,
+          id: editingSupplier ? editingSupplier.id : generateId()
+        };
+        
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(supplierToSave)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log(`✅ Lieferant erfolgreich über Cloud gespeichert:`, result.message);
+        
+        // Verwende die vom Cloud zurückgegebenen Daten
+        const savedSupplier = result.data;
+        
+        setSuppliers(prev => {
+          const updatedSuppliers = editingSupplier 
+            ? prev.map(s => s.id === editingSupplier.id ? savedSupplier : s)
+            : [...prev, savedSupplier];
+          
+          return updatedSuppliers;
+        });
+      } else {
+        // Lokaler Speichermodus
+        if (editingSupplier) {
+          // Lieferant bearbeiten
+          setSuppliers(prev => prev.map(supplier => 
+            supplier.id === editingSupplier.id 
+              ? { ...supplierForm, id: supplier.id }
+              : supplier
+          ));
+        } else {
+          // Neuen Lieferanten erstellen
+          const newSupplier = {
+            ...supplierForm,
+            id: generateId()
+          };
+          setSuppliers(prev => [...prev, newSupplier]);
+        }
+      }
+      
+      // Speichere die aktualisierten Lieferanten im LocalStorage
+      if (saveAppData) {
+        const supplierToSave = {
+          ...supplierForm,
+          id: editingSupplier ? editingSupplier.id : generateId()
+        };
+        
+        const updatedSuppliers = editingSupplier 
+          ? suppliers.map(s => s.id === editingSupplier.id ? supplierToSave : s)
+          : [...suppliers, supplierToSave];
+        
+        await saveAppData({ suppliers: updatedSuppliers });
+        console.log('✅ Lieferanten erfolgreich im LocalStorage gespeichert');
+      }
+      
       setEditingSupplier(null);
-    } else {
-      // Neuen Lieferanten erstellen
-      const newSupplier = {
-        ...supplierForm,
-        id: Date.now().toString()
-      };
-      setSuppliers(prev => [...prev, newSupplier]);
+      setShowSupplierForm(false);
+      resetSupplierForm();
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern des Lieferanten:', error);
+      // Fallback: Lokale Speicherung
+      if (editingSupplier) {
+        setSuppliers(prev => prev.map(supplier => 
+          supplier.id === editingSupplier.id 
+            ? { ...supplierForm, id: supplier.id }
+            : supplier
+        ));
+      } else {
+        const newSupplier = {
+          ...supplierForm,
+          id: generateId()
+        };
+        setSuppliers(prev => [...prev, newSupplier]);
+      }
+      
+      if (saveAppData) {
+        const supplierToSave = {
+          ...supplierForm,
+          id: editingSupplier ? editingSupplier.id : generateId()
+        };
+        
+        const updatedSuppliers = editingSupplier 
+          ? suppliers.map(s => s.id === editingSupplier.id ? supplierToSave : s)
+          : [...suppliers, supplierToSave];
+        
+        await saveAppData({ suppliers: updatedSuppliers });
+      }
+      
+      setEditingSupplier(null);
+      setShowSupplierForm(false);
+      resetSupplierForm();
     }
-    setShowSupplierForm(false);
-    resetSupplierForm();
   };
 
   const addPhoneNumber = () => {

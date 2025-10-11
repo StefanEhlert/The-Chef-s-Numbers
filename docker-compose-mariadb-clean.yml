@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # MariaDB Database
+  mariadb:
+    image: mariadb:10.11
+    container_name: chef-numbers-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: chef123
+      MYSQL_DATABASE: chef_numbers
+      MYSQL_USER: chef_user
+      MYSQL_PASSWORD: chef123
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u chef_user -pchef123 --silent || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Init Script Downloader
+  mariadb-init:
+    image: curlimages/curl:latest
+    container_name: chef-numbers-mariadb-init
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - chef-numbers-network
+    command: |
+      sh -c "
+        echo '⏳ Warte auf MariaDB...'
+        sleep 5
+        
+        echo '📥 Lade Init-Script herunter...'
+        curl -o /tmp/init-chef-numbers-mariadb.sql http://localhost:3000/init-scripts/init-chef-numbers-mariadb.sql
+        
+        echo '📤 Übertrage Script zu MariaDB...'
+        mysql -h mariadb -u root -pchef123 chef_numbers < /tmp/init-chef-numbers-mariadb.sql
+        
+        echo '✅ Init-Script erfolgreich ausgeführt!'
+        echo '🗑️ Init-Container wird entfernt...'
+      "
+    restart: "no"
+
+  # Prisma REST API Server
+  prisma-api:
+    image: node:18-alpine
+    container_name: chef-numbers-prisma-api
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      DATABASE_URL: mysql://chef_user:chef123@mariadb:3306/chef_numbers
+      JWT_SECRET: chef-jwt-secret-key-2024
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./prisma-api:/app
+    command: |
+      sh -c "
+        echo '📦 Installiere Prisma API Dependencies...'
+        npm install
+        
+        echo '🔄 Generiere Prisma Client...'
+        npx prisma generate
+        
+        echo '🗄️ Führe Datenbank-Migrationen aus...'
+        npx prisma db push
+        
+        echo '🚀 Starte Prisma API Server...'
+        npm start
+      "
+    depends_on:
+      mariadb-init:
+        condition: service_completed_successfully
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  mariadb_data:
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network

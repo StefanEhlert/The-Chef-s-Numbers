@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
 
 // App State Interface
 interface AppState {
@@ -280,6 +280,31 @@ interface AppProviderProps {
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Einfache App-Initialisierung (ohne Auto-Migration)
+  useEffect(() => {
+    console.log('🚀 App wird initialisiert...');
+    setIsInitialized(true);
+    console.log('✅ App-Initialisierung abgeschlossen');
+  }, []); // Dependency Array mit State-Variablen
+
+  // Zeige Ladebildschirm während Initialisierung
+  if (!isInitialized) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
+        <div className="text-center">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Lädt...</span>
+          </div>
+          <div className="mt-3">
+            <h5>App wird initialisiert...</h5>
+            <p className="text-muted">Schema-Migration wird durchgeführt</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

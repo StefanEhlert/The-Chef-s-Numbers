@@ -1,7 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FaTimes as FaClose, FaImage, FaSave, FaArrowLeft, FaPlus, FaPencilAlt } from 'react-icons/fa';
 import { useRecipeForm } from '../hooks/useRecipeForm';
 import { useAppContext } from '../contexts/AppContext';
+import { UUIDUtils } from '../utils/uuidUtils';
+import { storageLayer } from '../services/storageLayer';
+import { Recipe, Unit, Difficulty } from '../types';
 
 interface RezeptformularProps {
   articles: any[];
@@ -31,6 +34,7 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   onReset
 }) => {
   const { state, dispatch } = useAppContext();
+  const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
   
   const {
     // States
@@ -114,53 +118,125 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
     }
   }, [show, articles, recipeForm.ingredients, updateIngredientFromArticle]);
 
+  // Lade gespeichertes Bild beim Öffnen des Formulares
+  useEffect(() => {
+    const loadSavedImage = async () => {
+      if (show && editingRecipe) {
+        try {
+          const imagePath = `pictures/recipes/${editingRecipe.id}`;
+          const imageData = await storageLayer.loadImage(imagePath);
+          if (imageData) {
+            setSavedImageUrl(imageData);
+            console.log('📷 Gespeichertes Rezeptbild geladen');
+          } else {
+            setSavedImageUrl(null);
+            console.log('📷 Kein gespeichertes Rezeptbild gefunden');
+          }
+        } catch (error) {
+          console.error('❌ Fehler beim Laden des Rezeptbildes:', error);
+          setSavedImageUrl(null);
+        }
+      } else if (show && !editingRecipe) {
+        // Neues Rezept - kein gespeichertes Bild
+        setSavedImageUrl(null);
+      }
+    };
+
+    loadSavedImage();
+  }, [show, editingRecipe]);
+
   if (!show) {
     return null;
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!recipeForm.name.trim()) {
       alert('Bitte geben Sie einen Namen für das Rezept ein.');
       return;
     }
 
-    // Entferne leere Zubereitungsschritte vor dem Speichern
-    const cleanedPreparationSteps = recipeForm.preparationSteps
-      .filter(step => step.description.trim() !== '')
-      .map((step, index) => ({ ...step, order: index + 1 }));
+    try {
+      // Entferne leere Zubereitungsschritte vor dem Speichern
+      const cleanedPreparationSteps = recipeForm.preparationSteps
+        .filter(step => step.description.trim() !== '')
+        .map((step, index) => ({ ...step, order: index + 1 }));
 
-    // Entferne nur Zutaten ohne Namen vor dem Speichern (Menge kann 0 sein)
-    const cleanedIngredients = recipeForm.ingredients
-      .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
+      // Entferne nur Zutaten ohne Namen vor dem Speichern (Menge kann 0 sein)
+      const cleanedIngredients = recipeForm.ingredients
+        .filter(ingredient => ingredient.name && ingredient.name.trim() !== '')
+        .map(ingredient => ({
+          ...ingredient,
+          unit: ingredient.unit as Unit // Type-Assertion für Unit
+        }));
 
-    const recipeToSave = {
-      ...recipeForm,
-      preparationSteps: cleanedPreparationSteps,
-      ingredients: cleanedIngredients,
-      id: editingRecipe ? editingRecipe.id : Date.now().toString(),
-      materialCosts: calculateMaterialCosts(),
-      totalNutritionInfo: calculateRecipeNutrition(),
-      allergens: getRecipeAllergens(),
-      createdAt: editingRecipe ? editingRecipe.createdAt : new Date(),
-      updatedAt: new Date(),
-      lastModifiedBy: 'Benutzer' // Platzhalter für später
-    };
+      const recipeId = editingRecipe ? editingRecipe.id : UUIDUtils.generateId();
+      
+      // Erstelle eine Kopie ohne das image-Feld (wird separat gespeichert)
+      const { image, ...recipeFormWithoutImage } = recipeForm;
+      
+      const recipeToSave: Recipe = {
+        ...recipeFormWithoutImage,
+        preparationSteps: cleanedPreparationSteps,
+        ingredients: cleanedIngredients,
+        id: recipeId, // Frontend-ID (eindeutig)
+        dbId: editingRecipe?.dbId, // DB-ID falls vorhanden (für Updates)
+        isNew: !editingRecipe,
+        isDirty: true,
+        syncStatus: 'pending',
+        difficulty: recipeForm.difficulty as Difficulty, // Type-Assertion für Difficulty
+        materialCosts: calculateMaterialCosts(),
+        totalNutritionInfo: calculateRecipeNutrition(),
+        allergens: getRecipeAllergens()
+        // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
+        // lastModifiedBy wird später implementiert (User-System)
+      };
 
-    onSave(recipeToSave);
-    resetRecipeForm();
-    
-    // Reset global editing state
-    if (state.editingRecipe) {
-      onReset();
+      // Speichere das Rezept
+      const success = await storageLayer.save('recipes', [recipeToSave]);
+
+      // Speichere das Bild falls vorhanden
+      if (recipeForm.image) {
+        try {
+          const imagePath = `pictures/recipes/${recipeId}`;
+          await storageLayer.saveImage(imagePath, recipeForm.image);
+          console.log('📷 Rezeptbild erfolgreich gespeichert');
+        } catch (error) {
+          console.error('❌ Fehler beim Speichern des Rezeptbildes:', error);
+          // Bildfehler soll das Rezept-Speichern nicht verhindern
+        }
+      }
+
+      if (!success) {
+        throw new Error('Fehler beim Speichern des Rezepts');
+      }
+
+      // Aktualisiere den globalen State
+      if (editingRecipe) {
+        dispatch({ type: 'UPDATE_RECIPE', payload: { id: editingRecipe.id, recipe: recipeToSave } });
+      } else {
+        dispatch({ type: 'ADD_RECIPE', payload: recipeToSave });
+      }
+
+      resetRecipeForm();
+      setSavedImageUrl(null); // Reset gespeichertes Bild
+      
+      // Reset global editing state
+      if (state.editingRecipe) {
+        onReset();
+      }
+      
+      // Schließe das Modal nach dem Speichern
+      onClose();
+    } catch (error: any) {
+      console.error('❌ Fehler beim Speichern des Rezepts:', error);
+      alert(`Fehler beim Speichern des Rezepts: ${error.message}`);
     }
-    
-    // Schließe das Modal nach dem Speichern
-    onClose();
   };
 
   const handleClose = () => {
     onClose();
     resetRecipeForm();
+    setSavedImageUrl(null); // Reset gespeichertes Bild
     // Reset global editing state
     if (state.editingRecipe) {
       onReset();
@@ -254,10 +330,10 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                         onClick={() => document.getElementById('recipe-image-input')?.click()}
                         title="Klicken Sie, um ein Bild auszuwählen"
                       >
-                        {recipeForm.image ? (
+                        {(recipeForm.image || savedImageUrl) ? (
                           <div className="position-relative w-100 h-100">
                             <img
-                              src={URL.createObjectURL(recipeForm.image)}
+                              src={recipeForm.image ? URL.createObjectURL(recipeForm.image) : savedImageUrl!}
                               alt="Rezeptbild"
                               style={{
                                 width: '100%',
@@ -279,7 +355,7 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                               <div className="text-center text-white">
                                 <FaImage style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }} />
                                 <div style={{ fontSize: '0.7rem' }}>
-                                  Bild ändern
+                                  {recipeForm.image ? 'Bild ändern' : 'Neues Bild auswählen'}
                                 </div>
                               </div>
                             </div>
@@ -428,9 +504,11 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                       <>
                         {/* Obere Reihe */}
                         <div className="col-md-4 mb-3">
-                          <label className="form-label" style={{ color: colors.text }}>
-                            Aufschlag (%)
-                          </label>
+                          <div className="d-flex justify-content-between align-items-center mb-1" style={{ height: '24px' }}>
+                            <label className="form-label mb-0" style={{ color: colors.text }}>
+                              Aufschlag (%)
+                            </label>
+                          </div>
                           <input
                             type="number"
                             className="form-control"
@@ -445,9 +523,9 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                             style={{ borderColor: colors.cardBorder, color: colors.text }}
                           />
                         </div>
-                        <div className="col-md-4 mb-3 d-flex flex-column">
-                          <div className="d-flex justify-content-between align-items-end mb-1">
-                            <label className="form-label mb-0" style={{ color: colors.text, fontSize: '0.875rem' }}>
+                        <div className="col-md-4 mb-3">
+                          <div className="d-flex justify-content-between align-items-center mb-1" style={{ height: '24px' }}>
+                            <label className="form-label mb-0" style={{ color: colors.text }}>
                               MwSt. (%)
                             </label>
                             <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
@@ -457,33 +535,31 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                               })()}
                             </small>
                           </div>
-                          <div className="mt-auto">
-                            <select
-                              className="form-control"
-                              value={recipeForm.vatRate}
-                              onChange={(e) => {
-                                const newVatRate = parseInt(e.target.value);
-                                setRecipeForm((prev: any) => {
-                                  const updatedForm = { ...prev, vatRate: newVatRate };
-                                  // Berechne den Aufschlag mit dem neuen MwSt-Satz
-                                  const materialCosts = calculateMaterialCosts();
-                                  const costsPerPortion = materialCosts / updatedForm.portions;
-                                  const netSellingPrice = calculateNetPrice(updatedForm.sellingPrice, newVatRate);
-                                  const markup = costsPerPortion > 0 ? Math.round((netSellingPrice / costsPerPortion) * 100) : 0;
-                                  
-                                  return { ...updatedForm, markupPercentage: markup };
-                                });
-                              }}
-                              style={{ borderColor: colors.cardBorder, color: colors.text }}
-                            >
-                              <option value={0}>0%</option>
-                              <option value={7}>7%</option>
-                              <option value={19}>19%</option>
-                            </select>
-                          </div>
+                          <select
+                            className="form-control"
+                            value={recipeForm.vatRate}
+                            onChange={(e) => {
+                              const newVatRate = parseInt(e.target.value);
+                              setRecipeForm((prev: any) => {
+                                const updatedForm = { ...prev, vatRate: newVatRate };
+                                // Berechne den Aufschlag mit dem neuen MwSt-Satz
+                                const materialCosts = calculateMaterialCosts();
+                                const costsPerPortion = materialCosts / updatedForm.portions;
+                                const netSellingPrice = calculateNetPrice(updatedForm.sellingPrice, newVatRate);
+                                const markup = costsPerPortion > 0 ? Math.round((netSellingPrice / costsPerPortion) * 100) : 0;
+                                
+                                return { ...updatedForm, markupPercentage: markup };
+                              });
+                            }}
+                            style={{ borderColor: colors.cardBorder, color: colors.text }}
+                          >
+                            <option value={0}>0%</option>
+                            <option value={7}>7%</option>
+                            <option value={19}>19%</option>
+                          </select>
                         </div>
                         <div className="col-md-4 mb-3">
-                          <div className="d-flex justify-content-between align-items-center mb-1">
+                          <div className="d-flex justify-content-between align-items-center mb-1" style={{ height: '24px' }}>
                             <label className="form-label mb-0" style={{ color: colors.text }}>
                               Verkaufspreis
                             </label>

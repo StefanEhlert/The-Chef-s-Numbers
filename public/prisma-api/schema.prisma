@@ -1,0 +1,136 @@
+// Chef Numbers Prisma Schema
+// Frontend-synchronisiertes Schema v2.0.0
+// Generiert aus centralSchema.ts
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Article {
+  id                     String   @id @default(cuid()) @db.VarChar(36)
+  name                   String   @db.Text
+  category               String?  @db.Text
+  supplierId             String?  @map("supplier_id") @db.VarChar(36)
+  supplierArticleNumber  String?  @map("supplier_article_number") @db.Text
+  bundleUnit             String?  @map("bundle_unit") @db.Text
+  bundlePrice            Decimal? @map("bundle_price") @db.Decimal(10, 2)
+  bundleEanCode          String?  @map("bundle_ean_code") @db.Text
+  content                Decimal? @db.Decimal(10, 3)
+  contentUnit            String?  @map("content_unit") @db.Text
+  contentEanCode         String?  @map("content_ean_code") @db.Text
+  pricePerUnit           Decimal? @map("price_per_unit") @db.Decimal(10, 4)
+  vatRate                Decimal? @map("vat_rate") @default(19.00) @db.Decimal(5, 2)
+  allergens              String[] @db.Text
+  additives              String[] @db.Text
+  ingredients            String?  @db.Text
+  nutritionInfo          Json?    @map("nutrition_info")
+  notes                  String?  @db.Text
+  imageUrl               String?  @map("image_url") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamp
+  createdBy              String?  @map("created_by") @db.Text
+  updatedBy              String?  @map("updated_by") @db.Text
+  lastModifiedBy         String?  @map("last_modified_by") @db.Text
+
+  @@map("articles")
+}
+
+model Supplier {
+  id              String   @id @default(cuid()) @db.VarChar(36)
+  name            String   @db.Text
+  contactPerson   String?  @map("contact_person") @db.Text
+  email           String?  @db.Text
+  website         String?  @db.Text
+  address         Json?
+  phoneNumbers    Json?    @map("phone_numbers")
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp
+  createdBy       String?  @map("created_by") @db.Text
+  updatedBy       String?  @map("updated_by") @db.Text
+  lastModifiedBy  String?  @map("last_modified_by") @db.Text
+
+  @@map("suppliers")
+}
+
+model Recipe {
+  id                    String   @id @default(cuid()) @db.VarChar(36)
+  name                  String   @db.Text
+  description           String?  @db.Text
+  portions              Int      @default(1)
+  preparationTime       Int?     @default(0) @map("preparation_time")
+  difficulty            Int?     @default(1)
+  ingredients           Json?
+  usedRecipes           Json?    @map("used_recipes")
+  preparationSteps      Json?    @map("preparation_steps")
+  materialCosts         Decimal? @map("material_costs") @default(0) @db.Decimal(10, 2)
+  markupPercentage      Decimal? @map("markup_percentage") @default(300.00) @db.Decimal(5, 2)
+  vatRate               Decimal? @map("vat_rate") @default(19.00) @db.Decimal(5, 2)
+  sellingPrice          Decimal? @map("selling_price") @default(0) @db.Decimal(10, 2)
+  totalNutritionInfo    Json?    @map("total_nutrition_info")
+  allergens             String[] @db.Text
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamp
+  createdBy             String?  @map("created_by") @db.Text
+  updatedBy             String?  @map("updated_by") @db.Text
+  lastModifiedBy        String?  @map("last_modified_by") @db.Text
+
+  @@map("recipes")
+}
+
+model Design {
+  id              String   @id @default(cuid()) @db.VarChar(36)
+  templateName    String?  @map("template_name") @db.VarChar(100)
+  colors          Json?
+  settings        Json?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp
+  createdBy       String?  @map("created_by") @db.Text
+  updatedBy       String?  @map("updated_by") @db.Text
+  lastModifiedBy  String?  @map("last_modified_by") @db.Text
+
+  @@map("design")
+}
+
+model ShoppingList {
+  id          String   @id @default(cuid()) @db.VarChar(36)
+  articleId   String?  @map("article_id") @db.VarChar(36)
+  quantity    Decimal  @db.Decimal(10, 2)
+  unit        String?  @default("Stück") @db.Text
+  priority    String?  @default("normal") @db.Text
+  notes       String?  @db.Text
+  completed   Boolean? @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp
+
+  @@map("shopping_list")
+}
+
+model Inventory {
+  id               String   @id @default(cuid()) @db.VarChar(36)
+  articleId        String?  @map("article_id") @db.VarChar(36)
+  countedQuantity  Decimal  @map("counted_quantity") @db.Decimal(10, 2)
+  unit             String?  @default("Stück") @db.Text
+  notes            String?  @db.Text
+  countedAt        DateTime @default(now()) @map("counted_at") @db.Timestamp
+  countedBy        String?  @default("Benutzer") @map("counted_by") @db.Text
+
+  @@map("inventory")
+}
+
+model SystemInfo {
+  id          String   @id @default(cuid()) @db.VarChar(36)
+  key         String   @unique @db.VarChar(100)
+  value       String?  @db.Text
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp
+
+  @@map("system_info")
+}

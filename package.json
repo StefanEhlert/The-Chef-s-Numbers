@@ -7,13 +7,14 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@types/node": "^20.10.0",
-    "@types/react": "^18.2.45",
-    "@types/react-dom": "^18.2.18",
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@supabase/supabase-js": "^2.56.0",
     "@types/uuid": "^9.0.7",
     "bootstrap": "^5.3.7",
     "bootstrap-icons": "^1.13.1",
     "idb": "^8.0.0",
+    "jose": "^6.1.0",
+    "pg": "^8.16.3",
     "react": "^18.2.0",
     "react-bootstrap": "^2.9.2",
     "react-dom": "^18.2.0",
@@ -24,9 +25,11 @@
     "uuid": "^9.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "build:dev": "react-app-rewired build",
+    "generate-auto-schema": "npx tsx scripts/autoSchemaGenerator.ts",
+    "test": "react-app-rewired test",
     "eject": "react-scripts eject",
     "deploy": "npm run build && netlify deploy --prod --dir=build"
   },
@@ -39,7 +42,10 @@
       "@typescript-eslint/no-unused-vars": "warn",
       "react-hooks/exhaustive-deps": "warn",
       "no-useless-escape": "warn"
-    }
+    },
+    "ignorePatterns": [
+      "src/generated/**/*"
+    ]
   },
   "browserslist": {
     "production": [
@@ -54,6 +60,20 @@
     ]
   },
   "devDependencies": {
-    "gh-pages": "^6.3.0"
+    "@types/node": "^24.3.0",
+    "@types/react": "^18.3.24",
+    "@types/react-dom": "^18.3.7",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.1",
+    "gh-pages": "^6.3.0",
+    "https-browserify": "^1.0.0",
+    "path-browserify": "^1.0.1",
+    "process": "^0.11.10",
+    "react-app-rewired": "^2.2.1",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "timers-browserify": "^2.0.12",
+    "ts-morph": "^22.0.0",
+    "ts-node": "^10.9.2"
   }
 }

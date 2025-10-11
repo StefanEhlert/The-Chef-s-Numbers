@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaShoppingCart, FaClipboardList, FaTruck, FaCheckCircle } from 'react-icons/fa';
+import { FaShoppingCart, FaClipboardList, FaTruck, FaCheckCircle, FaSync } from 'react-icons/fa';
 import { useEinkauf } from '../hooks/useEinkauf';
 import { EinkaufsItem } from '../types/einkauf';
 import { formatDate, formatPrice } from '../utils/formatters';
@@ -22,7 +22,8 @@ const Einkauf: React.FC<EinkaufProps> = ({ getCurrentColors }) => {
     addEinkaufsItem,
     updateEinkaufsItem,
     deleteEinkaufsItem,
-    getEinkaufsItemsByStatus
+    getEinkaufsItemsByStatus,
+    cleanupEinkaufsData
   } = useEinkauf();
 
   const colors = getCurrentColors();
@@ -88,7 +89,17 @@ const Einkauf: React.FC<EinkaufProps> = ({ getCurrentColors }) => {
         <div className="mt-4">
           {activeTab === 'uebersicht' && (
             <div>
-              <h3 style={{ color: colors.text }}>Einkaufsübersicht</h3>
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h3 style={{ color: colors.text }}>Einkaufsübersicht</h3>
+                <button 
+                  className="btn btn-outline-warning btn-sm"
+                  onClick={cleanupEinkaufsData}
+                  title="Bereinige EinkaufsListe-Daten (konvertiert Object zu Array)"
+                >
+                  <FaSync className="me-1" />
+                  Daten bereinigen
+                </button>
+              </div>
               <div className="row">
                 <StatCard 
                   title="Offen"

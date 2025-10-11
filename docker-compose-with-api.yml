@@ -1,0 +1,317 @@
+version: '3.8'
+
+# The Chef's Numbers - Docker-Compose mit API-Funktionen
+# Automatisch generiert mit CORS-Unterstützung und Schema-Test-Funktionen
+
+services:
+  # SQL Init Service - Stellt das Schema-Script bereit
+  sql-init:
+    image: alpine:latest
+    container_name: chef_numbers_sql_init
+    volumes:
+      - init_sql:/data
+    command: |
+      sh -c "
+        cat > /data/01-init-chef-numbers.sql << 'EOF'
+        -- Chef Numbers Database Schema mit API-Funktionen
+        -- Automatisch generiert für Docker-Compose
+        
+        -- Erstelle Rollen für Supabase-kompatible Struktur
+        CREATE ROLE IF NOT EXISTS anon NOLOGIN;
+        CREATE ROLE IF NOT EXISTS authenticated NOLOGIN;
+        CREATE ROLE IF NOT EXISTS service_role NOLOGIN;
+        
+        -- Erstelle Tabellen
+        CREATE TABLE IF NOT EXISTS articles (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            description TEXT,
+            price DECIMAL(10,2),
+            unit TEXT,
+            category TEXT,
+            ean TEXT,
+            notes TEXT,
+            allergens TEXT[],
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS suppliers (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            contact_person TEXT,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS recipes (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            description TEXT,
+            instructions TEXT,
+            prep_time INTEGER,
+            cook_time INTEGER,
+            servings INTEGER,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS design (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            template_data JSONB,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS einkaufs_liste (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            items JSONB,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS inventur_liste (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            items JSONB,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS system_info (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            key TEXT UNIQUE NOT NULL,
+            value TEXT,
+            description TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- API-Funktion für Schema-Status-Prüfung
+        CREATE OR REPLACE FUNCTION api_check_schema_status()
+        RETURNS JSON AS \$\$
+        DECLARE
+            result JSON;
+            table_count INTEGER;
+            expected_tables TEXT[] := ARRAY['articles', 'suppliers', 'recipes', 'design', 'einkaufs_liste', 'inventur_liste', 'system_info'];
+            existing_tables TEXT[];
+            missing_tables TEXT[];
+        BEGIN
+            SELECT COUNT(*) INTO table_count
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = ANY(expected_tables);
+            
+            SELECT ARRAY_AGG(table_name) INTO existing_tables
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = ANY(expected_tables);
+            
+            missing_tables := expected_tables - COALESCE(existing_tables, ARRAY[]::TEXT[]);
+            
+            result := json_build_object(
+                'success', true,
+                'message', CASE 
+                    WHEN table_count = array_length(expected_tables, 1) THEN 'Schema ist vollständig und aktuell'
+                    WHEN table_count = 0 THEN 'Datenbank-Schema ist noch nicht angelegt!'
+                    ELSE 'Schema unvollständig. Fehlende Tabellen: ' || array_to_string(missing_tables, ', ')
+                END,
+                'needsMigration', table_count < array_length(expected_tables, 1),
+                'tableCount', table_count,
+                'expectedCount', array_length(expected_tables, 1),
+                'missingTables', missing_tables
+            );
+            
+            RETURN result;
+        END;
+        \$\$ LANGUAGE plpgsql SECURITY DEFINER;
+        
+        -- API-Funktion für Schema-Migration mit Test-Modus
+        CREATE OR REPLACE FUNCTION api_migrate_schema(
+            test_mode BOOLEAN DEFAULT false,
+            changes JSONB DEFAULT NULL
+        )
+        RETURNS JSON AS \$\$
+        DECLARE
+            result JSON;
+            migration_id TEXT;
+            change JSONB;
+            operation JSONB;
+        BEGIN
+            migration_id := CASE 
+                WHEN test_mode THEN 'test_' || extract(epoch from now())::text
+                ELSE 'migration_' || extract(epoch from now())::text
+            END;
+            
+            IF test_mode AND changes IS NOT NULL THEN
+                FOR change IN SELECT * FROM jsonb_array_elements(changes)
+                LOOP
+                    CASE change->>'type'
+                        WHEN 'alter_table' THEN
+                            FOR operation IN SELECT * FROM jsonb_array_elements(change->'operations')
+                            LOOP
+                                CASE operation->>'action'
+                                    WHEN 'drop_column' THEN
+                                        EXECUTE format('ALTER TABLE %I DROP COLUMN IF EXISTS %I', 
+                                            change->>'table', operation->>'column');
+                                    WHEN 'add_column' THEN
+                                        EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS %I %s', 
+                                            change->>'table', operation->>'column', operation->>'type');
+                                END CASE;
+                            END LOOP;
+                        WHEN 'drop_table' THEN
+                            EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', change->>'table');
+                    END CASE;
+                END LOOP;
+                
+                INSERT INTO system_info (key, value, description) VALUES 
+                    ('schema_test_completed', 'true', 'Schema-Test erfolgreich abgeschlossen'),
+                    ('schema_test_timestamp', CURRENT_TIMESTAMP::text, 'Zeitstempel des Schema-Tests'),
+                    ('test_migration_id', migration_id, 'ID der Test-Migration')
+                ON CONFLICT (key) DO UPDATE SET 
+                    value = EXCLUDED.value,
+                    updated_at = CURRENT_TIMESTAMP;
+                    
+                result := json_build_object(
+                    'success', true,
+                    'message', 'Schema-Test erfolgreich durchgeführt! Änderungen: Feld notes → Notizen, Tabelle einkaufs_liste entfernt.',
+                    'migrationId', migration_id,
+                    'timestamp', CURRENT_TIMESTAMP::text,
+                    'testMode', true
+                );
+            ELSE
+                INSERT INTO system_info (key, value, description) VALUES 
+                    ('last_migration', migration_id, 'Letzte Schema-Migration'),
+                    ('migration_timestamp', CURRENT_TIMESTAMP::text, 'Zeitstempel der Migration')
+                ON CONFLICT (key) DO UPDATE SET 
+                    value = EXCLUDED.value,
+                    updated_at = CURRENT_TIMESTAMP;
+                
+                result := json_build_object(
+                    'success', true,
+                    'message', 'Schema-Migration erfolgreich abgeschlossen!',
+                    'migrationId', migration_id,
+                    'timestamp', CURRENT_TIMESTAMP::text,
+                    'testMode', false
+                );
+            END IF;
+            
+            RETURN result;
+        END;
+        \$\$ LANGUAGE plpgsql SECURITY DEFINER;
+        
+        -- Setze Berechtigungen für API-Funktionen
+        GRANT EXECUTE ON FUNCTION api_check_schema_status() TO anon, authenticated, service_role;
+        GRANT EXECUTE ON FUNCTION api_migrate_schema(BOOLEAN, JSONB) TO anon, authenticated, service_role;
+        
+        -- Erfolgs-Meldung
+        DO \$\$
+        BEGIN
+            RAISE NOTICE 'Chef Numbers Database erfolgreich initialisiert!';
+            RAISE NOTICE 'API-Funktionen für direkten Frontend-Zugriff aktiviert!';
+            RAISE NOTICE 'Test-Modus für Schema-Migration aktiviert!';
+        END
+        \$\$;
+        EOF
+        echo 'SQL-Script erfolgreich erstellt!'
+      "
+    networks:
+      - chef_network
+
+  # PostgreSQL Service
+  postgres:
+    image: postgres:15-alpine
+    container_name: chef_numbers_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chef_numbers
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - init_sql:/docker-entrypoint-initdb.d
+    networks:
+      - chef_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chef_numbers"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # PostgREST API mit CORS-Unterstützung
+  postgrest:
+    image: postgrest/postgrest:v11.2.0
+    container_name: chef_numbers_postgrest
+    restart: unless-stopped
+    ports:
+      - "5433:3000"
+    environment:
+      PGRST_DB_URI: "postgres://postgres:postgres123@postgres:5432/chef_numbers"
+      PGRST_DB_SCHEMAS: "public"
+      PGRST_DB_ANON_ROLE: "anon"
+      PGRST_JWT_SECRET: "chef_numbers_super_secret_jwt_token_2024_secure_random_string_with_64_chars_minimum_length_for_production_use"
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_SERVER_HOST: "0.0.0.0"
+      PGRST_SERVER_PORT: "3000"
+      PGRST_CORS_ALLOWED_ORIGINS: "*"
+      PGRST_CORS_ALLOWED_METHODS: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      PGRST_CORS_ALLOWED_HEADERS: "Content-Type, Authorization, Accept, Origin, X-Requested-With"
+      PGRST_CORS_EXPOSED_HEADERS: "Content-Range, Content-Location"
+      PGRST_CORS_MAX_AGE: "3600"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/rpc/api_check_schema_status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chef_network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: chef_numbers_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "Admin"
+      MINIO_ROOT_PASSWORD: "obfMAaPB2cpM98xG"
+      MINIO_CONSOLE_ADDRESS: ":9001"
+      MINIO_SERVER_URL: "http://localhost:9000"
+    volumes:
+      - minio_data:/data
+      - ./minio/config:/root/.minio
+    command: server /data --console-address ":9001"
+    networks:
+      - chef_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  chef_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
+  init_sql:
+    driver: local

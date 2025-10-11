@@ -1,0 +1,199 @@
+version: '3.8'
+
+services:
+  # MariaDB Database
+  mariadb:
+    image: mariadb:10.11
+    container_name: chef-numbers-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: chef123
+      MYSQL_DATABASE: chef_numbers
+      MYSQL_USER: chef_user
+      MYSQL_PASSWORD: chef123
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u chef_user -pchef123 --silent || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Init Script Runner
+  mariadb-init:
+    image: mariadb:10.11
+    container_name: chef-numbers-mariadb-init
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: chef123
+      MYSQL_DATABASE: chef_numbers
+      MYSQL_USER: chef_user
+      MYSQL_PASSWORD: chef123
+    networks:
+      - chef-numbers-network
+    command: |
+      sh -c "
+        echo '⏳ Warte auf MariaDB...'
+        sleep 10
+        
+        echo '🗄️ Erstelle Schema...'
+        mysql -h mariadb -u chef_user -pchef123 chef_numbers << 'EOF'
+        -- Chef's Numbers MariaDB Schema
+        CREATE TABLE IF NOT EXISTS artikel (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            ean VARCHAR(13) UNIQUE,
+            preis DECIMAL(10,2) NOT NULL,
+            einheit VARCHAR(50) NOT NULL,
+            kategorie VARCHAR(100),
+            zusatzstoffe TEXT,
+            allergene TEXT,
+            bild_url VARCHAR(500),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS rezepte (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            beschreibung TEXT,
+            anleitung TEXT,
+            portionen INT DEFAULT 1,
+            bild_url VARCHAR(500),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS rezept_zutaten (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            rezept_id INT NOT NULL,
+            artikel_id INT NOT NULL,
+            menge DECIMAL(10,3) NOT NULL,
+            einheit VARCHAR(50) NOT NULL,
+            FOREIGN KEY (rezept_id) REFERENCES rezepte(id) ON DELETE CASCADE,
+            FOREIGN KEY (artikel_id) REFERENCES artikel(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_rezept_artikel (rezept_id, artikel_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS lieferanten (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            kontakt TEXT,
+            telefon VARCHAR(50),
+            email VARCHAR(255),
+            adresse TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS einkauf (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            artikel_id INT NOT NULL,
+            lieferant_id INT,
+            menge DECIMAL(10,3) NOT NULL,
+            einheit VARCHAR(50) NOT NULL,
+            preis DECIMAL(10,2) NOT NULL,
+            datum TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notizen TEXT,
+            FOREIGN KEY (artikel_id) REFERENCES artikel(id) ON DELETE CASCADE,
+            FOREIGN KEY (lieferant_id) REFERENCES lieferanten(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS inventur (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            artikel_id INT NOT NULL,
+            menge DECIMAL(10,3) NOT NULL,
+            einheit VARCHAR(50) NOT NULL,
+            datum TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notizen TEXT,
+            FOREIGN KEY (artikel_id) REFERENCES artikel(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS kalkulation (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            rezept_id INT NOT NULL,
+            portionen INT DEFAULT 1,
+            preis DECIMAL(10,2) NOT NULL,
+            datum TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notizen TEXT,
+            FOREIGN KEY (rezept_id) REFERENCES rezepte(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        -- Beispiel-Daten
+        INSERT IGNORE INTO artikel (name, ean, preis, einheit, kategorie) VALUES
+        ('Tomaten', '1234567890123', 2.50, 'kg', 'Gemüse'),
+        ('Zwiebeln', '1234567890124', 1.80, 'kg', 'Gemüse'),
+        ('Knoblauch', '1234567890125', 0.50, 'Stück', 'Gemüse'),
+        ('Olivenöl', '1234567890126', 8.90, 'Liter', 'Öle'),
+        ('Salz', '1234567890127', 0.80, 'kg', 'Gewürze');
+
+        INSERT IGNORE INTO lieferanten (name, kontakt, telefon, email) VALUES
+        ('Gemüse-Hof Müller', 'Herr Müller', '0123-456789', 'mueller@gemuese-hof.de'),
+        ('Bio-Laden Schmidt', 'Frau Schmidt', '0123-456790', 'schmidt@bio-laden.de');
+
+        SELECT 'Chef''s Numbers MariaDB Schema erfolgreich initialisiert!' as status;
+        EOF
+        
+        echo '✅ Schema erfolgreich erstellt!'
+        echo '🗑️ Init-Container wird entfernt...'
+      "
+    restart: "no"
+
+  # Prisma REST API Server
+  prisma-api:
+    image: node:18-alpine
+    container_name: chef-numbers-prisma-api
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      DATABASE_URL: mysql://chef_user:chef123@mariadb:3306/chef_numbers
+      JWT_SECRET: chef-jwt-secret-key-2024
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./prisma-api:/app
+    command: |
+      sh -c "
+        echo '📦 Installiere Prisma API Dependencies...'
+        npm install
+        
+        echo '🔄 Generiere Prisma Client...'
+        npx prisma generate
+        
+        echo '🗄️ Führe Datenbank-Migrationen aus...'
+        npx prisma db push
+        
+        echo '🚀 Starte Prisma API Server...'
+        npm start
+      "
+    depends_on:
+      mariadb-init:
+        condition: service_completed_successfully
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  mariadb_data:
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network

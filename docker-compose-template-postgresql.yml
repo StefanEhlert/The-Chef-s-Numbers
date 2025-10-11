@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: chef-numbers-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: {{CONFIG:postgres.database}}
+      POSTGRES_USER: {{CONFIG:postgres.username}}
+      POSTGRES_PASSWORD: {{CONFIG:postgres.password}}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      # Deaktiviere Kerberos für einfache Authentifizierung
+      POSTGRES_HOST_AUTH_METHOD: "md5"
+    ports:
+      - "{{CONFIG:postgres.port}}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command: |
+      sh -c "
+        # Starte PostgreSQL im Hintergrund
+        docker-entrypoint.sh postgres &
+        POSTGRES_PID=\$!
+        
+        # Warte bis PostgreSQL bereit ist
+        until pg_isready -U {{CONFIG:postgres.username}} -d postgres; do
+          echo 'Warte auf PostgreSQL...'
+          sleep 2
+        done
+        
+        # Lade Init-Script von der App herunter
+        echo 'Lade Init-Script von der App...'
+        wget -O /docker-entrypoint-initdb.d/init-chef-numbers-postgresql.sql {{FUNCTION:getFrontendUrl}}/init-scripts/init-chef-numbers-postgresql.sql
+        
+        # Führe Init-Script aus
+        echo 'Führe Init-Script aus...'
+        psql -U {{CONFIG:postgres.username}} -d postgres -f /docker-entrypoint-initdb.d/init-chef-numbers-postgresql.sql
+        
+        # Warte auf PostgreSQL-Prozess
+        wait \$POSTGRES_PID
+      "
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{CONFIG:postgres.username}} -d {{CONFIG:postgres.database}} || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # PostgREST API mit CORS-Unterstützung
+  postgrest:
+    image: postgrest/postgrest:v12.2.0
+    container_name: chef-numbers-postgrest
+    restart: unless-stopped
+    environment:
+      # Einfache und robuste Datenbankverbindung
+      PGRST_DB_URI: postgres://{{CONFIG:postgres.username}}:{{CONFIG:postgres.password}}@postgres:5432/{{CONFIG:postgres.database}}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: {{CONFIG:postgres.username}}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_JWT_SECRET: {{FUNCTION:generateJWTSecret}}
+      PGRST_CORS_ALLOWED_ORIGINS: "*"
+      PGRST_CORS_ALLOWED_METHODS: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      PGRST_CORS_ALLOWED_HEADERS: "Content-Type, Authorization, X-Requested-With"
+      PGRST_CORS_EXPOSED_HEADERS: "Content-Range, Content-Location"
+      PGRST_CORS_ALLOW_CREDENTIALS: "true"
+      PGRST_CORS_MAX_AGE: "3600"
+      # Deaktiviere Kerberos für einfache Authentifizierung
+      PGRST_DB_EXTRA_SEARCH_PATH: "public"
+    ports:
+      - "{{CONFIG:postgrest.port}}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - chef-numbers-network
+    # Health-Check deaktiviert - PostgREST zeigt immer "unhealthy" an
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -f http://localhost:3000/rpc/api_check_schema_status || exit 1"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network

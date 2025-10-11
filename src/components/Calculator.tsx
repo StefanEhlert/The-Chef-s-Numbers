@@ -113,7 +113,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onResult, colors }) => {
   };
 
   return (
-    <div>
+    <div style={{ zIndex: 1000, position: 'relative' }}>
       <div style={{ padding: '1rem' }}>
         {/* Display */}
         <div style={{

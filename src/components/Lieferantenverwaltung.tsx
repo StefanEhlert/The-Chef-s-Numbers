@@ -1,21 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaPencilAlt, FaTimes, FaUsers } from 'react-icons/fa';
-
-interface Supplier {
-  id: string;
-  name: string;
-  contactPerson: string;
-  email: string;
-  phoneNumbers: Array<{ type: string; number: string }>;
-  address: {
-    street: string;
-    zipCode: string;
-    city: string;
-    country: string;
-  };
-  website: string;
-  notes: string;
-}
+import { Supplier } from '../types';
 
 interface LieferantenverwaltungProps {
   suppliers: Supplier[];
@@ -32,7 +17,7 @@ interface LieferantenverwaltungProps {
   filteredAndSortedSuppliers: () => Supplier[];
   handleSelectSupplier: (supplierId: string) => void;
   handleSelectAllSuppliers: () => void;
-  handleDeleteSuppliers: () => void;
+  handleDeleteSuppliers: (onProgress?: (current: number, total: number) => void) => void;
   handleEditSupplier: (supplier: Supplier) => void;
   handleDeleteSingleSupplier: (supplierId: string, supplierName: string) => void;
   setShowSupplierForm: (show: boolean) => void;
@@ -58,6 +43,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
   handleDeleteSingleSupplier,
   setShowSupplierForm
 }) => {
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const filteredSuppliers = filteredAndSortedSuppliers() || [];
 
   return (
@@ -189,18 +175,65 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
           <div className="alert alert-warning mb-3" style={{
             backgroundColor: colors.secondary,
             borderColor: colors.cardBorder,
-            color: colors.text
+            color: colors.text,
+            paddingBottom: bulkProgress ? '0.75rem' : '1rem',
+            position: 'relative',
+            overflow: 'hidden'
           }}>
             <div className="d-flex justify-content-between align-items-center">
               <span>{selectedSuppliers.length} Lieferant{selectedSuppliers.length !== 1 ? 'en' : ''} ausgewählt</span>
               <button
                 className="btn btn-danger btn-sm"
-                onClick={handleDeleteSuppliers}
+                onClick={async () => {
+                  try {
+                    setBulkProgress({ current: 0, total: selectedSuppliers.length });
+                    
+                    // Kurze Verzögerung damit der initiale State sichtbar wird
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    
+                    // Rufe handleDeleteSuppliers mit Progress-Callback auf
+                    await handleDeleteSuppliers((current, total) => {
+                      setBulkProgress({ current, total });
+                    });
+                    
+                    // Verstecke Fortschritt nach kurzer Zeit
+                    setTimeout(() => setBulkProgress(null), 1200);
+                  } catch (error) {
+                    console.error('❌ Fehler beim Bulk-Löschen:', error);
+                    setBulkProgress(null);
+                  }
+                }}
+                disabled={!!bulkProgress}
               >
                 <FaTimes className="me-1" />
                 Löschen
               </button>
             </div>
+            
+            {/* Dezenter Fortschrittsbalken */}
+            {bulkProgress && (
+              <div 
+                className="position-absolute bottom-0 start-0 end-0"
+                style={{
+                  height: '4px',
+                  backgroundColor: 'rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                  borderBottomLeftRadius: '4px',
+                  borderBottomRightRadius: '4px'
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${bulkProgress.total > 0 ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%`,
+                    backgroundColor: colors.accent,
+                    transition: 'width 0.2s ease-out',
+                    boxShadow: `0 0 10px ${colors.accent}`,
+                    minWidth: bulkProgress.current > 0 ? '2%' : '0%'
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 

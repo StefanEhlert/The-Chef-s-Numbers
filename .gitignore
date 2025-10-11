@@ -3,6 +3,11 @@
 /.pnp
 .pnp.js
 
+# Temporäre Build-Caches
+**/.cache/
+**/node_modules/
+**/.pnp/
+
 # Testing
 /coverage
 
@@ -29,3 +34,6 @@ Thumbs.db
 
 # Netlify
 .netlify/ 
+node_modules
+
+/src/generated/prisma

@@ -2,6 +2,56 @@
 
 Professionelle Rezeptverwaltung mit Kalkulationsfunktionen für Küchenchefs.
 
+## 🚀 Features
+
+- **Rezeptverwaltung**: Vollständige CRUD-Operationen für Rezepte
+- **Artikelverwaltung**: Verwaltung von Zutaten und Artikeln
+- **Lieferantenverwaltung**: Verwaltung von Lieferanten und deren Daten
+- **Kalkulation**: Automatische Kostenberechnung für Rezepte
+- **Inventur**: Bestandsverwaltung und Inventurfunktionen
+- **Einkauf**: Einkaufsplanung und -verwaltung
+- **MinIO-Integration**: Objektspeicher für Bilder und Dateien
+- **Multi-Tenant**: Unterstützung für mehrere Mandanten
+- **Backup/Restore**: Automatische Datensicherung
+
+## 🗄️ MinIO Objektspeicher
+
+### MinIO-Server starten
+
+```powershell
+# MinIO mit Docker starten
+.\start-minio.ps1
+```
+
+**Standard-Konfiguration:**
+- **API Endpoint**: http://localhost:9000
+- **Console**: http://localhost:9001
+- **Username**: minioadmin
+- **Password**: minioadmin
+- **Standard-Bucket**: chef-images
+
+### MinIO in der Anwendung verwenden
+
+1. **Speicherverwaltung öffnen**
+2. **MinIO-Konfiguration eingeben:**
+   - Host: localhost
+   - Port: 9000
+   - Access Key: minioadmin
+   - Secret Key: minioadmin
+   - Bucket: chef-images
+3. **"Verbindung testen" klicken**
+
+### MinIO-Features
+
+- ✅ **Verbindungstest**: Vollständige MinIO-Verbindungsprüfung
+- ✅ **Bucket-Management**: Erstellen, Löschen, Prüfen von Buckets
+- ✅ **Datei-Upload**: Hochladen von Bildern und Dateien
+- ✅ **Datei-Download**: Herunterladen von gespeicherten Dateien
+- ✅ **Objekt-Liste**: Auflisten aller Objekte in einem Bucket
+- ✅ **Presigned URLs**: Sichere Upload/Download-URLs
+- ✅ **Objekt-Kopie**: Kopieren von Objekten zwischen Buckets
+- ✅ **Backend-Integration**: Alle Operationen über sichere Backend-APIs
+
 ## 🚀 Deployment auf Netlify
 
 ### Automatisches Deployment

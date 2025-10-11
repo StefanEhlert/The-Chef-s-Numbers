@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # MariaDB Database
+  mariadb:
+    image: mariadb:10.11
+    container_name: chef-numbers-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: chef123
+      MYSQL_DATABASE: chef_numbers
+      MYSQL_USER: chef_user
+      MYSQL_PASSWORD: chef123
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "4406:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    command: |
+      sh -c "
+        # Starte MariaDB im Hintergrund
+        docker-entrypoint.sh mysqld &
+        MYSQL_PID=\$!
+        
+        # Warte bis MariaDB bereit ist
+        until mysqladmin ping -h localhost -u root -pchef123 --silent; do
+          echo 'Warte auf MariaDB...'
+          sleep 2
+        done
+        
+        # Installiere curl und lade Init-Script von der App herunter
+        echo 'Installiere curl...'
+        apt-get update && apt-get install -y curl
+        
+        echo 'Lade Init-Script von der App...'
+        curl -o /docker-entrypoint-initdb.d/init-chef-numbers-mariadb.sql http://192.168.1.20:3000/init-scripts/init-chef-numbers-mariadb.sql
+        
+        # Führe Init-Script aus
+        echo 'Führe Init-Script aus...'
+        mysql -u root -pchef123 chef_numbers < /docker-entrypoint-initdb.d/init-chef-numbers-mariadb.sql
+        
+        # Warte auf MariaDB-Prozess
+        wait \$MYSQL_PID
+      "
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u chef_user -pchef123 --silent || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Prisma REST API Server
+  prisma-api:
+    image: node:18-alpine
+    container_name: chef-numbers-prisma-api
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      DATABASE_URL: mysql://chef_user:chef123@mariadb:3306/chef_numbers
+      JWT_SECRET: chef-jwt-secret-key-2024
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - "4407:3001"
+    command: |
+      sh -c "
+        echo '📦 Installiere curl und OpenSSL für Alpine...'
+        apk add --no-cache curl openssl
+        
+        echo '📥 Lade Prisma API Dateien herunter...'
+        curl -o /app/package.json http://192.168.1.20:3000/prisma-api/package.json
+        curl -o /app/schema.prisma http://192.168.1.20:3000/prisma-api/schema.prisma
+        curl -o /app/server.js http://192.168.1.20:3000/prisma-api/server.js
+        
+        echo '📦 Installiere Prisma API Dependencies...'
+        npm install
+        
+        echo '🔄 Generiere Prisma Client...'
+        npx prisma generate
+        
+        echo '🗄️ Führe Datenbank-Migrationen aus...'
+        npx prisma db push
+        
+        echo '🚀 Starte Prisma API Server...'
+        npm start
+      "
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - chef-numbers-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  mariadb_data:
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network

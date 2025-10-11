@@ -48,7 +48,10 @@ export interface NutritionSearchResult {
   code: string;
   product_name: string;
   brands?: string;
+  categories?: string;
   nutrition_grade_fr?: string;
+  nutrition_grades?: string;
+  nutrition_data_per?: string;
   nutriments: {
     energy_100g?: number;
     'energy-kcal_100g'?: number;
@@ -60,6 +63,10 @@ export interface NutritionSearchResult {
     salt_100g?: number;
   };
   image_url?: string;
+  // Inhaltsmenge und Verpackung
+  quantity?: string; // z.B. "750 g", "1 L"
+  product_quantity?: string; // Alternative
+  serving_size?: string; // Portionsgröße
   // Neue Felder für Allergene und Zusatzstoffe
   allergens_tags?: string[];
   allergens_hierarchy?: string[];
@@ -68,6 +75,7 @@ export interface NutritionSearchResult {
   ingredients_text_de?: string;
   ingredients_analysis_tags?: string[];
   additives_tags?: string[];
+  additives?: string[];
   e_number?: string;
 }
 
@@ -115,7 +123,7 @@ class NutritionAPIService {
         action: 'process',
         json: '1',
         page_size: limit.toString(),
-        fields: 'code,product_name,brands,nutrition_grade_fr,nutriments,image_url,allergens_tags,allergens_hierarchy,allergens,ingredients_text,ingredients_text_de,ingredients_analysis_tags,additives_tags,e_number'
+        fields: 'code,product_name,brands,nutrition_grade_fr,nutriments,image_url,quantity,product_quantity,serving_size,allergens_tags,allergens_hierarchy,allergens,ingredients_text,ingredients_text_de,ingredients_analysis_tags,additives_tags,e_number'
       });
 
       const response = await fetch(`${this.baseURL}?${params}`);
@@ -984,6 +992,7 @@ class NutritionAPIService {
     brand?: string;
     nutritionData: NutritionData;
     code: string;
+    quantity?: string;
   }>> {
     try {
       const products = await this.searchProducts(articleName, 10);
@@ -992,7 +1001,8 @@ class NutritionAPIService {
         name: product.product_name || 'Unbekanntes Produkt',
         brand: product.brands,
         nutritionData: this.convertToNutritionData(product),
-        code: product.code
+        code: product.code,
+        quantity: product.quantity || product.product_quantity
       }));
     } catch (error) {
       console.error('Fehler beim Laden der Vorschläge:', error);
@@ -1008,6 +1018,8 @@ class NutritionAPIService {
     brand?: string;
     extendedData: ExtendedProductData;
     code: string;
+    imageUrl?: string;
+    quantity?: string;
   }>> {
     try {
       const products = await this.searchProducts(articleName, 10);
@@ -1017,7 +1029,9 @@ class NutritionAPIService {
           name: product.product_name || 'Unbekanntes Produkt',
           brand: product.brands,
           extendedData: await this.convertToExtendedProductData(product),
-          code: product.code
+          code: product.code,
+          imageUrl: product.image_url,
+          quantity: product.quantity || product.product_quantity
         }))
       );
       
@@ -1027,7 +1041,188 @@ class NutritionAPIService {
       return [];
     }
   }
+
+  /**
+   * Holt die Bild-URLs für ein Produkt in verschiedenen Größen
+   */
+  async getProductImages(code: string): Promise<{
+    small?: string;
+    medium?: string;
+    large?: string;
+    original?: string;
+  } | null> {
+    try {
+      const product = await this.getProductByCode(code);
+      
+      if (!product) {
+        return null;
+      }
+
+      // Open Food Facts Bildformat:
+      // https://images.openfoodfacts.org/images/products/[barcode]/front_[lang].[size].jpg
+      // Größen: 100 (small), 200 (medium), 400 (large), full (original)
+      
+      const baseUrl = `https://images.openfoodfacts.org/images/products`;
+      
+      // Barcode in Pfad umwandeln (z.B. 3017620422003 → 301/762/042/2003)
+      const barcode = code.padStart(13, '0');
+      const parts = [];
+      for (let i = 0; i < barcode.length - 1; i += 3) {
+        parts.push(barcode.substring(i, i + 3));
+      }
+      const barcodeFolder = parts.join('/');
+      
+      return {
+        small: `${baseUrl}/${barcodeFolder}/front_de.100.jpg`,
+        medium: `${baseUrl}/${barcodeFolder}/front_de.200.jpg`,
+        large: `${baseUrl}/${barcodeFolder}/front_de.400.jpg`,
+        original: product.image_url || `${baseUrl}/${barcodeFolder}/front_de.full.jpg`
+      };
+    } catch (error) {
+      console.error('Fehler beim Laden der Produktbilder:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lädt ein Produktbild herunter und konvertiert es zu einem File-Objekt
+   * 
+   * @param code - Produkt-Code (EAN/Barcode)
+   * @param size - Bildgröße: 'small' (100px), 'medium' (200px), 'large' (400px), 'original' (volle Größe)
+   * @returns File-Objekt oder null bei Fehler
+   */
+  async downloadProductImage(code: string, size: 'small' | 'medium' | 'large' | 'original' = 'medium'): Promise<File | null> {
+    try {
+      console.log(`📷 Lade Produktbild für Code ${code} in Größe ${size}...`);
+      
+      // Hole Bild-URLs
+      const images = await this.getProductImages(code);
+      
+      if (!images) {
+        console.warn('⚠️ Keine Bilder für Produkt gefunden');
+        return null;
+      }
+
+      // Wähle die richtige Bild-URL basierend auf der Größe
+      const imageUrl = images[size];
+      
+      if (!imageUrl) {
+        console.warn('⚠️ Keine Bild-URL für gewählte Größe verfügbar');
+        return null;
+      }
+
+      console.log(`📥 Lade Bild von: ${imageUrl}`);
+
+      // Lade das Bild
+      const response = await fetch(imageUrl);
+
+      if (!response.ok) {
+        console.warn(`⚠️ Bild konnte nicht geladen werden: ${response.status} ${response.statusText}`);
+        return null;
+      }
+
+      // Konvertiere zu Blob
+      const blob = await response.blob();
+
+      // Erstelle File-Objekt
+      const fileName = `product-${code}-${size}.jpg`;
+      const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+
+      console.log(`✅ Produktbild erfolgreich geladen: ${fileName} (${(file.size / 1024).toFixed(2)} KB)`);
+
+      return file;
+    } catch (error) {
+      console.error('❌ Fehler beim Herunterladen des Produktbildes:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sucht ein Produkt und lädt direkt das Bild herunter
+   * 
+   * @param articleName - Name des Artikels zum Suchen
+   * @param size - Bildgröße
+   * @returns File-Objekt oder null bei Fehler
+   */
+  async searchAndDownloadImage(articleName: string, size: 'small' | 'medium' | 'large' | 'original' = 'medium'): Promise<{
+    file: File | null;
+    productName?: string;
+    brand?: string;
+  }> {
+    try {
+      console.log(`🔍 Suche Produkt für: ${articleName}`);
+      
+      const products = await this.searchProducts(articleName, 1);
+      
+      if (products.length === 0) {
+        console.warn('⚠️ Kein Produkt gefunden');
+        return { file: null };
+      }
+
+      const product = products[0];
+      console.log(`✅ Produkt gefunden: ${product.product_name} (Code: ${product.code})`);
+
+      const file = await this.downloadProductImage(product.code, size);
+
+      return {
+        file,
+        productName: product.product_name,
+        brand: product.brands
+      };
+    } catch (error) {
+      console.error('❌ Fehler beim Suchen und Herunterladen des Produktbildes:', error);
+      return { file: null };
+    }
+  }
 }
+
+// Open Food Facts EAN-Code-Suche
+export const searchByEANCode = async (eanCode: string): Promise<NutritionSearchResult | null> => {
+  try {
+    const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${eanCode}.json`);
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (data.status === 0 || !data.product) {
+      return null;
+    }
+    
+    const product = data.product;
+    
+    // Konvertiere Open Food Facts Format zu unserem Format
+    const result: NutritionSearchResult = {
+      code: product.code || eanCode,
+      product_name: product.product_name || 'Unbekanntes Produkt',
+      brands: product.brands || '',
+      categories: product.categories || '',
+      nutrition_grades: product.nutrition_grades || '',
+      image_url: product.image_url || '',
+      nutrition_data_per: product.nutrition_data_per || '100g',
+      nutriments: {
+        energy_100g: product.nutriments?.['energy-kj_100g'] || 0,
+        'energy-kcal_100g': product.nutriments?.['energy-kcal_100g'] || 0,
+        proteins_100g: product.nutriments?.['proteins_100g'] || 0,
+        fat_100g: product.nutriments?.['fat_100g'] || 0,
+        carbohydrates_100g: product.nutriments?.['carbohydrates_100g'] || 0,
+        sugars_100g: product.nutriments?.['sugars_100g'] || 0,
+        fiber_100g: product.nutriments?.['fiber_100g'] || 0,
+        salt_100g: product.nutriments?.['salt_100g'] || 0
+      },
+      ingredients_text: product.ingredients_text || '',
+      allergens: product.allergens || '',
+      additives: product.additives_tags || []
+    };
+    
+    return result;
+  } catch (error) {
+    console.error('Fehler bei EAN-Code-Suche:', error);
+    return null;
+  }
+};
 
 // Singleton-Instanz
 export const nutritionAPI = new NutritionAPIService(); 

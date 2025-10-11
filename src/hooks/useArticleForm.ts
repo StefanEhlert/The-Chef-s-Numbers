@@ -12,10 +12,11 @@ export interface ArticleForm {
   supplierArticleNumber: string;
   bundlePrice: number;
   bundleUnit: string;
+  bundleEanCode?: string; // EAN-Code für das Gebinde
   content: number;
   contentUnit: string;
+  contentEanCode?: string; // EAN-Code für den Inhalt
   pricePerUnit: number;
-  isGrossPrice: boolean;
   vatRate: number;
   additives: string[];
   allergens: string[];
@@ -30,6 +31,9 @@ export interface ArticleForm {
     sugar: number;
     salt: number;
   };
+  openFoodFactsCode?: string; // Open Food Facts Produkt-Code für Rückverfolgbarkeit
+  notes: string;
+  // Kein image-Feld mehr nötig - Bild wird automatisch basierend auf Artikelname+ID geladen
 }
 
 export interface Supplier {
@@ -205,10 +209,11 @@ const initialArticleForm: ArticleForm = {
   supplierArticleNumber: '',
   bundlePrice: 0,
   bundleUnit: '',
+  bundleEanCode: '',
   content: 0,
   contentUnit: '',
+  contentEanCode: '',
   pricePerUnit: 0,
-  isGrossPrice: true,
   vatRate: 19,
   additives: [],
   allergens: [],
@@ -222,7 +227,9 @@ const initialArticleForm: ArticleForm = {
     fiber: 0,
     sugar: 0,
     salt: 0
-  }
+  },
+  openFoodFactsCode: '',
+  notes: ''
 };
 
 export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierName: string) => void, articles?: any[]) => {
@@ -258,14 +265,24 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   const [showCalculator, setShowCalculator] = useState(false);
   
   // Input-States für bessere UX
-  const [bundlePriceInput, setBundlePriceInput] = useState(articleForm.bundlePrice.toFixed(2));
-  const [contentInput, setContentInput] = useState(articleForm.content.toFixed(2));
+  const [bundlePriceInput, setBundlePriceInput] = useState(() => {
+    console.log('🔍 Debug - articleForm.bundlePrice:', articleForm.bundlePrice, 'Typ:', typeof articleForm.bundlePrice);
+    return (articleForm.bundlePrice || 0).toFixed(2).replace('.', ',');
+  });
+  const [contentInput, setContentInput] = useState(() => {
+    console.log('🔍 Debug - articleForm.content:', articleForm.content, 'Typ:', typeof articleForm.content);
+    return (articleForm.content || 0).toFixed(2).replace('.', ',');
+  });
+  const [pricePerUnitInput, setPricePerUnitInput] = useState(() => {
+    console.log('🔍 Debug - articleForm.pricePerUnit:', articleForm.pricePerUnit, 'Typ:', typeof articleForm.pricePerUnit);
+    return (articleForm.pricePerUnit || 0).toFixed(2).replace('.', ',');
+  });
 
   // Hilfsfunktionen
-  const calculatePricePerUnit = useCallback((bundlePrice: number, content: number, isGross: boolean, vatRate: number) => {
+  const calculatePricePerUnit = useCallback((bundlePrice: number, content: number) => {
     if (content <= 0) return 0;
-    const netPrice = isGross ? bundlePrice / (1 + vatRate / 100) : bundlePrice;
-    return netPrice / content;
+    // Immer mit Netto-Preisen rechnen: Gebindepreis geteilt durch Inhalt
+    return bundlePrice / content;
   }, []);
 
   const calculateGrossPrice = useCallback((netPrice: number, vatRate: number) => {
@@ -288,7 +305,7 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   }, []);
 
   const formatAdditivesDisplay = useCallback((additives: string[]) => {
-    if (additives.length === 0) return 'Zusatzstoffe auswählen...';
+    if (!Array.isArray(additives) || additives.length === 0) return 'Zusatzstoffe auswählen...';
     
     // Extrahiere nur die Zahlen aus den Zusatzstoffen
     const numbers = additives.map(additive => {
@@ -300,7 +317,7 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   }, []);
 
   const formatAllergensDisplay = useCallback((allergens: string[]) => {
-    if (allergens.length === 0) return 'Allergene auswählen...';
+    if (!Array.isArray(allergens) || allergens.length === 0) return 'Allergene auswählen...';
     
     // Extrahiere nur die Buchstaben aus den Allergenen
     const letters = allergens.map(allergen => {
@@ -695,72 +712,90 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     }));
   }, []);
 
-  const handlePriceChange = useCallback((newBundlePrice: number, isGross: boolean) => {
-    const newPricePerUnit = calculatePricePerUnit(newBundlePrice, articleForm.content, isGross, articleForm.vatRate);
+  const handlePriceChange = useCallback((newBundlePrice: number) => {
+    const newPricePerUnit = calculatePricePerUnit(newBundlePrice, articleForm.content);
     setArticleForm(prev => ({
       ...prev,
       bundlePrice: newBundlePrice,
-      isGrossPrice: isGross,
       pricePerUnit: newPricePerUnit
     }));
-  }, [articleForm.content, articleForm.vatRate, calculatePricePerUnit]);
+  }, [articleForm.content, calculatePricePerUnit]);
 
   const handleContentChange = useCallback((newContent: number) => {
-    const newPricePerUnit = calculatePricePerUnit(articleForm.bundlePrice, newContent, articleForm.isGrossPrice, articleForm.vatRate);
+    const newPricePerUnit = calculatePricePerUnit(articleForm.bundlePrice, newContent);
     setArticleForm(prev => ({
       ...prev,
       content: newContent,
       pricePerUnit: newPricePerUnit
     }));
-  }, [articleForm.bundlePrice, articleForm.isGrossPrice, articleForm.vatRate, calculatePricePerUnit]);
+  }, [articleForm.bundlePrice, calculatePricePerUnit]);
 
   const handleVatRateChange = useCallback((newVatRate: number) => {
-    const newPricePerUnit = calculatePricePerUnit(articleForm.bundlePrice, articleForm.content, articleForm.isGrossPrice, newVatRate);
+    const newPricePerUnit = calculatePricePerUnit(articleForm.bundlePrice, articleForm.content);
     setArticleForm(prev => ({
       ...prev,
       vatRate: newVatRate,
       pricePerUnit: newPricePerUnit
     }));
-  }, [articleForm.bundlePrice, articleForm.content, articleForm.isGrossPrice, calculatePricePerUnit]);
+  }, [articleForm.bundlePrice, articleForm.content, calculatePricePerUnit]);
 
   const handleApplyGrossPrice = useCallback(() => {
     const grossPrice = calculateGrossPrice(articleForm.bundlePrice, selectedVatRate);
-    const newPricePerUnit = calculatePricePerUnit(grossPrice, articleForm.content, true, selectedVatRate);
+    const newPricePerUnit = calculatePricePerUnit(grossPrice, articleForm.content);
     setArticleForm(prev => ({ 
       ...prev, 
       bundlePrice: grossPrice,
-      isGrossPrice: true,
       vatRate: selectedVatRate,
       pricePerUnit: newPricePerUnit
     }));
-    setBundlePriceInput(grossPrice.toFixed(2));
+    setBundlePriceInput(() => {
+      console.log('🔍 Debug - grossPrice:', grossPrice, 'Typ:', typeof grossPrice);
+      // Formatiere als deutsche Zahl mit Komma
+      return (grossPrice || 0).toFixed(2).replace('.', ',');
+    });
     setShowPriceConverter(false);
   }, [articleForm.bundlePrice, articleForm.content, selectedVatRate, calculateGrossPrice, calculatePricePerUnit]);
 
   const handleApplyNetPrice = useCallback(() => {
     const netPrice = calculateNetPrice(articleForm.bundlePrice, selectedVatRate);
-    const newPricePerUnit = calculatePricePerUnit(netPrice, articleForm.content, false, selectedVatRate);
+    const newPricePerUnit = calculatePricePerUnit(netPrice, articleForm.content);
     setArticleForm(prev => ({ 
       ...prev, 
       bundlePrice: netPrice,
-      isGrossPrice: false,
       vatRate: selectedVatRate,
       pricePerUnit: newPricePerUnit
     }));
-    setBundlePriceInput(netPrice.toFixed(2));
+    setBundlePriceInput(() => {
+      console.log('🔍 Debug - netPrice:', netPrice, 'Typ:', typeof netPrice);
+      // Formatiere als deutsche Zahl mit Komma
+      return (netPrice || 0).toFixed(2).replace('.', ',');
+    });
     setShowPriceConverter(false);
   }, [articleForm.bundlePrice, articleForm.content, selectedVatRate, calculateNetPrice, calculatePricePerUnit]);
 
   // Taschenrechner-Funktionen
   const handleCalculatorResult = useCallback((result: number) => {
-    setArticleForm(prev => ({
-      ...prev,
-      content: result,
-      pricePerUnit: calculatePricePerUnit(prev.bundlePrice, result, prev.isGrossPrice, prev.vatRate)
-    }));
-    setContentInput(result.toFixed(2));
+    console.log('🔍 Taschenrechner-Ergebnis erhalten:', result);
+    console.log('🔍 Aktueller articleForm:', articleForm);
+    
+    setArticleForm(prev => {
+      console.log('🔍 Vorheriger articleForm:', prev);
+      const updated = {
+        ...prev,
+        content: result, // Taschenrechner setzt content (Inhalt)
+        pricePerUnit: calculatePricePerUnit(prev.bundlePrice, result) // Berechne pricePerUnit neu
+      };
+      console.log('🔍 Aktualisierter articleForm:', updated);
+      return updated;
+    });
+    
+    // Aktualisiere auch contentInput sofort mit deutschem Format
+    setContentInput((result || 0).toFixed(2).replace('.', ','));
+    // Aktualisiere auch pricePerUnitInput sofort mit deutschem Format
+    setPricePerUnitInput((calculatePricePerUnit(articleForm.bundlePrice, result) || 0).toFixed(2).replace('.', ','));
+    
     setShowCalculator(false);
-  }, [calculatePricePerUnit]);
+  }, [articleForm, calculatePricePerUnit]);
 
   // Neue Funktion für erweiterte Daten (Nährwerte + Allergene + Inhaltsstoffe)
   const handleExtendedDataFound = useCallback((extendedData: ExtendedProductData) => {
@@ -799,8 +834,9 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     setSupplierSearchTerm('');
     setBundleUnitSearchTerm('');
     setContentUnitSearchTerm('');
-    setBundlePriceInput(initialArticleForm.bundlePrice.toFixed(2));
-    setContentInput(initialArticleForm.content.toFixed(2));
+    setBundlePriceInput((initialArticleForm.bundlePrice || 0).toFixed(2).replace('.', ','));
+    setContentInput((initialArticleForm.content || 0).toFixed(2).replace('.', ','));
+    setPricePerUnitInput((initialArticleForm.pricePerUnit || 0).toFixed(2).replace('.', ','));
     setShowCategoryDropdown(false);
     setShowSupplierDropdown(false);
     setShowBundleUnitDropdown(false);
@@ -823,22 +859,28 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
       supplierArticleNumber: article.supplierArticleNumber || '',
       bundlePrice: article.bundlePrice,
       bundleUnit: article.bundleUnit,
+      bundleEanCode: article.bundleEanCode || '',
       content: article.content,
       contentUnit: article.contentUnit,
+      contentEanCode: article.contentEanCode || '',
       pricePerUnit: article.pricePerUnit,
-      isGrossPrice: article.isGrossPrice,
+
       vatRate: article.vatRate || 19, // vatRate hinzufügen
-      additives: article.additives || [],
-      allergens: article.allergens || [],
+      additives: Array.isArray(article.additives) ? article.additives : [],
+      allergens: Array.isArray(article.allergens) ? article.allergens : [],
       ingredients: article.ingredients || '', // ingredients hinzufügen
       nutrition: article.nutritionInfo || {
         calories: 0, kilojoules: 0, protein: 0, fat: 0, carbohydrates: 0, fiber: 0, sugar: 0, salt: 0
-      }
+      },
+      openFoodFactsCode: article.openFoodFactsCode || '', // Open Food Facts Code laden
+      notes: article.notes || ''
     });
     // Aktualisiere auch bundlePriceInput sofort
-    setBundlePriceInput((article.bundlePrice || 0).toFixed(2));
-    // Aktualisiere auch contentInput sofort
-    setContentInput((article.content || 0).toFixed(2));
+    setBundlePriceInput((Number(article.bundlePrice) || 0).toFixed(2).replace('.', ','));
+    // Aktualisiere auch contentInput sofort mit deutschem Format
+    setContentInput((Number(article.content) || 0).toFixed(2).replace('.', ','));
+    // Aktualisiere auch pricePerUnitInput sofort mit deutschem Format
+    setPricePerUnitInput((Number(article.pricePerUnit) || 0).toFixed(2).replace('.', ','));
   }, []);
 
   return {
@@ -864,11 +906,13 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     showCalculator,
     bundlePriceInput,
     contentInput,
+    pricePerUnitInput,
 
     // Setters
     setArticleForm,
     setBundlePriceInput,
     setContentInput,
+    setPricePerUnitInput,
     setShowPriceConverter,
     setSelectedVatRate,
     setShowCalculator,

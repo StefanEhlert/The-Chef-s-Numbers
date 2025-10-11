@@ -1,5 +1,6 @@
-export interface EinkaufsItem {
-  id: string;
+import { BaseEntity } from './index';
+
+export interface EinkaufsItem extends BaseEntity {
   artikelName: string;
   menge: number;
   einheit: string;

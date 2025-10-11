@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSave, FaSort, FaTrash, FaPencilAlt, FaTimes, FaBoxes, FaCheck } from 'react-icons/fa';
+import { Article } from '../types';
 
 interface ArtikelverwaltungProps {
-  articles: any[];
+  articles: Article[];
   colors: any;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
@@ -20,14 +21,14 @@ interface ArtikelverwaltungProps {
   setShowArticleForm: (show: boolean) => void;
   resetArticleForm: () => void;
   setShowImportExportModal: (show: boolean) => void;
-  filteredAndSortedArticles: () => any[];
+  filteredAndSortedArticles: () => Article[];
   getUsedCategories: () => string[];
   getUniqueSuppliers: () => string[];
   handleSelectArticle: (id: string) => void;
   handleSelectAll: () => void;
-  handleDeleteArticles: () => void;
-  handleBulkPriceChange: (percentage: number) => void;
-  handleEditArticle: (article: any) => void;
+  handleDeleteArticles: (onProgress?: (current: number, total: number) => void) => void;
+  handleBulkPriceChange: (percentage: number, onProgress?: (current: number, total: number) => void) => void;
+  handleEditArticle: (article: Article) => void;
   handleDeleteSingleArticle: (id: string, name: string) => void;
   getSupplierName: (id: string) => string;
   formatPrice: (price: number) => string;
@@ -65,13 +66,14 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
   formatPrice
 }) => {
   const [percentageValue, setPercentageValue] = useState<string>('');
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const filteredArticles = filteredAndSortedArticles();
   const categories = getUsedCategories();
   const uniqueSuppliers = getUniqueSuppliers();
 
   // Hilfsfunktion zur Formatierung der Nährwerte
-  const formatNutritionInfo = (article: any) => {
-    const nutrition = article.nutritionInfo || article.nutrition;
+  const formatNutritionInfo = (article: Article) => {
+    const nutrition = article.nutritionInfo;
     if (!nutrition) return null;
 
     const nutritionParts = [];
@@ -92,12 +94,29 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
     return nutritionParts.length > 0 ? nutritionParts.join(', ') : null;
   };
 
-  // Funktion zum Anwenden der Preisänderung
-  const handleApplyPriceChange = () => {
+  // Funktion zum Anwenden der Preisänderung mit Fortschrittsanzeige
+  const handleApplyPriceChange = async () => {
     const percentage = parseFloat(percentageValue);
     if (!isNaN(percentage) && percentage >= -99 && percentage <= 99) {
-      handleBulkPriceChange(percentage);
-      setPercentageValue(''); // Reset input field
+      try {
+        setBulkProgress({ current: 0, total: selectedArticles.length });
+        
+        // Kurze Verzögerung damit der initiale State sichtbar wird
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Rufe handleBulkPriceChange mit Progress-Callback auf
+        await handleBulkPriceChange(percentage, (current, total) => {
+          setBulkProgress({ current, total });
+        });
+        
+        setPercentageValue(''); // Reset input field
+        
+        // Verstecke Fortschritt nach kurzer Zeit
+        setTimeout(() => setBulkProgress(null), 1200);
+      } catch (error) {
+        console.error('❌ Fehler bei Bulk-Preisänderung:', error);
+        setBulkProgress(null);
+      }
     }
   };
 
@@ -227,8 +246,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               }}
             >
               <option value="">Alle Kategorien</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
+              {categories.map((category, index) => (
+                <option key={`category-${index}-${category}`} value={category}>{category}</option>
               ))}
             </select>
           </div>
@@ -243,8 +262,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               }}
             >
               <option value="">Alle Lieferanten</option>
-              {uniqueSuppliers.map(supplier => (
-                <option key={supplier} value={supplier}>{supplier}</option>
+              {uniqueSuppliers.map((supplier, index) => (
+                <option key={`supplier-${index}-${supplier}`} value={supplier}>{supplier}</option>
               ))}
             </select>
           </div>
@@ -285,7 +304,10 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
           <div className="alert alert-warning mb-3" style={{
             backgroundColor: colors.secondary,
             borderColor: colors.cardBorder,
-            color: colors.text
+            color: colors.text,
+            paddingBottom: bulkProgress ? '0.75rem' : '1rem',
+            position: 'relative',
+            overflow: 'hidden'
           }}>
             <div className="d-flex justify-content-between align-items-center">
               <span>{selectedArticles.length} Artikel ausgewählt</span>
@@ -307,11 +329,12 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                       color: colors.text,
                       backgroundColor: colors.card
                     }}
+                    disabled={!!bulkProgress}
                   />
                   <button
                     className="btn btn-success btn-sm"
                     onClick={handleApplyPriceChange}
-                    disabled={!percentageValue || parseFloat(percentageValue) < -99 || parseFloat(percentageValue) > 99}
+                    disabled={!percentageValue || parseFloat(percentageValue) < -99 || parseFloat(percentageValue) > 99 || !!bulkProgress}
                     title="Preisänderung anwenden"
                   >
                     <FaCheck />
@@ -320,13 +343,57 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                 {/* Löschen-Button */}
                 <button
                   className="btn btn-danger btn-sm"
-                  onClick={handleDeleteArticles}
+                  onClick={async () => {
+                    try {
+                      setBulkProgress({ current: 0, total: selectedArticles.length });
+                      
+                      // Kurze Verzögerung damit der initiale State sichtbar wird
+                      await new Promise(resolve => setTimeout(resolve, 50));
+                      
+                      // Rufe handleDeleteArticles mit Progress-Callback auf
+                      await handleDeleteArticles((current, total) => {
+                        setBulkProgress({ current, total });
+                      });
+                      
+                      // Verstecke Fortschritt nach kurzer Zeit
+                      setTimeout(() => setBulkProgress(null), 1200);
+                    } catch (error) {
+                      console.error('❌ Fehler beim Bulk-Löschen:', error);
+                      setBulkProgress(null);
+                    }
+                  }}
+                  disabled={!!bulkProgress}
                 >
                   <FaTrash className="me-1" />
                   Löschen
                 </button>
               </div>
             </div>
+            
+            {/* Dezenter Fortschrittsbalken */}
+            {bulkProgress && (
+              <div 
+                className="position-absolute bottom-0 start-0 end-0"
+                style={{
+                  height: '4px',
+                  backgroundColor: 'rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                  borderBottomLeftRadius: '4px',
+                  borderBottomRightRadius: '4px'
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${bulkProgress.total > 0 ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%`,
+                    backgroundColor: colors.accent,
+                    transition: 'width 0.2s ease-out',
+                    boxShadow: `0 0 10px ${colors.accent}`,
+                    minWidth: bulkProgress.current > 0 ? '2%' : '0%'
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -356,9 +423,9 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredArticles.map(article => (
+                {filteredArticles.map((article, index) => (
                   <tr 
-                    key={article.id} 
+                    key={article.id || `article-${index}`} 
                     style={{ 
                       borderColor: colors.cardBorder,
                       cursor: 'pointer'

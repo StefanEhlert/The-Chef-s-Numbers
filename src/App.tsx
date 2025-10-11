@@ -1,12 +1,15 @@
 import React from 'react';
 import { AppProvider } from './contexts/AppContext';
+import { StorageContextProvider } from './contexts/StorageContext';
 import AppContent from './components/AppContent';
 
 function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <StorageContextProvider>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </StorageContextProvider>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint } from 'react-icons/fa';
+import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint, FaDatabase, FaChevronDown, FaChevronRight, FaDownload, FaCode } from 'react-icons/fa';
 import Dashboard from './Dashboard';
 import Kalkulation from './Kalkulation';
 import Einkauf from './Einkauf';
@@ -7,8 +7,14 @@ import Inventur from './Inventur';
 import { ColorProvider } from '../contexts/ColorContext';
 import ErrorBoundary from './ui/ErrorBoundary';
 import { useStorage } from '../hooks/useStorage';
+import { StorageMode, CloudStorageType, storageLayer } from '../services/storageLayer';
 import LoadingSpinner from './ui/LoadingSpinner';
 import StorageStatus from './ui/StorageStatus';
+import { generateId } from '../utils/storageUtils';
+
+import StorageManagement from './StorageManagement';
+import DevelopmentPage from './DevelopmentPage';
+
 import Rezeptverwaltung from './Rezeptverwaltung';
 import Rezeptformular from './Rezeptformular';
 import Artikelverwaltung from './Artikelverwaltung';
@@ -29,7 +35,7 @@ import { categoryManager } from '../utils/categoryManager';
 
 function AppContent() {
   const { state, dispatch } = useAppContext();
-  const { loadAppData, saveAppData, isLoading, lastSaved, storageInfo } = useStorage();
+  const { loadAppData, saveAppData, isLoading, lastSync, storageInfo, storageMode, cloudType } = useStorage();
   
   // Import/Export-System wird jetzt über den useImportExport Hook verwaltet
   const importExport = useImportExport();
@@ -74,7 +80,7 @@ function AppContent() {
   const handleNewSupplierFromArticle = (supplierName: string) => {
     // Erstelle einen neuen Lieferanten mit dem angegebenen Namen
     const newSupplier = {
-      id: Date.now().toString(),
+      id: generateId(),
       name: supplierName,
       contactPerson: '',
       email: '',
@@ -112,72 +118,189 @@ function AppContent() {
     }
   }, [state.showArticleForm]);
 
-  // Lade gespeicherte Daten beim Start
+  // Lade gespeicherte Daten beim Start (nur einmal, auch bei React Strict Mode)
+  const hasLoadedInitialData = useRef(false);
+  
   useEffect(() => {
-    const savedData = loadAppData();
-    if (savedData.articles.length > 0) {
-      dispatch({ type: 'SET_ARTICLES', payload: savedData.articles });
-    }
-    if (savedData.suppliers.length > 0) {
-      dispatch({ type: 'SET_SUPPLIERS', payload: savedData.suppliers });
-    }
-    if (savedData.recipes.length > 0) {
-      dispatch({ type: 'SET_RECIPES', payload: savedData.recipes });
-    }
-    if (savedData.design) {
-      dispatch({ type: 'SET_CURRENT_DESIGN', payload: savedData.design });
-    }
-  }, [loadAppData, dispatch]);
-
-  // Speichere Design-Änderungen automatisch
-  useEffect(() => {
-    if (state.currentDesign) {
-      saveAppData({ design: state.currentDesign });
-    }
-  }, [state.currentDesign, saveAppData]);
-
-  // Speichere Lieferanten-Änderungen automatisch
-  useEffect(() => {
-    if (state.suppliers && state.suppliers.length >= 0) {
-      saveAppData({ suppliers: state.suppliers });
-    }
-  }, [state.suppliers, saveAppData]);
-
-  // Speichere Artikel-Änderungen automatisch
-  useEffect(() => {
-    if (state.articles && state.articles.length >= 0) {
-      saveAppData({ articles: state.articles });
-    }
-  }, [state.articles, saveAppData]);
-
-  // Speichere Rezept-Änderungen automatisch
-  useEffect(() => {
-    if (state.recipes && state.recipes.length >= 0) {
-      saveAppData({ recipes: state.recipes });
-    }
-  }, [state.recipes, saveAppData]);
+    if (hasLoadedInitialData.current) return;
+    hasLoadedInitialData.current = true;
+    
+    const loadInitialData = async () => {
+      try {
+        // Verwende den Storage-Layer für konsistente Speichermodus-Informationen
+        const currentStorageMode = storageMode;
+        const currentCloudType = cloudType;
+        
+        console.log(`🔍 AppContent - Aktueller Speichermodus: ${currentStorageMode}, Cloud: ${currentCloudType || 'none'}`);
+        
+        // Nur lokalen Modus unterstützen (Cloud-Modus noch nicht implementiert)
+        if (currentStorageMode === 'local') {
+          console.log('📁 Verwende loadAppData für lokalen Modus...');
+          const savedData = await loadAppData();
+          if (savedData && typeof savedData === 'object' && 'articles' in savedData) {
+            const appData = savedData as any;
+            if (Array.isArray(appData.articles) && appData.articles.length > 0) {
+              dispatch({ type: 'SET_ARTICLES', payload: appData.articles });
+            }
+            if (Array.isArray(appData.suppliers) && appData.suppliers.length > 0) {
+              dispatch({ type: 'SET_SUPPLIERS', payload: appData.suppliers });
+            }
+            if (Array.isArray(appData.recipes) && appData.recipes.length > 0) {
+              dispatch({ type: 'SET_RECIPES', payload: appData.recipes });
+            }
+          }
+        } else {
+          console.warn('⚠️ Cloud-Modus noch nicht implementiert, verwende lokalen Modus');
+          // Fallback auf lokalen Modus
+          const savedData = await loadAppData();
+          if (savedData && typeof savedData === 'object' && 'articles' in savedData) {
+            const appData = savedData as any;
+            if (Array.isArray(appData.articles) && appData.articles.length > 0) {
+              dispatch({ type: 'SET_ARTICLES', payload: appData.articles });
+            }
+            if (Array.isArray(appData.suppliers) && appData.suppliers.length > 0) {
+              dispatch({ type: 'SET_SUPPLIERS', payload: appData.suppliers });
+            }
+            if (Array.isArray(appData.recipes) && appData.recipes.length > 0) {
+              dispatch({ type: 'SET_RECIPES', payload: appData.recipes });
+            }
+          }
+        }
+        
+                 // Design immer aus localStorage laden
+         const design = localStorage.getItem('chef_design');
+         if (design) {
+           dispatch({ type: 'SET_CURRENT_DESIGN', payload: JSON.parse(design) });
+         }
+         
+         // Markiere initiales Laden als abgeschlossen
+         setInitialDataLoaded(true);
+         console.log('✅ Initiales Datenladen abgeschlossen');
+       } catch (error) {
+         console.error('Fehler beim Laden der initialen Daten:', error);
+         setInitialDataLoaded(true); // Auch bei Fehlern setzen
+       }
+     };
+     
+     loadInitialData();
+   }, []); // Nur beim ersten Render ausführen
 
   // State to track if an import operation just completed
   const [importCompleted, setImportCompleted] = useState(false);
+  // State to track if initial data loading is complete
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Accordion State
+  const [accordionOpen, setAccordionOpen] = useState({
+    kalkulation: false,
+    einstellungen: false
+  });
+
+  const toggleAccordion = (section: 'kalkulation' | 'einstellungen') => {
+    setAccordionOpen(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const isAccordionActive = (section: string) => {
+    switch (section) {
+      case 'kalkulation':
+        return ['kalkulation', 'rezepte', 'artikel', 'lieferanten'].includes(state.currentPage);
+      case 'einstellungen':
+        return ['storage-settings', 'storage-management', 'development'].includes(state.currentPage);
+      default:
+        return false;
+    }
+  };
+
+  // Automatisch Accordion öffnen, wenn ein Unterpunkt aktiv ist
+  // und alle anderen Accordion-Bereiche schließen
+  useEffect(() => {
+    // Schließe alle Accordion-Bereiche zuerst
+    setAccordionOpen(prev => ({
+      kalkulation: false,
+      einstellungen: false
+    }));
+
+    // Öffne nur den aktiven Bereich
+    if (isAccordionActive('kalkulation')) {
+      setAccordionOpen(prev => ({ ...prev, kalkulation: true }));
+    }
+    if (isAccordionActive('einstellungen')) {
+      setAccordionOpen(prev => ({ ...prev, einstellungen: true }));
+    }
+  }, [state.currentPage]);
+
+  // Intelligente Speicherung - nur bei echten Benutzer-Änderungen
+  useEffect(() => {
+    // Überspringe automatische Speicherung während des Imports
+    if (importCompleted) {
+      return;
+    }
+    
+    // Überspringe automatische Speicherung bis initiales Laden abgeschlossen ist
+    if (!initialDataLoaded) {
+      return;
+    }
+    
+    // Speichere nur bei echten Benutzer-Änderungen, nicht bei jedem State-Update
+    const hasRealChanges = () => {
+      // Prüfe ob es sich um echte Änderungen handelt (nicht um initiales Laden)
+      const isInitialLoad = !state.articles || state.articles.length === 0;
+      if (isInitialLoad) {
+        return false;
+      }
+      
+      // Speichere nur wenn sich die Anzahl der Artikel geändert hat (echte Änderungen)
+      // NICHT bei jedem State-Update
+      return false; // Deaktiviere automatische Speicherung
+    };
+    
+    if (hasRealChanges()) {
+      const saveChanges = async () => {
+        const dataToSave: any = {};
+        let hasChanges = false;
+
+        if (state.currentDesign) {
+          dataToSave.design = state.currentDesign;
+          hasChanges = true;
+        }
+
+        if (state.suppliers && state.suppliers.length >= 0) {
+          dataToSave.suppliers = state.suppliers;
+          hasChanges = true;
+        }
+
+        if (state.articles && state.articles.length >= 0) {
+          dataToSave.articles = state.articles;
+          hasChanges = true;
+        }
+
+        if (state.recipes && state.recipes.length >= 0) {
+          dataToSave.recipes = state.recipes;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          console.log('💾 Speichere Änderungen...', Object.keys(dataToSave));
+          await saveAppData(dataToSave);
+        }
+      };
+
+      // Verzögerung um mehrfache Aufrufe zu verhindern
+      const timeoutId = setTimeout(saveChanges, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [state.currentDesign, state.suppliers, state.articles, state.recipes, saveAppData, importCompleted]);
 
   // Auto-save effect that triggers when import is completed
   useEffect(() => {
     if (importCompleted) {
-      const currentData = {
-        suppliers: state.suppliers || [],
-        articles: state.articles || [],
-        recipes: state.recipes || [],
-        design: state.currentDesign || 'warm'
-      };
-      const success = saveAppData(currentData);
-      if (success) {
-        console.log('Daten erfolgreich in LocalStorage gespeichert nach Import:', currentData);
-      } else {
-        console.error('Fehler beim Speichern der Daten in LocalStorage nach Import');
-      }
+      console.log('💾 Import abgeschlossen - keine weiteren Speicheraktionen nötig');
       setImportCompleted(false);
     }
-  }, [importCompleted, state.suppliers, state.articles, state.recipes, state.currentDesign, saveAppData]);
+  }, [importCompleted]);
 
   // Check screen size on mount and resize
   useEffect(() => {
@@ -301,17 +424,11 @@ function AppContent() {
     // Defensive Programmierung: Stelle sicher, dass recipes ein Array ist
     const recipes = state.recipes || [];
     
-    // Migriere bestehende Rezepte ohne createdAt
+    // Migriere bestehende Rezepte - entferne Timestamps (werden von PostgreSQL gesetzt)
     const migratedRecipes = recipes.map(recipe => {
-      if (!recipe.createdAt) {
-        return {
-          ...recipe,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastModifiedBy: 'Benutzer'
-        };
-      }
-      return recipe;
+      // Entferne Timestamps aus alten Daten (PostgreSQL setzt sie automatisch)
+      const { createdAt, updatedAt, lastModifiedBy, ...recipeWithoutTimestamps } = recipe;
+      return recipeWithoutTimestamps;
     });
 
     let filtered = migratedRecipes.filter(recipe => {
@@ -388,11 +505,32 @@ function AppContent() {
             }}
             handleEditSupplier={(supplier) => dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: supplier.id })}
             getSupplierName={getSupplierName}
-            lastSaved={lastSaved}
-            storageInfo={storageInfo}
+            lastSaved={lastSync}
+            storageInfo={{
+              ...storageInfo,
+              used: storageInfo?.used || 0,
+              available: storageInfo?.available || 100,
+              percentage: storageInfo?.percentage || 0
+            }}
             isStorageAvailable={true}
           />
         );
+                           
+
+                           case 'storage-management':
+          return (
+            <div className="container-fluid">
+              <div className="row">
+                <div className="col-12">
+                  <StorageManagement />
+                </div>
+              </div>
+            </div>
+          );
+
+      case 'development':
+        return <DevelopmentPage />;
+
       case 'kalkulation':
         return (
           <Kalkulation
@@ -474,17 +612,62 @@ function AppContent() {
                 dispatch({ type: 'SET_SELECTED_SUPPLIERS', payload: filteredSuppliers.map(s => s.id) });
               }
             }}
-            handleDeleteSuppliers={() => {
+                                     handleDeleteSuppliers={async (onProgress?: (current: number, total: number) => void) => {
               if (state.selectedSuppliers.length > 0) {
-                dispatch({ type: 'DELETE_SUPPLIERS', payload: state.selectedSuppliers });
+                try {
+                  // Lösche alle ausgewählten Lieferanten über StorageLayer
+                  for (let i = 0; i < state.selectedSuppliers.length; i++) {
+                    const supplierId = state.selectedSuppliers[i];
+                    
+                    // Rufe Progress-Callback auf
+                    if (onProgress) {
+                      onProgress(i, state.selectedSuppliers.length);
+                    }
+                    
+                    const success = await storageLayer.delete('suppliers', supplierId);
+                    if (!success) {
+                      console.warn(`⚠️ Lieferant ${supplierId} konnte nicht gelöscht werden`);
+                    }
+                  }
+                  
+                  // Finaler Progress-Callback
+                  if (onProgress) {
+                    onProgress(state.selectedSuppliers.length, state.selectedSuppliers.length);
+                  }
+                  
+                  // Aktualisiere lokalen State
+                  dispatch({ type: 'DELETE_SUPPLIERS', payload: state.selectedSuppliers });
+                } catch (error) {
+                  console.error('❌ Fehler beim Löschen der Lieferanten:', error);
+                  // Fallback: Nur lokalen State aktualisieren
+                  dispatch({ type: 'DELETE_SUPPLIERS', payload: state.selectedSuppliers });
+                }
               }
             }}
             handleEditSupplier={(supplier) => {
               dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: supplier.id });
               dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: true });
             }}
-            handleDeleteSingleSupplier={(supplierId) => {
-              dispatch({ type: 'DELETE_SUPPLIERS', payload: [supplierId] });
+                                     handleDeleteSingleSupplier={async (supplierId) => {
+              try {
+                console.log(`🗑️ Lösche Lieferant ${supplierId} über StorageLayer...`);
+                
+                // Lösche über StorageLayer
+                const success = await storageLayer.delete('suppliers', supplierId);
+                
+                if (!success) {
+                  throw new Error('Fehler beim Löschen des Lieferanten über StorageLayer');
+                }
+                
+                // Aktualisiere lokalen State
+                dispatch({ type: 'DELETE_SUPPLIERS', payload: [supplierId] });
+                
+                console.log('✅ Lieferant erfolgreich gelöscht');
+              } catch (error) {
+                console.error('❌ Fehler beim Löschen des Lieferanten:', error);
+                // Fallback: Nur lokalen State aktualisieren
+                dispatch({ type: 'DELETE_SUPPLIERS', payload: [supplierId] });
+              }
             }}
             setShowSupplierForm={(show) => dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: show })}
           />
@@ -520,13 +703,80 @@ function AppContent() {
                 dispatch({ type: 'SET_SELECTED_RECIPES', payload: filteredRecipes.map(r => r.id) });
               }
             }}
-            handleDeleteRecipes={() => {
+                                     handleDeleteRecipes={async (onProgress?: (current: number, total: number) => void) => {
               if (state.selectedRecipes.length > 0) {
-                dispatch({ type: 'DELETE_RECIPES', payload: state.selectedRecipes });
+                try {
+                  // Lösche Rezepte über StorageLayer
+                  for (let i = 0; i < state.selectedRecipes.length; i++) {
+                    const recipeId = state.selectedRecipes[i];
+                    
+                    // Rufe Progress-Callback auf
+                    if (onProgress) {
+                      onProgress(i, state.selectedRecipes.length);
+                    }
+                    
+                    const success = await storageLayer.delete('recipes', recipeId);
+                    if (!success) {
+                      console.warn(`⚠️ Rezept ${recipeId} konnte nicht gelöscht werden`);
+                    }
+                  }
+                  
+                  // Finaler Progress-Callback
+                  if (onProgress) {
+                    onProgress(state.selectedRecipes.length, state.selectedRecipes.length);
+                  }
+                  
+                  // Aktualisiere lokalen State
+                  dispatch({ type: 'DELETE_RECIPES', payload: state.selectedRecipes });
+                } catch (error) {
+                  console.error('❌ Fehler beim Löschen der Rezepte:', error);
+                  // Fallback: Nur lokalen State aktualisieren
+                  dispatch({ type: 'DELETE_RECIPES', payload: state.selectedRecipes });
+                }
               }
             }}
-            handleDeleteSingleRecipe={(recipeId) => {
-              dispatch({ type: 'DELETE_RECIPES', payload: [recipeId] });
+                                     handleDeleteSingleRecipe={async (recipeId) => {
+              try {
+                // Prüfe den aktuellen Speichermodus
+                const currentStorageMode = localStorage.getItem('chef_storage_mode') as string;
+                
+                if (currentStorageMode === 'backend' || currentStorageMode === 'hybrid') {
+                  // Lösche Rezept aus der Datenbank
+                  console.log(`🗑️ Lösche Rezept ${recipeId} aus der Datenbank...`);
+                  
+                  const response = await fetch(`http://localhost:3001/api/v1/recipes/${recipeId}`, {
+                    method: 'DELETE',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    }
+                  });
+                  
+                  if (!response.ok) {
+                    console.warn(`⚠️ Rezept ${recipeId} konnte nicht aus der Datenbank gelöscht werden`);
+                  } else {
+                    console.log(`✅ Rezept ${recipeId} erfolgreich aus der Datenbank gelöscht`);
+                  }
+                } else {
+                  console.log(`🗑️ Lösche Rezept ${recipeId} aus dem lokalen Speicher...`);
+                }
+                
+                // Lösche Rezept über StorageLayer
+                const success = await storageLayer.delete('recipes', recipeId);
+                if (!success) {
+                  console.warn(`⚠️ Rezept ${recipeId} konnte nicht gelöscht werden`);
+                } else {
+                  console.log(`✅ Rezept ${recipeId} erfolgreich gelöscht`);
+                }
+                
+                // Aktualisiere lokalen State
+                dispatch({ type: 'DELETE_RECIPES', payload: [recipeId] });
+                
+                console.log('✅ Rezept erfolgreich gelöscht');
+              } catch (error) {
+                console.error('❌ Fehler beim Löschen des Rezepts:', error);
+                // Fallback: Nur lokalen State aktualisieren
+                dispatch({ type: 'DELETE_RECIPES', payload: [recipeId] });
+              }
             }}
             formatPrice={formatPrice}
             filteredAndSortedRecipes={filteredAndSortedRecipes}
@@ -756,64 +1006,56 @@ function AppContent() {
               colors={getCurrentColors()}
               suppliers={state.suppliers}
               articles={state.articles}
-              onSave={articleHandlers.handleSaveArticle}
               onReset={() => dispatch({ type: 'SET_EDITING_ARTICLE', payload: null })}
               onNewSupplier={handleNewSupplierFromArticle}
             />
           )}
 
-          {/* Lieferantenformular Modal */}
-          <Lieferantenformular
-            suppliers={state.suppliers}
-            setSuppliers={(suppliers) => {
-              if (typeof suppliers === 'function') {
-                const newSuppliers = suppliers(state.suppliers);
-                dispatch({ type: 'SET_SUPPLIERS', payload: newSuppliers });
-              } else {
-                dispatch({ type: 'SET_SUPPLIERS', payload: suppliers });
-              }
-            }}
-            showSupplierForm={state.showSupplierForm}
-            setShowSupplierForm={(show) => dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: show })}
-            getCurrentColors={getCurrentColors}
-            isValidUrl={isValidUrl}
-            openWebsite={openWebsite}
-          />
+                     {/* Lieferantenformular Modal */}
+           <Lieferantenformular
+             suppliers={state.suppliers}
+             showSupplierForm={state.showSupplierForm}
+             setShowSupplierForm={(show) => dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: show })}
+             getCurrentColors={getCurrentColors}
+             isValidUrl={isValidUrl}
+             openWebsite={openWebsite}
+             onReset={() => dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: null })}
+           />
 
-          {/* Rezept-Formular Modal */}
-          <Rezeptformular
-            articles={state.articles}
-            recipes={state.recipes}
-            setRecipes={(recipes) => {
-              if (typeof recipes === 'function') {
-                const newRecipes = recipes(state.recipes);
-                dispatch({ type: 'SET_RECIPES', payload: newRecipes });
-              } else {
-                dispatch({ type: 'SET_RECIPES', payload: recipes });
-              }
-            }}
-            setShowArticleForm={(show) => dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: show })}
-            setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
-            formatPrice={formatPrice}
-            getCurrentColors={getCurrentColors}
-            show={state.showRecipeForm || !!state.editingRecipe}
-            onClose={() => {
-              dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
-              dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
-            }}
-            onSave={(recipe) => {
-              if (state.editingRecipe) {
-                // Rezept bearbeiten
-                dispatch({ type: 'UPDATE_RECIPE', payload: { id: state.editingRecipe.id, recipe } });
-              } else {
-                // Neues Rezept erstellen
-                dispatch({ type: 'ADD_RECIPE', payload: recipe });
-              }
-            }}
-            onReset={() => {
-              dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
-            }}
-          />
+                     {/* Rezept-Formular Modal */}
+           <Rezeptformular
+             articles={state.articles}
+             recipes={state.recipes}
+             setRecipes={(recipes) => {
+               if (typeof recipes === 'function') {
+                 const newRecipes = recipes(state.recipes);
+                 dispatch({ type: 'SET_RECIPES', payload: newRecipes });
+               } else {
+                 dispatch({ type: 'SET_RECIPES', payload: recipes });
+               }
+             }}
+             setShowArticleForm={(show) => dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: show })}
+             setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
+             formatPrice={formatPrice}
+             getCurrentColors={getCurrentColors}
+             show={state.showRecipeForm || !!state.editingRecipe}
+             onClose={() => {
+               dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
+               dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+             }}
+             onSave={(recipe) => {
+               if (state.editingRecipe) {
+                 // Rezept bearbeiten
+                 dispatch({ type: 'UPDATE_RECIPE', payload: { id: state.editingRecipe.id, recipe } });
+               } else {
+                 // Neues Rezept erstellen
+                 dispatch({ type: 'ADD_RECIPE', payload: recipe });
+               }
+             }}
+             onReset={() => {
+               dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+             }}
+           />
 
           {/* Enhanced Sidebar */}
           <div
@@ -825,7 +1067,9 @@ function AppContent() {
               transition: 'width 0.3s ease',
               backgroundColor: colors.sidebar,
               borderRight: `1px solid ${colors.cardBorder}`,
-              display: state.isMobile ? (state.sidebarOpen ? 'block' : 'none') : 'block'
+              display: state.isMobile ? (state.sidebarOpen ? 'flex' : 'none') : 'flex',
+              flexDirection: 'column',
+              height: 'calc(100vh - 56px)'
             }}
           >
             <div className="d-flex justify-content-between align-items-center p-3 border-bottom" style={{ borderColor: colors.cardBorder }}>
@@ -851,7 +1095,9 @@ function AppContent() {
               </button>
             </div>
             
-            <ul className="nav flex-column p-2">
+            {/* Haupt-Navigation */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <ul className="nav flex-column p-2">
               <li className="nav-item mb-2">
                 <button 
                   className="sidebar-button" 
@@ -918,69 +1164,166 @@ function AppContent() {
                     width: state.sidebarOpen ? 'auto' : '100%'
                   }} />
                   {state.sidebarOpen && <span>Kalkulation</span>}
+                  {state.sidebarOpen && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleAccordion('kalkulation');
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: colors.text,
+                        marginLeft: 'auto',
+                        padding: '4px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: '24px',
+                        minHeight: '24px',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.accent + '20';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleAccordion('kalkulation');
+                        }
+                      }}
+                    >
+                      {accordionOpen.kalkulation ? <FaChevronDown /> : <FaChevronRight />}
+                    </div>
+                  )}
                 </button>
-                <ul className="nav flex-column mt-2" style={{ 
-                  paddingLeft: state.sidebarOpen ? '2rem' : '0',
-                  display: state.sidebarOpen ? 'block' : 'none'
-                }}>
-                  <li className="nav-item mb-1">
-                    <button 
-                      className="sidebar-sub-button"
-                      onClick={() => { 
-                        dispatch({ type: 'SET_CURRENT_PAGE', payload: 'artikel' }); 
-                        if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                      }}
-                      style={{ 
-                        color: colors.text,
-                        borderRadius: '6px',
-                        backgroundColor: state.currentPage === 'artikel' ? colors.accent + '15' : 'transparent',
-                        padding: '8px 12px',
-                        fontSize: '0.9rem'
-                      }}
-                    >
-                      <FaBoxes className="me-2" style={{ fontSize: '14px' }} />
-                      Artikel
-                    </button>
-                  </li>
-                  <li className="nav-item mb-1">
-                    <button 
-                      className="sidebar-sub-button"
-                      onClick={() => { 
-                        dispatch({ type: 'SET_CURRENT_PAGE', payload: 'lieferanten' }); 
-                        if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                      }}
-                      style={{ 
-                        color: colors.text,
-                        borderRadius: '6px',
-                        backgroundColor: state.currentPage === 'lieferanten' ? colors.accent + '15' : 'transparent',
-                        padding: '8px 12px',
-                        fontSize: '0.9rem'
-                      }}
-                    >
-                      <FaUsers className="me-2" style={{ fontSize: '14px' }} />
-                      Lieferanten
-                    </button>
-                  </li>
-                  <li className="nav-item mb-1">
-                    <button 
-                      className="sidebar-sub-button"
-                      onClick={() => { 
-                        dispatch({ type: 'SET_CURRENT_PAGE', payload: 'rezepte' }); 
-                        if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                      }}
-                      style={{ 
-                        color: colors.text,
-                        borderRadius: '6px',
-                        backgroundColor: state.currentPage === 'rezepte' ? colors.accent + '15' : 'transparent',
-                        padding: '8px 12px',
-                        fontSize: '0.9rem'
-                      }}
-                    >
-                      <FaUtensils className="me-2" style={{ fontSize: '14px' }} />
-                      Rezepte
-                    </button>
-                  </li>
-                </ul>
+                {/* Accordion Unterpunkte */}
+                {accordionOpen.kalkulation && state.sidebarOpen && (
+                  <div 
+                    className="accordion-content"
+                    style={{
+                      overflow: 'hidden',
+                      transition: 'all 0.3s ease',
+                      maxHeight: '200px',
+                      opacity: 1
+                    }}
+                  >
+                    <ul className="nav flex-column mt-2" style={{ 
+                      paddingLeft: '2rem'
+                    }}>
+                      <li className="nav-item mb-1">
+                        <button 
+                          className="sidebar-sub-button"
+                          onClick={() => { 
+                            dispatch({ type: 'SET_CURRENT_PAGE', payload: 'artikel' }); 
+                            if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                          }}
+                          style={{ 
+                            color: colors.text,
+                            borderRadius: '6px',
+                            backgroundColor: state.currentPage === 'artikel' ? colors.accent + '15' : 'transparent',
+                            padding: '8px 12px',
+                            fontSize: '0.9rem',
+                            border: 'none',
+                            width: '100%',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (state.currentPage !== 'artikel') {
+                              e.currentTarget.style.backgroundColor = colors.accent + '10';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (state.currentPage !== 'artikel') {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }
+                          }}
+                        >
+                          <FaBoxes className="me-2" style={{ fontSize: '14px' }} />
+                          Artikel
+                        </button>
+                      </li>
+                      <li className="nav-item mb-1">
+                        <button 
+                          className="sidebar-sub-button"
+                          onClick={() => { 
+                            dispatch({ type: 'SET_CURRENT_PAGE', payload: 'lieferanten' }); 
+                            if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                          }}
+                          style={{ 
+                            color: colors.text,
+                            borderRadius: '6px',
+                            backgroundColor: state.currentPage === 'lieferanten' ? colors.accent + '15' : 'transparent',
+                            padding: '8px 12px',
+                            fontSize: '0.9rem',
+                            border: 'none',
+                            width: '100%',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (state.currentPage !== 'lieferanten') {
+                              e.currentTarget.style.backgroundColor = colors.accent + '10';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (state.currentPage !== 'lieferanten') {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }
+                          }}
+                        >
+                          <FaUsers className="me-2" style={{ fontSize: '14px' }} />
+                          Lieferanten
+                        </button>
+                      </li>
+                      <li className="nav-item mb-1">
+                        <button 
+                          className="sidebar-sub-button"
+                          onClick={() => { 
+                            dispatch({ type: 'SET_CURRENT_PAGE', payload: 'rezepte' }); 
+                            if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                          }}
+                          style={{ 
+                            color: colors.text,
+                            borderRadius: '6px',
+                            backgroundColor: state.currentPage === 'rezepte' ? colors.accent + '15' : 'transparent',
+                            padding: '8px 12px',
+                            fontSize: '0.9rem',
+                            border: 'none',
+                            width: '100%',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (state.currentPage !== 'rezepte') {
+                              e.currentTarget.style.backgroundColor = colors.accent + '10';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (state.currentPage !== 'rezepte') {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }
+                          }}
+                        >
+                          <FaUtensils className="me-2" style={{ fontSize: '14px' }} />
+                          Rezepte
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                )}
               </li>
               <li className="nav-item mb-2">
                 <button 
@@ -1050,7 +1393,174 @@ function AppContent() {
                   {state.sidebarOpen && <span>Inventur</span>}
                 </button>
               </li>
-            </ul>
+              </ul>
+            </div>
+            
+            {/* Einstellungen am unteren Rand */}
+            <div style={{ marginTop: 'auto', padding: '8px' }}>
+              <ul className="nav flex-column">
+                {/* Haupt-Einstellungen */}
+                <li className="nav-item mb-2">
+                  <button 
+                    className="sidebar-button" 
+                    onClick={() => { 
+                      dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-settings' }); 
+                      if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                    }}
+                    title="Einstellungen"
+                    style={{ 
+                      color: colors.text,
+                      borderRadius: '8px',
+                      backgroundColor: (state.currentPage === 'storage-settings' || state.currentPage === 'storage-management') ? colors.accent + '20' : 'transparent',
+                      justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
+                      minHeight: '50px',
+                      border: 'none',
+                      outline: 'none',
+                      padding: state.sidebarOpen ? '12px' : '2px',
+                      width: '100%'
+                    }}
+                  >
+                    <FaCog className="sidebar-icon" style={{ 
+                      marginRight: state.sidebarOpen ? '12px' : '0',
+                      display: 'block',
+                      flexShrink: 0,
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      color: colors.text,
+                      minWidth: '18px',
+                      textAlign: 'center',
+                      width: state.sidebarOpen ? 'auto' : '100%'
+                    }} />
+                    {state.sidebarOpen && <span>Einstellungen</span>}
+                    {state.sidebarOpen && (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAccordion('einstellungen');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: colors.text,
+                          marginLeft: 'auto',
+                          padding: '4px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minWidth: '24px',
+                          minHeight: '24px',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = colors.accent + '20';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleAccordion('einstellungen');
+                          }
+                        }}
+                      >
+                        {accordionOpen.einstellungen ? <FaChevronDown /> : <FaChevronRight />}
+                      </div>
+                    )}
+                  </button>
+                  {/* Accordion Unterpunkte */}
+                  {accordionOpen.einstellungen && state.sidebarOpen && (
+                    <div 
+                      className="accordion-content"
+                      style={{
+                        overflow: 'hidden',
+                        transition: 'all 0.3s ease',
+                        maxHeight: '200px',
+                        opacity: 1
+                      }}
+                    >
+                      <ul className="nav flex-column mt-2" style={{ 
+                        paddingLeft: '2rem'
+                      }}>
+                        <li className="nav-item mb-1">
+                          <button 
+                            className="sidebar-sub-button"
+                            onClick={() => { 
+                              dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-management' }); 
+                              if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                            }}
+                            style={{ 
+                              color: colors.text,
+                              borderRadius: '6px',
+                              backgroundColor: state.currentPage === 'storage-management' ? colors.accent + '15' : 'transparent',
+                              padding: '8px 12px',
+                              fontSize: '0.9rem',
+                              border: 'none',
+                              width: '100%',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (state.currentPage !== 'storage-management') {
+                                e.currentTarget.style.backgroundColor = colors.accent + '10';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (state.currentPage !== 'storage-management') {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                          >
+                            <FaDatabase className="me-2" style={{ fontSize: '14px' }} />
+                            Speicherverwaltung
+                          </button>
+                        </li>
+                        <li className="nav-item mb-1">
+                          <button 
+                            className="sidebar-sub-button"
+                            onClick={() => { 
+                              dispatch({ type: 'SET_CURRENT_PAGE', payload: 'development' }); 
+                              if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                            }}
+                            style={{ 
+                              color: colors.text,
+                              borderRadius: '6px',
+                              backgroundColor: state.currentPage === 'development' ? colors.accent + '15' : 'transparent',
+                              padding: '8px 12px',
+                              fontSize: '0.9rem',
+                              border: 'none',
+                              width: '100%',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (state.currentPage !== 'development') {
+                                e.currentTarget.style.backgroundColor = colors.accent + '10';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (state.currentPage !== 'development') {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                          >
+                            <FaCode className="me-2" style={{ fontSize: '14px' }} />
+                            Entwicklung
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </li>
+              </ul>
+            </div>
           </div>
 
           {/* Main Content */}
@@ -1063,13 +1573,19 @@ function AppContent() {
             {renderPage()}
           </div>
 
-          {/* Storage Status */}
-          <StorageStatus 
-            lastSaved={lastSaved}
-            storageInfo={storageInfo}
-            isStorageAvailable={true}
-          />
-
+                     {/* Storage Status */}
+           <StorageStatus 
+             lastSaved={lastSync}
+             storageInfo={{
+              ...storageInfo,
+              used: storageInfo?.used || 0,
+              available: storageInfo?.available || 100,
+              percentage: storageInfo?.percentage || 0
+            }}
+             isStorageAvailable={true}
+           />
+           
+           {/* Backup & Restore Button - nur im "Nur Lokal"-Modus sichtbar */}
                                             {/* Import/Export Modal */}
             <ArtikelDataExchange
               show={importExport.showImportExportModal}
@@ -1077,16 +1593,45 @@ function AppContent() {
               colors={colors}
               suppliers={state.suppliers}
               articles={state.articles}
-              onImportComplete={(newSuppliers, newArticles) => {
-                // Alle neuen Lieferanten und Artikel auf einmal hinzufügen
-                if (newSuppliers.length > 0) {
-                  dispatch({ type: 'SET_SUPPLIERS', payload: [...state.suppliers, ...newSuppliers] });
+              onImportComplete={async (newSuppliers, newArticles) => {
+                console.log('💾 Import abgeschlossen - speichere Daten über Storage-Layer...');
+                
+                try {
+                  // Neue Lieferanten über Storage-Layer speichern
+                  if (newSuppliers.length > 0) {
+                    console.log(`📋 Speichere ${newSuppliers.length} neue Lieferanten über Storage-Layer...`);
+                    const success = await storageLayer.save('suppliers', newSuppliers);
+                    if (success) {
+                      dispatch({ type: 'SET_SUPPLIERS', payload: [...state.suppliers, ...newSuppliers] });
+                      console.log('✅ Lieferanten erfolgreich gespeichert');
+                    } else {
+                      throw new Error('Fehler beim Speichern der Lieferanten');
+                    }
+                  }
+                  
+                  // Neue Artikel über Storage-Layer speichern
+                  if (newArticles.length > 0) {
+                    console.log(`📦 Speichere ${newArticles.length} neue Artikel über Storage-Layer...`);
+                    const success = await storageLayer.save('articles', newArticles);
+                    if (success) {
+                      dispatch({ type: 'SET_ARTICLES', payload: [...state.articles, ...newArticles] });
+                      console.log('✅ Artikel erfolgreich gespeichert');
+                    } else {
+                      throw new Error('Fehler beim Speichern der Artikel');
+                    }
+                  }
+                  
+                  console.log('✅ Import erfolgreich abgeschlossen - Daten gespeichert');
+                } catch (error) {
+                  console.error('❌ Fehler beim Speichern der importierten Daten:', error);
+                  // Bei Fehler trotzdem den State aktualisieren (Daten sind im localStorage)
+                  if (newSuppliers.length > 0) {
+                    dispatch({ type: 'SET_SUPPLIERS', payload: [...state.suppliers, ...newSuppliers] });
+                  }
+                  if (newArticles.length > 0) {
+                    dispatch({ type: 'SET_ARTICLES', payload: [...state.articles, ...newArticles] });
+                  }
                 }
-                if (newArticles.length > 0) {
-                  dispatch({ type: 'SET_ARTICLES', payload: [...state.articles, ...newArticles] });
-                }
-                // Nur einmal setImportCompleted aufrufen
-                setImportCompleted(true);
               }}
             />
         </div>

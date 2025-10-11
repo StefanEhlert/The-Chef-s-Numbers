@@ -1,96 +1,189 @@
-import { useEffect, useCallback, useState } from 'react';
-import { storageService, AppData } from '../services/storage';
+import { useEffect, useCallback, useState, useMemo } from 'react';
+import { StorageMode, CloudStorageType, StorageLayer } from '../services/storageLayer';
 
 export const useStorage = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [storageInfo, setStorageInfo] = useState(storageService.getStorageInfo());
+  const [storageMode, setStorageMode] = useState<StorageMode>('local');
+  const [cloudType, setCloudType] = useState<CloudStorageType | undefined>(undefined);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Lade aktuelle Konfiguration aus StorageLayer
+  useEffect(() => {
+    const loadCurrentConfig = async () => {
+      try {
+        const storageLayer = StorageLayer.getInstance();
+        const config = storageLayer.getCurrentConfig();
+        
+        if (config) {
+          setStorageMode(config.mode);
+          
+          if (config.mode === 'cloud') {
+            // Bestimme Cloud-Type basierend auf Daten-Speicher
+            switch (config.data) {
+              case 'PostgreSQL':
+              case 'MariaDB':
+              case 'MySQL':
+                setCloudType('docker');
+                break;
+              case 'Supabase':
+                setCloudType('supabase');
+                break;
+              case 'Firebase':
+                setCloudType('firebase');
+                break;
+              default:
+                setCloudType('docker');
+            }
+          } else {
+            setCloudType(undefined);
+          }
+          
+          console.log(`🔍 useStorage Hook - storageMode: ${config.mode}, cloudType: ${cloudType}, data: ${config.data}`);
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Laden der Storage-Konfiguration:', error);
+      }
+    };
+    
+    loadCurrentConfig();
+  }, [cloudType]);
 
-  // Lädt alle App-Daten beim Start
-  const loadAppData = useCallback((): AppData => {
-    setIsLoading(true);
+  const storageInfo = useMemo(() => ({
+    mode: storageMode,
+    cloudType,
+    lastSync,
+    isOnline,
+    initializationStatus: { isInitialized: true, isInitializing: false, lastCheck: new Date(), schemaStatus: {}, dataStatus: {}, errors: [] },
+    // Add the required properties for StorageStatus component
+    used: 0, // Placeholder - could be calculated from actual data
+    available: 5 * 1024 * 1024, // 5MB placeholder
+    percentage: 0 // Placeholder
+  }), [storageMode, cloudType, lastSync, isOnline]);
+
+  const loadAppData = useCallback(async () => {
+    // Verwende StorageLayer für konsistente Datenoperationen
     try {
-      const data = storageService.loadAppData();
-      setStorageInfo(storageService.getStorageInfo());
-      return data;
+      console.log(`🔄 Lade Daten für Speichermodus: ${storageMode} (über StorageLayer)`);
+      
+      const storageLayer = StorageLayer.getInstance();
+      
+      // Lade alle App-Daten über StorageLayer (harmonisiert mit zentralem Schema)
+      const articles = await storageLayer.load('articles');
+      const suppliers = await storageLayer.load('suppliers');
+      const recipes = await storageLayer.load('recipes');
+      // Design immer aus LocalStorage laden (nicht über StorageLayer)
+      const design = localStorage.getItem('chef_design');
+      const shoppingList = await storageLayer.load('shopping_list'); // einkaufsListe → shopping_list
+      const inventory = await storageLayer.load('inventory'); // inventurListe → inventory
+      
+      console.log('📁 Daten über StorageLayer geladen');
+      return {
+        articles: articles || [],
+        suppliers: suppliers || [],
+        recipes: recipes || [],
+        design: design ? JSON.parse(design) : 'warm',
+        einkaufsListe: shoppingList || [], // Backward compatibility
+        inventurListe: inventory || [] // Backward compatibility
+      };
+    } catch (error) {
+      console.error('❌ Fehler beim Laden der Daten über StorageLayer:', error);
+      return { articles: [], suppliers: [], recipes: [], design: 'warm', einkaufsListe: [], inventurListe: [] };
+    }
+  }, [storageMode]);
+
+  const saveAppData = useCallback(async (data: any) => {
+    // Verwende StorageLayer für konsistente Datenoperationen
+    try {
+      console.log('💾 Speichere Daten über StorageLayer:', Object.keys(data));
+      
+      const storageLayer = StorageLayer.getInstance();
+      
+      // Speichere alle Daten über StorageLayer
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== null && value !== undefined) {
+          if (key === 'design') {
+            // Design immer in LocalStorage speichern (nicht über StorageLayer)
+            localStorage.setItem('chef_design', JSON.stringify(value));
+            console.log('💾 Design in LocalStorage gespeichert');
+          } else {
+            // StorageLayer erwartet Arrays, also konvertiere einzelne Werte zu Arrays
+            const arrayValue = Array.isArray(value) ? value : [value];
+            await storageLayer.save(key as any, arrayValue);
+          }
+        }
+      }
+      
+      console.log('✅ Daten erfolgreich über StorageLayer gespeichert');
+      setLastSync(new Date());
+      return true;
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern der Daten über StorageLayer:', error);
+      setError(error instanceof Error ? error.message : 'Unbekannter Fehler');
+      return false;
+    }
+  }, [storageMode]);
+
+  const switchStorageMode = useCallback(async (mode: StorageMode, cloudType?: CloudStorageType) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      setStorageMode(mode);
+      setCloudType(cloudType);
+      setLastSync(new Date());
+      
+      console.log(`Storage mode switched to: ${mode}${cloudType ? ` (${cloudType})` : ''}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      setError(errorMessage);
+      console.error('❌ Fehler beim Wechseln des Storage-Modus:', error);
+      throw error;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Speichert alle App-Daten
-  const saveAppData = useCallback((data: Partial<AppData>): boolean => {
-    const success = storageService.saveAppData(data);
-    if (success) {
-      setLastSaved(new Date());
-      setStorageInfo(storageService.getStorageInfo());
+  const syncData = useCallback(async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // StorageLayer wird automatisch initialisiert
+      const storageLayer = StorageLayer.getInstance();
+      await storageLayer.ensureInitialized();
+      
+      setLastSync(new Date());
+      console.log('Data sync completed');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Sync fehlgeschlagen';
+      setError(errorMessage);
+      console.error('Sync failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-    return success;
   }, []);
 
-  // Speichert spezifische Daten
-  const saveData = useCallback(<T extends keyof AppData>(key: T, data: AppData[T]): boolean => {
-    return saveAppData({ [key]: data } as Partial<AppData>);
-  }, [saveAppData]);
-
-  // Lädt spezifische Daten
-  const loadData = useCallback(<T extends keyof AppData>(key: T): AppData[T] => {
-    return storageService.loadData(key);
-  }, []);
-
-  // Löscht alle Daten
-  const clearAllData = useCallback((): boolean => {
-    const success = storageService.clearAllData();
-    if (success) {
-      setLastSaved(null);
-      setStorageInfo(storageService.getStorageInfo());
-    }
-    return success;
-  }, []);
-
-  // Exportiert Daten
-  const exportData = useCallback((): string => {
-    return storageService.exportData();
-  }, []);
-
-  // Importiert Daten
-  const importData = useCallback((jsonData: string): boolean => {
-    const success = storageService.importData(jsonData);
-    if (success) {
-      setLastSaved(new Date());
-      setStorageInfo(storageService.getStorageInfo());
-    }
-    return success;
-  }, []);
-
-  // Prüft ob Daten vorhanden sind
-  const hasData = useCallback((): boolean => {
-    return storageService.hasData();
-  }, []);
-
-  // Aktualisiert Storage-Info
-  const updateStorageInfo = useCallback(() => {
-    setStorageInfo(storageService.getStorageInfo());
-  }, []);
+  const lastSaved = useMemo(() => lastSync, [lastSync]);
 
   return {
-    // Daten-Operationen
+    storageMode,
+    cloudType,
+    lastSync,
+    switchStorageMode,
+    syncData,
+    isOnline,
+    initializationStatus: { isInitialized: true, isInitializing: false, lastCheck: new Date(), schemaStatus: {}, dataStatus: {}, errors: [] },
+    isLoading,
+    error,
+    // Backward compatibility properties
     loadAppData,
     saveAppData,
-    saveData,
-    loadData,
-    clearAllData,
-    exportData,
-    importData,
-    hasData,
-    
-    // Status-Informationen
-    isLoading,
     lastSaved,
     storageInfo,
-    updateStorageInfo,
-    
-    // Utility-Funktionen
-    isStorageAvailable: () => storageService.hasData(),
+    // Legacy compatibility
+    backendType: cloudType
   };
-}; 
+};

@@ -41,8 +41,11 @@ export const useDashboard = ({ articles, suppliers, recipes }: UseDashboardProps
     
     // Top-Lieferanten (nach Anzahl der Artikel)
     const supplierCounts = articles.reduce((acc, article) => {
-      if (article.supplier) {
-        acc[article.supplier] = (acc[article.supplier] || 0) + 1;
+      if (article.supplierId) {
+        // Finde Lieferanten-Namen anhand der supplierId
+        const supplier = suppliers.find(s => s.id === article.supplierId);
+        const supplierName = supplier?.name || 'Unbekannter Lieferant';
+        acc[supplierName] = (acc[supplierName] || 0) + 1;
       }
       return acc;
     }, {} as Record<string, number>);

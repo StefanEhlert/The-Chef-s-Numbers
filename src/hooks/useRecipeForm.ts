@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Recipe, UsedRecipe } from '../types';
 import { useAppContext } from '../contexts/AppContext';
+import { UUIDUtils } from '../utils/uuidUtils';
 
 // Interface für das Rezeptformular
 interface RecipeForm {
@@ -32,8 +33,8 @@ interface RecipeForm {
 
 interface UseRecipeFormProps {
   articles: any[];
-  recipes: any[];
-  setRecipes: React.Dispatch<React.SetStateAction<any[]>>;
+  recipes: Recipe[];
+  setRecipes: React.Dispatch<React.SetStateAction<Recipe[]>>;
   setShowArticleForm: (show: boolean) => void;
   setEditingArticle: (article: any) => void;
   formatPrice: (price: number | undefined | null) => string;
@@ -63,13 +64,13 @@ export const useRecipeForm = ({
     markupPercentage: 300,
     vatRate: 19,
     sellingPrice: 0,
-    ingredients: [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+    ingredients: [{ id: UUIDUtils.generateId(), name: '', amount: 0, unit: 'g', price: 0 }],
     usedRecipes: [],
-    preparationSteps: [{ id: Date.now().toString(), order: 1, description: '' }]
+    preparationSteps: [{ id: UUIDUtils.generateId(), order: 1, description: '' }]
   });
 
   // Nach dem useState für recipeForm:
-  const [sellingPriceInput, setSellingPriceInput] = useState(recipeForm.sellingPrice.toFixed(2));
+  const [sellingPriceInput, setSellingPriceInput] = useState((recipeForm.sellingPrice || 0).toFixed(2));
   const [activeTab, setActiveTab] = useState<'kalkulation' | 'inhaltsangaben' | 'naehrwerte'>('kalkulation');
 
   // State für Zutat-Autovervollständigung
@@ -102,12 +103,12 @@ export const useRecipeForm = ({
         vatRate: editingRecipe.vatRate || 19,
         sellingPrice: editingRecipe.sellingPrice || 0,
         ingredients: editingRecipe.ingredients && editingRecipe.ingredients.length > 0 
-          ? [...editingRecipe.ingredients, { id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }] 
-          : [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+          ? [...editingRecipe.ingredients, { id: UUIDUtils.generateId(), name: '', amount: 0, unit: 'g', price: 0 }] 
+          : [{ id: UUIDUtils.generateId(), name: '', amount: 0, unit: 'g', price: 0 }],
         usedRecipes: editingRecipe.usedRecipes || [],
         preparationSteps: editingRecipe.preparationSteps && editingRecipe.preparationSteps.length > 0 
           ? editingRecipe.preparationSteps 
-          : [{ id: Date.now().toString(), order: 1, description: '' }]
+          : [{ id: UUIDUtils.generateId(), order: 1, description: '' }]
       });
       setSellingPriceInput((editingRecipe.sellingPrice || 0).toFixed(2));
     }
@@ -144,9 +145,9 @@ export const useRecipeForm = ({
       markupPercentage: 300,
       vatRate: 19,
       sellingPrice: 0,
-      ingredients: [{ id: Date.now().toString(), name: '', amount: 0, unit: 'g', price: 0 }],
+      ingredients: [{ id: UUIDUtils.generateId(), name: '', amount: 0, unit: 'g', price: 0 }],
       usedRecipes: [],
-      preparationSteps: [{ id: Date.now().toString(), order: 1, description: '' }]
+      preparationSteps: [{ id: UUIDUtils.generateId(), order: 1, description: '' }]
     } as RecipeForm);
   };
 
@@ -178,7 +179,7 @@ export const useRecipeForm = ({
     }));
     
     // Aktualisiere auch sellingPriceInput sofort
-    setSellingPriceInput(roundedSellingPrice.toFixed(2));
+    setSellingPriceInput((roundedSellingPrice || 0).toFixed(2));
   };
 
   const handleSellingPriceChange = (newSellingPrice: number) => {
@@ -241,8 +242,8 @@ export const useRecipeForm = ({
     // Zusatzstoffe von verwendeten Rezepten
     recipeForm.usedRecipes.forEach(usedRecipe => {
       const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
-      if (recipe && recipe.additives) {
-        recipe.additives.forEach((ingredient: any) => {
+      if (recipe && recipe.ingredients) {
+        recipe.ingredients.forEach((ingredient: any) => {
           if (ingredient.name && ingredient.name.trim() !== '') {
             const article = articles.find(a => a.name === ingredient.name);
             if (article && article.additives) {
@@ -418,7 +419,7 @@ export const useRecipeForm = ({
       // Wenn ein Rezept ausgewählt wurde, füge es zu usedRecipes hinzu
       const costPerPortion = item.materialCosts / item.portions;
       const newUsedRecipe = {
-        id: Date.now().toString(),
+        id: UUIDUtils.generateId(),
         recipeId: item.id,
         name: item.name,
         portions: 1, // Standard: 1 Portion
@@ -460,7 +461,7 @@ export const useRecipeForm = ({
         
         if (shouldAddNewLine) {
           updatedIngredients.push({ 
-            id: Date.now().toString(), 
+            id: UUIDUtils.generateId(), 
             name: '', 
             amount: 0, 
             unit: 'g', 
@@ -589,7 +590,7 @@ export const useRecipeForm = ({
       
       if (shouldAddNewLine) {
         updatedIngredients.push({ 
-          id: Date.now().toString(), 
+          id: UUIDUtils.generateId(), 
           name: '', 
           amount: 0, 
           unit: 'g', 
@@ -672,7 +673,7 @@ export const useRecipeForm = ({
     setRecipeForm(prev => ({
       ...prev,
       ingredients: [...prev.ingredients, { 
-        id: Date.now().toString(), 
+        id: UUIDUtils.generateId(), 
         name: '', 
         amount: 0, 
         unit: 'g', 
@@ -720,7 +721,7 @@ export const useRecipeForm = ({
     setRecipeForm(prev => ({
       ...prev,
       preparationSteps: [...prev.preparationSteps, { 
-        id: Date.now().toString(), 
+        id: UUIDUtils.generateId(), 
         order: prev.preparationSteps.length + 1, 
         description: '' 
       }]
@@ -736,7 +737,7 @@ export const useRecipeForm = ({
       // Wenn der letzte Schritt ausgefüllt wird, füge eine neue leere Zeile hinzu
       if (index === updatedSteps.length - 1 && description.trim() !== '') {
         updatedSteps.push({
-          id: Date.now().toString(),
+          id: UUIDUtils.generateId(),
           order: updatedSteps.length + 1,
           description: ''
         });
@@ -768,7 +769,7 @@ export const useRecipeForm = ({
       // Wenn nach dem Löschen keine leere Zeile am Ende ist, füge eine hinzu
       if (updatedSteps.length > 0 && updatedSteps[updatedSteps.length - 1].description.trim() !== '') {
         updatedSteps.push({
-          id: Date.now().toString(),
+          id: UUIDUtils.generateId(),
           order: updatedSteps.length + 1,
           description: ''
         });
@@ -781,54 +782,137 @@ export const useRecipeForm = ({
     });
   };
 
-  const handleSaveRecipe = () => {
+  const handleSaveRecipe = async () => {
     if (!recipeForm.name.trim()) {
       alert('Bitte geben Sie einen Namen für das Rezept ein.');
       return;
     }
 
-    console.log('🚀 handleSaveRecipe - editingRecipe:', editingRecipe);
+    try {
+      console.log('🚀 handleSaveRecipe - editingRecipe:', editingRecipe);
 
-    // Entferne leere Zubereitungsschritte vor dem Speichern
-    const cleanedPreparationSteps = recipeForm.preparationSteps
-      .filter(step => step.description.trim() !== '')
-      .map((step, index) => ({ ...step, order: index + 1 }));
+      // Entferne leere Zubereitungsschritte vor dem Speichern
+      const cleanedPreparationSteps = recipeForm.preparationSteps
+        .filter(step => step.description.trim() !== '')
+        .map((step, index) => ({ ...step, order: index + 1 }));
 
-    // Entferne nur Zutaten ohne Namen vor dem Speichern (Menge kann 0 sein)
-    const cleanedIngredients = recipeForm.ingredients
-      .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
+      // Entferne nur Zutaten ohne Namen vor dem Speichern (Menge kann 0 sein)
+      const cleanedIngredients = recipeForm.ingredients
+        .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
 
-    const recipeToSave = {
-      ...recipeForm,
-      preparationSteps: cleanedPreparationSteps,
-      ingredients: cleanedIngredients,
-      id: editingRecipe ? editingRecipe.id : Date.now().toString(),
-      materialCosts: calculateMaterialCosts(),
-      totalNutritionInfo: calculateRecipeNutrition(),
-      allergens: getRecipeAllergens(),
-      createdAt: editingRecipe ? editingRecipe.createdAt : new Date(),
-      updatedAt: new Date(),
-      lastModifiedBy: 'Benutzer' // Platzhalter für später
-    };
+      const recipeToSave = {
+        ...recipeForm,
+        preparationSteps: cleanedPreparationSteps,
+        ingredients: cleanedIngredients,
+        id: editingRecipe ? editingRecipe.id : UUIDUtils.generateId(), // Frontend-ID (eindeutig)
+        dbId: editingRecipe?.dbId, // DB-ID falls vorhanden (für Updates)
+        materialCosts: calculateMaterialCosts(),
+        totalNutritionInfo: calculateRecipeNutrition(),
+        allergens: getRecipeAllergens()
+        // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
+        // lastModifiedBy wird später implementiert (User-System)
+      };
 
-    console.log('📝 recipeToSave:', recipeToSave);
+      console.log('📝 recipeToSave:', recipeToSave);
 
-    if (editingRecipe) {
-      // Rezept bearbeiten
-      console.log('✏️ Bearbeite Rezept:', editingRecipe.id);
-      setRecipes((prev: any[]) => prev.map((recipe: any) => 
-        recipe.id === editingRecipe.id ? recipeToSave : recipe
-      ));
-    } else {
-      // Neues Rezept erstellen
-      console.log('🆕 Erstelle neues Rezept');
-      setRecipes((prev: any[]) => [...prev, recipeToSave]);
+      // Prüfe den aktuellen Speichermodus
+      const currentStorageMode = localStorage.getItem('chef_storage_mode') as string;
+      
+      if (currentStorageMode === 'cloud') {
+        // Speichere Rezept über Cloud-API
+        console.log(`💾 Speichere Rezept über Cloud-API: ${recipeToSave.name}`);
+        
+        const method = editingRecipe ? 'PUT' : 'POST';
+        const url = editingRecipe 
+          ? `http://localhost:3001/api/v1/recipes/${recipeToSave.id}`
+          : 'http://localhost:3001/api/v1/recipes';
+        
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(recipeToSave)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log(`✅ Rezept erfolgreich über Cloud gespeichert:`, result.message);
+        
+        // Verwende die vom Cloud zurückgegebenen Daten
+        const savedRecipe = result.data;
+        
+        setRecipes((prev: any[]) => {
+          const updatedRecipes = editingRecipe 
+            ? prev.map(r => r.id === editingRecipe.id ? savedRecipe : r)
+            : [...prev, savedRecipe];
+          
+          return updatedRecipes;
+        });
+      } else {
+        // Lokaler Speichermodus
+        if (editingRecipe) {
+          // Rezept bearbeiten
+          console.log('✏️ Bearbeite Rezept:', editingRecipe.id);
+          setRecipes((prev: any[]) => prev.map((recipe: any) => 
+            recipe.id === editingRecipe.id ? recipeToSave : recipe
+          ));
+        } else {
+          // Neues Rezept erstellen
+          console.log('🆕 Erstelle neues Rezept');
+          setRecipes((prev: any[]) => [...prev, recipeToSave]);
+        }
+      }
+      
+      // Das Speichern wird jetzt von der Komponente über den storageLayer gehandhabt
+      
+      // Schließe das Formular und reset
+      dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
+      dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+      resetRecipeForm();
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern des Rezepts:', error);
+      
+      // Erstelle recipeToSave für Fallback
+      const cleanedPreparationSteps = recipeForm.preparationSteps
+        .filter(step => step.description.trim() !== '')
+        .map((step, index) => ({ ...step, order: index + 1 }));
+
+      const cleanedIngredients = recipeForm.ingredients
+        .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
+
+      const recipeToSave = {
+        ...recipeForm,
+        preparationSteps: cleanedPreparationSteps,
+        ingredients: cleanedIngredients,
+        id: editingRecipe ? editingRecipe.id : UUIDUtils.generateId(), // Frontend-ID (eindeutig)
+        dbId: editingRecipe?.dbId, // DB-ID falls vorhanden (für Updates)
+        materialCosts: calculateMaterialCosts(),
+        totalNutritionInfo: calculateRecipeNutrition(),
+        allergens: getRecipeAllergens()
+        // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
+        // lastModifiedBy wird später implementiert (User-System)
+      };
+      
+      // Fallback: Lokale Speicherung
+      if (editingRecipe) {
+        setRecipes((prev: any[]) => prev.map((recipe: any) => 
+          recipe.id === editingRecipe.id ? recipeToSave : recipe
+        ));
+      } else {
+        setRecipes((prev: any[]) => [...prev, recipeToSave]);
+      }
+      
+      // Das Speichern wird jetzt von der Komponente über den storageLayer gehandhabt
+      
+      // Schließe das Formular und reset
+      dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
+      dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+      resetRecipeForm();
     }
-
-    // Schließe das Formular und reset
-    dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
-    dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
-    resetRecipeForm();
   };
 
   // Hilfsfunktionen für Dropdowns

@@ -1,5 +1,6 @@
-export interface InventurItem {
-  id: string;
+import { BaseEntity } from './index';
+
+export interface InventurItem extends BaseEntity {
   artikelName: string;
   kategorie: string;
   sollBestand: number;
