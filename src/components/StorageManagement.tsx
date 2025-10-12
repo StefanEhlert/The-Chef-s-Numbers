@@ -4684,12 +4684,26 @@ const StorageManagement: React.FC = () => {
                           name="cloudType"
                           id={type.id}
                           checked={storageManagement.selectedStorage.selectedCloudType === type.id}
-                          onChange={() => handleStorageManagementUpdate({
-                            selectedStorage: {
-                              ...storageManagement.selectedStorage,
-                              selectedCloudType: type.id as any
+                          onChange={() => {
+                            const updates: any = {
+                              selectedStorage: {
+                                ...storageManagement.selectedStorage,
+                                selectedCloudType: type.id as any
+                              }
+                            };
+
+                            // Setze automatisch Data- und Picture-Storage basierend auf Cloud-Typ
+                            if (type.id === 'supabase') {
+                              updates.selectedStorage.selectedDataStorage = 'Supabase';
+                              updates.selectedStorage.selectedPictureStorage = 'Supabase';
+                            } else if (type.id === 'firebase') {
+                              updates.selectedStorage.selectedDataStorage = 'Firebase';
+                              updates.selectedStorage.selectedPictureStorage = 'Firebase';
                             }
-                          })}
+                            // Für Docker: Benutzer wählt manuell PostgreSQL/MariaDB/MySQL
+
+                            handleStorageManagementUpdate(updates);
+                          }}
                           style={{ marginTop: '4px' }}
                         />
                         <label className="form-check-label" htmlFor={type.id} style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
