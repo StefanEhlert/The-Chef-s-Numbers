@@ -319,13 +319,6 @@ const StorageManagement: React.FC = () => {
     const selectedDataStorage = storageManagement.selectedStorage.selectedDataStorage;
     const cloudTypeValid = isCloudTypeValid();
 
-    console.log('🔍 Animation useEffect ausgelöst:', {
-      selectedCloudType,
-      selectedDataStorage,
-      cloudTypeValid,
-      supabaseSectionVisible
-    });
-
     // PostgreSQL-Bereich (nur bei Docker + PostgreSQL)
     if (selectedCloudType === 'docker' && selectedDataStorage === 'PostgreSQL' && cloudTypeValid) {
       if (!postgresSectionVisible) {
@@ -384,14 +377,11 @@ const StorageManagement: React.FC = () => {
 
     // Supabase-Bereich (nur bei Supabase Cloud-Typ)
     if (selectedCloudType === 'supabase' && cloudTypeValid) {
-      console.log('🔍 Supabase-Bereich sollte angezeigt werden:', { selectedCloudType, cloudTypeValid, supabaseSectionVisible });
       if (!supabaseSectionVisible) {
-        console.log('✅ Supabase-Bereich wird eingeblendet');
         setSupabaseSectionVisible(true);
         setSupabaseSectionAnimating(false);
       }
     } else if (supabaseSectionVisible) {
-      console.log('🔍 Supabase-Bereich wird ausgeblendet');
       setSupabaseSectionAnimating(true);
       setTimeout(() => {
         setSupabaseSectionVisible(false);
@@ -4709,24 +4699,23 @@ const StorageManagement: React.FC = () => {
                           id={type.id}
                           checked={storageManagement.selectedStorage.selectedCloudType === type.id}
                           onChange={() => {
-                            const updates: any = {
-                              selectedStorage: {
-                                ...storageManagement.selectedStorage,
-                                selectedCloudType: type.id as any
-                              }
+                            // Erstelle updates-Objekt mit allen Werten direkt
+                            let newSelectedStorage = {
+                              ...storageManagement.selectedStorage,
+                              selectedCloudType: type.id as any
                             };
 
                             // Setze automatisch Data- und Picture-Storage basierend auf Cloud-Typ
                             if (type.id === 'supabase') {
-                              updates.selectedStorage.selectedDataStorage = 'Supabase';
-                              updates.selectedStorage.selectedPictureStorage = 'Supabase';
+                              newSelectedStorage.selectedDataStorage = 'Supabase';
+                              newSelectedStorage.selectedPictureStorage = 'Supabase';
                             } else if (type.id === 'firebase') {
-                              updates.selectedStorage.selectedDataStorage = 'Firebase';
-                              updates.selectedStorage.selectedPictureStorage = 'Firebase';
+                              newSelectedStorage.selectedDataStorage = 'Firebase';
+                              newSelectedStorage.selectedPictureStorage = 'Firebase';
                             }
                             // Für Docker: Benutzer wählt manuell PostgreSQL/MariaDB/MySQL
 
-                            handleStorageManagementUpdate(updates);
+                            handleStorageManagementUpdate({ selectedStorage: newSelectedStorage });
                           }}
                           style={{ marginTop: '4px' }}
                         />
