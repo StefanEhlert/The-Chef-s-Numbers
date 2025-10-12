@@ -1356,120 +1356,32 @@ class PrismaAdapter implements StorageAdapter {
     return keyMap[key] || key;
   }
 
-  // Transformiere Daten für MariaDB/MySQL (identisch mit PostgreSQL-Logik)
+  // Transformiere Daten für MariaDB/MySQL via Prisma API
+  // WICHTIG: Prisma erwartet camelCase-Feldnamen, NICHT snake_case!
+  // Die Prisma-Schema-Mappings (@map) kümmern sich um die DB-Konvertierung
   private transformDataForMySQL<T extends StorageEntity>(data: T[]): any[] {
     return data.map(item => {
       const transformed: any = { ...item };
       
-      // db_id/id Handling (identisch mit PostgreSQL)
+      // db_id/id Handling für Prisma (camelCase!)
       if (transformed.dbId) {
-        transformed.db_id = transformed.dbId;
-        delete transformed.dbId;
-        console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Update für bestehenden Datensatz mit db_id: ${transformed.db_id}`);
+        // Behalte dbId (Prisma erwartet dbId, nicht db_id)
+        console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Update für bestehenden Datensatz mit dbId: ${transformed.dbId}`);
       } else {
+        // Kein dbId - Prisma/Server generiert es automatisch
         delete transformed.dbId;
-        console.log(`🆕 ${this.dbType.toUpperCase()} Transform: Neuer Datensatz, db_id wird generiert`);
+        console.log(`🆕 ${this.dbType.toUpperCase()} Transform: Neuer Datensatz, dbId wird vom Server generiert`);
       }
       
-      // Entferne Sync-Felder
+      // Entferne Frontend-spezifische Felder (Prisma kennt diese nicht)
       delete transformed.isDirty;
       delete transformed.isNew;
       delete transformed.syncStatus;
-      delete transformed.supplier;
+      delete transformed.supplier;  // Nur supplierId behalten
+      delete transformed.image;  // Wird separat gespeichert
       
-      // Feldnamen-Mapping (camelCase zu snake_case)
-      if (transformed.supplierId) {
-        transformed.supplier_id = transformed.supplierId;
-        delete transformed.supplierId;
-      }
-      if (transformed.supplierArticleNumber) {
-        transformed.supplier_article_number = transformed.supplierArticleNumber;
-        delete transformed.supplierArticleNumber;
-      }
-      if (transformed.bundleUnit) {
-        transformed.bundle_unit = transformed.bundleUnit;
-        delete transformed.bundleUnit;
-      }
-      if (transformed.bundlePrice) {
-        transformed.bundle_price = transformed.bundlePrice;
-        delete transformed.bundlePrice;
-      }
-      if (transformed.bundleEanCode) {
-        transformed.bundle_ean_code = transformed.bundleEanCode;
-        delete transformed.bundleEanCode;
-      }
-      if (transformed.contentUnit) {
-        transformed.content_unit = transformed.contentUnit;
-        delete transformed.contentUnit;
-      }
-      if (transformed.contentEanCode) {
-        transformed.content_ean_code = transformed.contentEanCode;
-        delete transformed.contentEanCode;
-      }
-      if (transformed.pricePerUnit) {
-        transformed.price_per_unit = transformed.pricePerUnit;
-        delete transformed.pricePerUnit;
-      }
-      if (transformed.vatRate) {
-        transformed.vat_rate = transformed.vatRate;
-        delete transformed.vatRate;
-      }
-      if (transformed.openFoodFactsCode) {
-        transformed.open_food_facts_code = transformed.openFoodFactsCode;
-        delete transformed.openFoodFactsCode;
-      }
-      
-      // Nutrition Info
-      if (transformed.nutrition || transformed.nutritionInfo) {
-        const nutritionData = transformed.nutritionInfo || transformed.nutrition;
-        if (nutritionData && typeof nutritionData === 'object' && Object.keys(nutritionData).length > 0) {
-          transformed.nutrition_info = nutritionData;
-        }
-        delete transformed.nutrition;
-        delete transformed.nutritionInfo;
-      }
-      
-      // Recipe-Felder
-      if (transformed.preparationTime !== undefined) {
-        transformed.preparation_time = transformed.preparationTime;
-        delete transformed.preparationTime;
-      }
-      if (transformed.markupPercentage !== undefined) {
-        transformed.markup_percentage = transformed.markupPercentage;
-        delete transformed.markupPercentage;
-      }
-      if (transformed.materialCosts !== undefined) {
-        transformed.material_costs = transformed.materialCosts;
-        delete transformed.materialCosts;
-      }
-      if (transformed.sellingPrice !== undefined) {
-        transformed.selling_price = transformed.sellingPrice;
-        delete transformed.sellingPrice;
-      }
-      if (transformed.preparationSteps) {
-        transformed.preparation_steps = transformed.preparationSteps;
-        delete transformed.preparationSteps;
-      }
-      if (transformed.usedRecipes) {
-        transformed.used_recipes = transformed.usedRecipes;
-        delete transformed.usedRecipes;
-      }
-      if (transformed.totalNutritionInfo) {
-        transformed.total_nutrition_info = transformed.totalNutritionInfo;
-        delete transformed.totalNutritionInfo;
-      }
-      
-      // Supplier-Felder
-      if (transformed.contactPerson) {
-        transformed.contact_person = transformed.contactPerson;
-        delete transformed.contactPerson;
-      }
-      if (transformed.phoneNumbers) {
-        transformed.phone_numbers = transformed.phoneNumbers;
-        delete transformed.phoneNumbers;
-      }
-      
-      // Entferne Timestamp-Felder (werden von DB verwaltet)
+      // WICHTIG: Prisma erwartet camelCase-Felder!
+      // Entferne nur Timestamp-Felder (werden von Prisma automatisch verwaltet)
       delete transformed.createdAt;
       delete transformed.updatedAt;
       delete transformed.created_at;
@@ -1480,168 +1392,58 @@ class PrismaAdapter implements StorageAdapter {
       delete transformed.created_by;
       delete transformed.updated_by;
       delete transformed.last_modified_by;
-      delete transformed.image;
+      
+      // Merge nutrition und nutritionInfo (falls beide vorhanden)
+      if (transformed.nutrition && !transformed.nutritionInfo) {
+        transformed.nutritionInfo = transformed.nutrition;
+        delete transformed.nutrition;
+      } else if (transformed.nutrition) {
+        // Behalte nutritionInfo, lösche nutrition
+        delete transformed.nutrition;
+      }
       
       return transformed;
     });
   }
 
-  // Transformiere Daten von MariaDB/MySQL zurück zu Frontend-Format
+  // Transformiere Daten von MariaDB/MySQL (via Prisma) zurück zu Frontend-Format
+  // Prisma gibt bereits camelCase zurück, daher minimale Transformation
   private transformDataFromMySQL(data: any[]): any[] {
     return data.map(item => {
       const transformed: any = { ...item };
       
-      // db_id/id Handling
-      transformed.dbId = transformed.db_id;
-      delete transformed.db_id;
+      // Prisma gibt dbId zurück (nicht db_id) - bereits korrekt!
+      // Füge nur Frontend-Felder hinzu
       transformed.isDirty = false;
       transformed.isNew = false;
       transformed.syncStatus = 'synced';
       
-      // Feldnamen-Mapping (snake_case zu camelCase)
-      if (transformed.supplier_id) {
-        transformed.supplierId = transformed.supplier_id;
-        delete transformed.supplier_id;
-      }
-      if (transformed.supplier_article_number) {
-        transformed.supplierArticleNumber = transformed.supplier_article_number;
-        delete transformed.supplier_article_number;
-      }
-      if (transformed.bundle_unit) {
-        transformed.bundleUnit = transformed.bundle_unit;
-        delete transformed.bundle_unit;
-      }
-      if (transformed.bundle_price) {
-        transformed.bundlePrice = transformed.bundle_price;
-        delete transformed.bundle_price;
-      }
-      if (transformed.bundle_ean_code) {
-        transformed.bundleEanCode = transformed.bundle_ean_code;
-        delete transformed.bundle_ean_code;
-      }
-      if (transformed.content_unit) {
-        transformed.contentUnit = transformed.content_unit;
-        delete transformed.content_unit;
-      }
-      if (transformed.content_ean_code) {
-        transformed.contentEanCode = transformed.content_ean_code;
-        delete transformed.content_ean_code;
-      }
-      if (transformed.price_per_unit) {
-        transformed.pricePerUnit = transformed.price_per_unit;
-        delete transformed.price_per_unit;
-      }
-      if (transformed.vat_rate) {
-        transformed.vatRate = transformed.vat_rate;
-        delete transformed.vat_rate;
-      }
-      if (transformed.open_food_facts_code) {
-        transformed.openFoodFactsCode = transformed.open_food_facts_code;
-        delete transformed.open_food_facts_code;
-      }
+      // Prisma gibt bereits camelCase zurück - keine Konvertierung nötig!
+      // Nur eventuelle JSON-String-Parsing für komplexe Felder
       
-      // Nutrition Info
-      if (transformed.nutrition_info) {
-        let nutritionData = transformed.nutrition_info;
-        if (typeof nutritionData === 'string') {
-          try {
-            nutritionData = JSON.parse(nutritionData);
-          } catch (e) {
-            nutritionData = null;
-          }
-        }
-        if (nutritionData && typeof nutritionData === 'object') {
-          transformed.nutritionInfo = {
-            calories: nutritionData.calories || 0,
-            kilojoules: nutritionData.kilojoules || 0,
-            protein: nutritionData.protein || 0,
-            fat: nutritionData.fat || 0,
-            carbohydrates: nutritionData.carbohydrates || 0,
-            fiber: nutritionData.fiber !== undefined ? nutritionData.fiber : 0,
-            sugar: nutritionData.sugar,
-            salt: nutritionData.salt
-          };
-        }
-        delete transformed.nutrition_info;
-      }
-      
-      // Recipe-Felder
-      if (transformed.preparation_time !== undefined) {
-        transformed.preparationTime = transformed.preparation_time;
-        delete transformed.preparation_time;
-      }
-      if (transformed.markup_percentage !== undefined) {
-        transformed.markupPercentage = transformed.markup_percentage;
-        delete transformed.markup_percentage;
-      }
-      if (transformed.material_costs !== undefined) {
-        transformed.materialCosts = transformed.material_costs;
-        delete transformed.material_costs;
-      }
-      if (transformed.selling_price !== undefined) {
-        transformed.sellingPrice = transformed.selling_price;
-        delete transformed.selling_price;
-      }
-      if (transformed.preparation_steps) {
-        transformed.preparationSteps = typeof transformed.preparation_steps === 'string' 
-          ? JSON.parse(transformed.preparation_steps) 
-          : transformed.preparation_steps;
-        delete transformed.preparation_steps;
-      }
-      if (transformed.used_recipes) {
-        transformed.usedRecipes = typeof transformed.used_recipes === 'string'
-          ? JSON.parse(transformed.used_recipes)
-          : transformed.used_recipes;
-        delete transformed.used_recipes;
-      }
-      if (transformed.total_nutrition_info) {
-        transformed.totalNutritionInfo = typeof transformed.total_nutrition_info === 'string'
-          ? JSON.parse(transformed.total_nutrition_info)
-          : transformed.total_nutrition_info;
-        delete transformed.total_nutrition_info;
-      }
-      
-      // Supplier-Felder
-      if (transformed.contact_person) {
-        transformed.contactPerson = transformed.contact_person;
-        delete transformed.contact_person;
-      }
-      if (transformed.phone_numbers) {
-        transformed.phoneNumbers = typeof transformed.phone_numbers === 'string'
-          ? JSON.parse(transformed.phone_numbers)
-          : transformed.phone_numbers;
-        delete transformed.phone_numbers;
-      }
-      if (transformed.address) {
-        if (typeof transformed.address === 'string') {
-          try {
-            transformed.address = JSON.parse(transformed.address);
-          } catch (e) {
-            transformed.address = null;
-          }
+      // Parse JSON-Strings falls nötig (sollte normalerweise nicht passieren)
+      if (typeof transformed.address === 'string') {
+        try {
+          transformed.address = JSON.parse(transformed.address);
+        } catch (e) {
+          console.warn('⚠️ Konnte address nicht parsen:', e);
         }
       }
       
-      // Timestamp-Felder
-      if (transformed.created_at) {
-        transformed.createdAt = transformed.created_at;
-        delete transformed.created_at;
+      if (typeof transformed.phoneNumbers === 'string') {
+        try {
+          transformed.phoneNumbers = JSON.parse(transformed.phoneNumbers);
+        } catch (e) {
+          console.warn('⚠️ Konnte phoneNumbers nicht parsen:', e);
+        }
       }
-      if (transformed.updated_at) {
-        transformed.updatedAt = transformed.updated_at;
-        delete transformed.updated_at;
-      }
-      if (transformed.created_by) {
-        transformed.createdBy = transformed.created_by;
-        delete transformed.created_by;
-      }
-      if (transformed.updated_by) {
-        transformed.updatedBy = transformed.updated_by;
-        delete transformed.updated_by;
-      }
-      if (transformed.last_modified_by) {
-        transformed.lastModifiedBy = transformed.last_modified_by;
-        delete transformed.last_modified_by;
+      
+      if (typeof transformed.nutritionInfo === 'string') {
+        try {
+          transformed.nutritionInfo = JSON.parse(transformed.nutritionInfo);
+        } catch (e) {
+          console.warn('⚠️ Konnte nutritionInfo nicht parsen:', e);
+        }
       }
       
       return transformed;
@@ -1674,14 +1476,15 @@ class PrismaAdapter implements StorageAdapter {
           onProgress(i, transformedData.length);
         }
         
-        // Bestimme ob Update oder Insert
-        const isUpdate = !!item.db_id;
+        // Bestimme ob Update oder Insert (Prisma verwendet dbId, nicht db_id)
+        const isUpdate = !!item.dbId;
         const method = isUpdate ? 'PUT' : 'POST';
         const url = isUpdate
-          ? `${this.getBaseUrl()}/api/${tableName}/${item.db_id}`
+          ? `${this.getBaseUrl()}/api/${tableName}/${item.dbId}`
           : `${this.getBaseUrl()}/api/${tableName}`;
         
         console.log(`🔧 ${this.dbType.toUpperCase()} ${method}: ${url}`);
+        console.log(`📦 Sende Daten:`, JSON.stringify(item, null, 2));
         
         const response = await fetch(url, {
           method,
@@ -1696,19 +1499,19 @@ class PrismaAdapter implements StorageAdapter {
           break;
         }
         
-        // Bei POST: Lese generierte db_id
+        // Bei POST: Lese generierte dbId (Prisma gibt camelCase zurück!)
         if (!isUpdate) {
           try {
             const responseData = await response.json();
-            if (responseData && responseData.db_id) {
+            if (responseData && responseData.dbId) {
               const originalItem = data.find(orig => orig.id === item.id);
               if (originalItem) {
-                originalItem.dbId = responseData.db_id;
-                console.log(`✅ db_id generiert: ${responseData.db_id} für Frontend-ID: ${item.id}`);
+                originalItem.dbId = responseData.dbId;
+                console.log(`✅ dbId generiert: ${responseData.dbId} für Frontend-ID: ${item.id}`);
               }
             }
           } catch (e) {
-            console.warn('⚠️ Konnte generierte db_id nicht lesen:', e);
+            console.warn('⚠️ Konnte generierte dbId nicht lesen:', e);
           }
         }
       }
