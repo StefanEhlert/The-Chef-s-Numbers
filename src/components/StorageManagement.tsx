@@ -2595,7 +2595,19 @@ const StorageManagement: React.FC = () => {
         });
 
         // 4. Speichere zusammengeführte Daten im Ziel-Storage
-        const saveSuccess = await targetStorageAdapter.save(entityType, mergedData);
+        // WICHTIG: Bei Übertragung zu einer neuen Datenbank, entferne alte dbIds
+        // damit die neue Datenbank ihre eigenen IDs generiert
+        const dataToSave = mergedData.map((item: any) => {
+          const cleaned = { ...item };
+          // Entferne alte dbId wenn Ziel leer war (neue Datenbank)
+          if (targetData.length === 0) {
+            delete cleaned.dbId;
+            console.log(`🆕 Entferne alte dbId für neuen INSERT: ${item.id}`);
+          }
+          return cleaned;
+        });
+        
+        const saveSuccess = await targetStorageAdapter.save(entityType, dataToSave);
         
         if (!saveSuccess) {
           throw new Error(`Fehler beim Speichern von ${entityType} im Ziel-Storage`);
