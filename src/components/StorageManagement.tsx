@@ -3883,7 +3883,7 @@ const StorageManagement: React.FC = () => {
 
   // Handler für Schema-Initialisierung-Button
   const handleSupabaseSchemaInit = async () => {
-    setSupabaseSchemaStatus(prev => ({ ...prev, checking: true, message: 'Initialisiere Schema...' }));
+    setSupabaseSchemaStatus(prev => ({ ...prev, checking: true, message: 'Bereite Schema vor...' }));
     
     try {
       // Lade SQL-Script
@@ -3894,17 +3894,25 @@ const StorageManagement: React.FC = () => {
       }
       
       const sqlScript = await scriptResponse.text();
+      console.log('📜 SQL-Script geladen:', sqlScript.length, 'Zeichen');
       
-      // Download SQL-Script für manuelles Ausführen im Supabase SQL Editor
-      const blob = new Blob([sqlScript], { type: 'text/plain' });
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = 'supabase-schema-init.sql';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(downloadUrl);
+      // Kopiere SQL-Script in die Zwischenablage
+      try {
+        await navigator.clipboard.writeText(sqlScript);
+        console.log('📋 SQL-Script in Zwischenablage kopiert');
+      } catch (clipboardError) {
+        console.warn('⚠️ Zwischenablage nicht verfügbar, verwende Download als Fallback');
+        // Fallback: Download
+        const blob = new Blob([sqlScript], { type: 'text/plain' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = 'supabase-schema-init.sql';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }
       
       // Öffne Supabase SQL Editor
       const projectRef = storageManagement.connections.supabase.url.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
@@ -3915,7 +3923,7 @@ const StorageManagement: React.FC = () => {
       setSupabaseSchemaStatus({
         exists: false,
         checking: false,
-        message: 'SQL-Script heruntergeladen - bitte im Supabase SQL Editor ausführen'
+        message: '📋 SQL-Script in Zwischenablage kopiert! Drücken Sie Strg+V im Supabase SQL Editor und klicken Sie auf "Run".'
       });
       
     } catch (error) {
@@ -6698,8 +6706,29 @@ const StorageManagement: React.FC = () => {
                           </div>
                         ) : (
                           <>
+                            {/* Status-Nachricht (z.B. nach Klick auf Button) */}
+                            {supabaseSchemaStatus.message && !supabaseSchemaStatus.exists && !supabaseSchemaStatus.needsUpdate && (
+                              <div className="alert alert-success mb-3" style={{ backgroundColor: '#28a74520', borderColor: '#28a745' }}>
+                                <div className="d-flex align-items-start">
+                                  <FaCheckCircle className="me-2 mt-1" style={{ color: '#28a745' }} />
+                                  <div>
+                                    <strong>SQL-Script bereit!</strong>
+                                    <p className="mb-2 mt-1" style={{ fontSize: '0.9rem' }}>
+                                      {supabaseSchemaStatus.message}
+                                    </p>
+                                    <div className="mt-2" style={{ fontSize: '0.85rem', color: colors.textSecondary }}>
+                                      <div>📋 Script ist in Ihrer Zwischenablage</div>
+                                      <div>🌐 SQL Editor ist geöffnet</div>
+                                      <div>⌨️ Drücken Sie <strong>Strg+V</strong> zum Einfügen</div>
+                                      <div>▶️ Klicken Sie auf <strong>"Run"</strong></div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Schema existiert nicht - Initialisierung erforderlich */}
-                            {!supabaseSchemaStatus.exists && (
+                            {!supabaseSchemaStatus.exists && !supabaseSchemaStatus.message && (
                               <div className="alert alert-warning" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107' }}>
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div className="d-flex align-items-start flex-grow-1">
