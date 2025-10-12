@@ -415,7 +415,12 @@ services:
 
 volumes:
   mariadb_data:
-    driver: local`;
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network`;
 
       case 'mysql':
         return `version: '3.8'
@@ -493,7 +498,12 @@ volumes:
   mysql_data:
     driver: local
   mysql-init:
-    driver: local`;
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network`;
 
       default:
         throw new Error(`Template nicht gefunden: ${templateName}`);
