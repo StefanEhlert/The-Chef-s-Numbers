@@ -319,6 +319,13 @@ const StorageManagement: React.FC = () => {
     const selectedDataStorage = storageManagement.selectedStorage.selectedDataStorage;
     const cloudTypeValid = isCloudTypeValid();
 
+    console.log('🔍 Animation useEffect ausgelöst:', {
+      selectedCloudType,
+      selectedDataStorage,
+      cloudTypeValid,
+      supabaseSectionVisible
+    });
+
     // PostgreSQL-Bereich (nur bei Docker + PostgreSQL)
     if (selectedCloudType === 'docker' && selectedDataStorage === 'PostgreSQL' && cloudTypeValid) {
       if (!postgresSectionVisible) {
@@ -377,11 +384,14 @@ const StorageManagement: React.FC = () => {
 
     // Supabase-Bereich (nur bei Supabase Cloud-Typ)
     if (selectedCloudType === 'supabase' && cloudTypeValid) {
+      console.log('🔍 Supabase-Bereich sollte angezeigt werden:', { selectedCloudType, cloudTypeValid, supabaseSectionVisible });
       if (!supabaseSectionVisible) {
+        console.log('✅ Supabase-Bereich wird eingeblendet');
         setSupabaseSectionVisible(true);
         setSupabaseSectionAnimating(false);
       }
     } else if (supabaseSectionVisible) {
+      console.log('🔍 Supabase-Bereich wird ausgeblendet');
       setSupabaseSectionAnimating(true);
       setTimeout(() => {
         setSupabaseSectionVisible(false);
@@ -470,7 +480,21 @@ const StorageManagement: React.FC = () => {
 
   // Storage Management Update Handler
   const handleStorageManagementUpdate = (updates: Partial<StorageManagement>) => {
-    const newManagement = { ...storageManagement, ...updates };
+    // Deep merge für nested objects (selectedStorage, currentStorage, connections)
+    const newManagement = {
+      ...storageManagement,
+      currentStorage: updates.currentStorage ? { ...storageManagement.currentStorage, ...updates.currentStorage } : storageManagement.currentStorage,
+      selectedStorage: updates.selectedStorage ? { ...storageManagement.selectedStorage, ...updates.selectedStorage } : storageManagement.selectedStorage,
+      connections: updates.connections ? {
+        ...storageManagement.connections,
+        postgres: updates.connections.postgres ? { ...storageManagement.connections.postgres, ...updates.connections.postgres } : storageManagement.connections.postgres,
+        mariadb: updates.connections.mariadb ? { ...storageManagement.connections.mariadb, ...updates.connections.mariadb } : storageManagement.connections.mariadb,
+        mysql: updates.connections.mysql ? { ...storageManagement.connections.mysql, ...updates.connections.mysql } : storageManagement.connections.mysql,
+        minio: updates.connections.minio ? { ...storageManagement.connections.minio, ...updates.connections.minio } : storageManagement.connections.minio,
+        supabase: updates.connections.supabase ? { ...storageManagement.connections.supabase, ...updates.connections.supabase } : storageManagement.connections.supabase,
+        firebase: updates.connections.firebase ? { ...storageManagement.connections.firebase, ...updates.connections.firebase } : storageManagement.connections.firebase
+      } : storageManagement.connections
+    };
 
     // Automatische Aktualisierung von selectedDataStorage und selectedPictureStorage basierend auf Verbindungsstatus
     // NUR wenn es sich um einen erfolgreichen Verbindungstest handelt, nicht bei Konfigurationsänderungen
