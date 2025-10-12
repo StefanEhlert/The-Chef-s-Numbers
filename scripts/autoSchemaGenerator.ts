@@ -1354,8 +1354,8 @@ datasource db {
         // WICHTIG: Für Felder mit @default(now()) oder @updatedAt verwende TIMESTAMP (nicht DATETIME)
         // MySQL/MariaDB erlauben nur TIMESTAMP mit DEFAULT CURRENT_TIMESTAMP
         if (column.name === 'created_at' || column.name === 'updated_at') {
-          // Verwende TIMESTAMP für created_at und updated_at
-          // Kein @db Annotation nötig, Prisma wählt automatisch TIMESTAMP
+          // Explizit @db.Timestamp für MySQL/MariaDB-Kompatibilität
+          attributes.push('@db.Timestamp(0)');
         } else {
           attributes.push('@db.DateTime');
         }
@@ -1380,8 +1380,8 @@ model SystemInfo {
   key         String   @unique @db.VarChar(100)
   value       String   @db.Text
   description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
   @@map("system_info")
 }
@@ -1396,8 +1396,8 @@ model Design {
   textColor       String?  @default("#212529") @map("text_color") @db.VarChar(7)
   cardColor       String?  @default("#f8f9fa") @map("card_color") @db.VarChar(7)
   borderColor     String?  @default("#dee2e6") @map("border_color") @db.VarChar(7)
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
   @@map("design")
 }
@@ -1406,8 +1406,8 @@ model ShoppingList {
   id        String   @id @default(uuid()) @db.VarChar(36)
   name      String   @db.Text
   items     Json?
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
   @@map("shopping_list")
 }
@@ -1419,8 +1419,8 @@ model Inventory {
   unit       String?  @default("Stück") @db.VarChar(50)
   expiryDate DateTime? @map("expiry_date") @db.Date
   location   String?  @db.Text
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
   @@map("inventory")
 }
