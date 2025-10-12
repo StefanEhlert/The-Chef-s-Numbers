@@ -1104,7 +1104,13 @@ USE chef_numbers;
       } else if (mysqlType === 'JSONB') {
         mysqlType = 'JSON';  // JSONB wird zu JSON in MySQL
       } else if (mysqlType === 'TIMESTAMP') {
-        mysqlType = 'DATETIME';  // TIMESTAMP als DATETIME
+        // WICHTIG: created_at und updated_at müssen TIMESTAMP sein (nicht DATETIME)
+        // MySQL erlaubt DEFAULT CURRENT_TIMESTAMP nur bei TIMESTAMP
+        if (column.name === 'created_at' || column.name === 'updated_at') {
+          mysqlType = 'TIMESTAMP';
+        } else {
+          mysqlType = 'DATETIME';
+        }
       } else if (mysqlType === 'sync_status_enum') {
         mysqlType = "ENUM('synced', 'pending', 'error', 'conflict')";
       }
@@ -1181,8 +1187,8 @@ CREATE TABLE IF NOT EXISTS system_info (
     \`key\` VARCHAR(100) UNIQUE NOT NULL,
     value TEXT NOT NULL,
     description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Design-Tabelle für UI-Einstellungen
@@ -1196,8 +1202,8 @@ CREATE TABLE IF NOT EXISTS design (
     text_color VARCHAR(7) DEFAULT '#212529',
     card_color VARCHAR(7) DEFAULT '#f8f9fa',
     border_color VARCHAR(7) DEFAULT '#dee2e6',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Shopping List Tabelle
@@ -1205,8 +1211,8 @@ CREATE TABLE IF NOT EXISTS shopping_list (
     id CHAR(36) PRIMARY KEY,
     name TEXT NOT NULL,
     items JSON,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Inventory Tabelle
@@ -1217,8 +1223,8 @@ CREATE TABLE IF NOT EXISTS inventory (
     unit VARCHAR(50) DEFAULT 'Stück',
     expiry_date DATE,
     location TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 `;

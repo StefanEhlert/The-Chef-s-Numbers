@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (MariaDB)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T20:38:37.469Z
+-- Automatisch generiert am: 2025-10-12T20:43:34.992Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS einkaufsitems (
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     created_by CHAR(36) NULL,
     updated_by CHAR(36) NULL,
     last_modified_by CHAR(36) NULL
@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS suppliers (
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     created_by CHAR(36) NULL,
     updated_by CHAR(36) NULL,
     last_modified_by CHAR(36) NULL
@@ -97,8 +97,8 @@ CREATE TABLE IF NOT EXISTS articles (
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     created_by CHAR(36) NULL,
     updated_by CHAR(36) NULL,
     last_modified_by CHAR(36) NULL
@@ -138,8 +138,8 @@ CREATE TABLE IF NOT EXISTS recipes (
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     created_by CHAR(36) NULL,
     updated_by CHAR(36) NULL,
     last_modified_by CHAR(36) NULL
@@ -169,8 +169,8 @@ CREATE TABLE IF NOT EXISTS inventuritems (
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     created_by CHAR(36) NULL,
     updated_by CHAR(36) NULL,
     last_modified_by CHAR(36) NULL
@@ -187,8 +187,8 @@ CREATE TABLE IF NOT EXISTS system_info (
     `key` VARCHAR(100) UNIQUE NOT NULL,
     value TEXT NOT NULL,
     description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Design-Tabelle für UI-Einstellungen
@@ -202,8 +202,8 @@ CREATE TABLE IF NOT EXISTS design (
     text_color VARCHAR(7) DEFAULT '#212529',
     card_color VARCHAR(7) DEFAULT '#f8f9fa',
     border_color VARCHAR(7) DEFAULT '#dee2e6',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Shopping List Tabelle
@@ -211,8 +211,8 @@ CREATE TABLE IF NOT EXISTS shopping_list (
     id CHAR(36) PRIMARY KEY,
     name TEXT NOT NULL,
     items JSON,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Inventory Tabelle
@@ -223,8 +223,8 @@ CREATE TABLE IF NOT EXISTS inventory (
     unit VARCHAR(50) DEFAULT 'Stück',
     expiry_date DATE,
     location TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
