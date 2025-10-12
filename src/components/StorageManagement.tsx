@@ -375,7 +375,7 @@ const StorageManagement: React.FC = () => {
       }, 300);
     }
 
-    // Supabase-Bereich
+    // Supabase-Bereich (nur bei Supabase Cloud-Typ)
     if (selectedCloudType === 'supabase' && cloudTypeValid) {
       if (!supabaseSectionVisible) {
         setSupabaseSectionVisible(true);
@@ -526,6 +526,8 @@ const StorageManagement: React.FC = () => {
         dataStorageConnected = newManagement.connections.mariadb.connectionStatus === true;
       } else if (selectedDataStorage === 'MySQL') {
         dataStorageConnected = newManagement.connections.mysql.connectionStatus === true;
+      } else if (selectedDataStorage === 'Supabase') {
+        dataStorageConnected = newManagement.connections.supabase.connectionStatus === true;
       } else if (selectedDataStorage === 'SQLite') {
         // SQLite-Speicher ist immer "verbunden" (lokal)
         dataStorageConnected = true;
@@ -535,6 +537,8 @@ const StorageManagement: React.FC = () => {
       let pictureStorageConnected = false;
       if (selectedPictureStorage === 'MinIO') {
         pictureStorageConnected = newManagement.connections.minio.connectionStatus === true;
+      } else if (selectedPictureStorage === 'Supabase') {
+        pictureStorageConnected = newManagement.connections.supabase.connectionStatus === true;
       } else if (selectedPictureStorage === 'LocalPath') {
         // Lokaler Pfad ist immer "verbunden"
         pictureStorageConnected = true;
@@ -593,6 +597,12 @@ const StorageManagement: React.FC = () => {
     if (connectionType === 'minio') {
       const minioFields = ['host', 'port', 'consolePort', 'accessKey', 'secretKey', 'bucket'];
       resetConnectionStatus('minio', minioFields);
+    }
+
+    // Supabase-Verbindungsstatus zurücksetzen
+    if (connectionType === 'supabase') {
+      const supabaseFields = ['url', 'anonKey', 'serviceRoleKey'];
+      resetConnectionStatus('supabase', supabaseFields);
     }
 
     handleStorageManagementUpdate({ connections: newConnections });
@@ -1879,6 +1889,11 @@ const StorageManagement: React.FC = () => {
     }
   };
 
+  // Supabase hat kein Docker-Modal, aber für Konsistenz hier verfügbar
+  const handleRestartSupabaseTest = () => {
+    handleSupabaseConnectionTest();
+  };
+
   // Handler für Konfiguration übernehmen
   const handleConfigApply = () => {
     setShowConfigModal(true);
@@ -2956,6 +2971,26 @@ const StorageManagement: React.FC = () => {
     }
   }, [storageManagement.connections.mysql.testMessage]);
 
+  // Auto-Hide für Supabase-Testmeldungen nach 8 Sekunden
+  useEffect(() => {
+    if (storageManagement.connections.supabase.testMessage) {
+      const timer = setTimeout(() => {
+        setStorageManagement(prev => ({
+          ...prev,
+          connections: {
+            ...prev.connections,
+            supabase: {
+              ...prev.connections.supabase,
+              testMessage: undefined
+            }
+          }
+        }));
+      }, 8000); // 8 Sekunden
+
+      return () => clearTimeout(timer);
+    }
+  }, [storageManagement.connections.supabase.testMessage]);
+
   const isDatabaseConfigComplete = (dbType: string) => {
     const connection = storageManagement.connections[dbType.toLowerCase() as keyof StorageManagement['connections']];
     if (!connection || typeof connection !== 'object') return false;
@@ -3214,6 +3249,62 @@ const StorageManagement: React.FC = () => {
       storageManagement.connections.mariadb.database,
       storageManagement.connections.mariadb.username,
       storageManagement.connections.mariadb.password
+    ]
+  );
+
+  // Supabase-spezifische Validierungsfunktionen
+  const validateSupabaseURL = (url: string): { isValid: boolean; message: string } => {
+    if (!url.trim()) {
+      return { isValid: false, message: 'Supabase-URL ist erforderlich' };
+    }
+
+    // Supabase-URLs haben typischerweise das Format: https://xxxxx.supabase.co
+    const supabaseUrlRegex = /^https:\/\/[a-z0-9-]+\.supabase\.co$/;
+    
+    if (!url.startsWith('https://')) {
+      return { isValid: false, message: 'URL muss mit https:// beginnen' };
+    }
+
+    if (!supabaseUrlRegex.test(url)) {
+      return { isValid: false, message: 'Ungültige Supabase-URL. Format: https://xxxxx.supabase.co' };
+    }
+
+    return { isValid: true, message: '✓ Gültige Supabase-URL' };
+  };
+
+  const validateSupabaseKey = (key: string, keyType: 'anon' | 'service'): { isValid: boolean; message: string } => {
+    if (!key.trim()) {
+      return { isValid: false, message: `${keyType === 'anon' ? 'Anon' : 'Service Role'} Key ist erforderlich` };
+    }
+
+    // Supabase-Keys sind JWT-Tokens, die mit "eyJ" beginnen
+    if (!key.startsWith('eyJ')) {
+      return { isValid: false, message: 'Ungültiger Key-Format. Supabase-Keys beginnen mit "eyJ"' };
+    }
+
+    // Prüfe auf mindestens 100 Zeichen (typisch für JWT)
+    if (key.length < 100) {
+      return { isValid: false, message: 'Key zu kurz. Supabase-Keys sind normalerweise 200+ Zeichen lang' };
+    }
+
+    return { isValid: true, message: `✓ Gültiger ${keyType === 'anon' ? 'Anon' : 'Service Role'} Key` };
+  };
+
+  const validateSupabaseConfig = (config: any): boolean => {
+    if (!config) return false;
+
+    return validateSupabaseURL(config.url || '').isValid &&
+      validateSupabaseKey(config.anonKey || '', 'anon').isValid &&
+      validateSupabaseKey(config.serviceRoleKey || '', 'service').isValid;
+  };
+
+  // Berechne Supabase-Button-Status (mit useMemo optimiert)
+  const isSupabaseButtonEnabled = React.useMemo(
+    () => validateSupabaseConfig(storageManagement.connections.supabase),
+    [
+      storageManagement.connections.supabase.url,
+      storageManagement.connections.supabase.anonKey,
+      storageManagement.connections.supabase.serviceRoleKey
     ]
   );
 
@@ -3495,6 +3586,148 @@ const StorageManagement: React.FC = () => {
           ...storageManagement.connections,
           mysql: {
             ...storageManagement.connections.mysql,
+            connectionStatus: false,
+            lastTested: new Date().toISOString(),
+            testMessage: `❌ Verbindung fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+          }
+        }
+      });
+    }
+  };
+
+  // Supabase-Verbindungstest
+  const performSupabaseConnectionTest = async (): Promise<{ success: boolean; message: string }> => {
+    const url = storageManagement.connections.supabase.url;
+    const anonKey = storageManagement.connections.supabase.anonKey;
+
+    if (!url || !anonKey) {
+      return { success: false, message: 'URL oder Anon Key fehlt' };
+    }
+
+    try {
+      console.log('🔍 Teste Supabase-Verbindung...', { url: url, anonKey: anonKey.substring(0, 20) + '...' });
+
+      // Teste Supabase REST API mit einem einfachen Request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      // Teste die REST API (ohne Schema-Abhängigkeit)
+      const response = await fetch(`${url}/rest/v1/`, {
+        method: 'GET',
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      console.log('📡 Supabase-Response:', response.status, response.statusText);
+
+      if (response.ok || response.status === 404) {
+        // 200 OK oder 404 (Schema fehlt, aber Verbindung steht)
+        console.log('✅ Supabase-Verbindung erfolgreich');
+        return {
+          success: true,
+          message: `✅ Supabase-Verbindung erfolgreich!\nURL: ${url}\nStatus: Verbunden\n\nSie können jetzt Daten synchronisieren.`
+        };
+      } else if (response.status === 401 || response.status === 403) {
+        console.log('❌ Supabase-Authentifizierung fehlgeschlagen');
+        return {
+          success: false,
+          message: `❌ Authentifizierung fehlgeschlagen!\nPrüfen Sie Ihre Supabase API-Keys.\nStatus: ${response.status}`
+        };
+      } else {
+        console.log(`❌ Supabase-Verbindung fehlgeschlagen: ${response.status}`);
+        return {
+          success: false,
+          message: `Verbindung fehlgeschlagen: ${response.status} ${response.statusText}`
+        };
+      }
+
+    } catch (error) {
+      console.error('❌ Supabase-Verbindungstest fehlgeschlagen:', error);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        return {
+          success: false,
+          message: 'Verbindungstest-Timeout - Supabase ist nicht erreichbar'
+        };
+      }
+
+      return {
+        success: false,
+        message: `Verbindungstest fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      };
+    }
+  };
+
+  // Handler für Supabase-Verbindungstest
+  const handleSupabaseConnectionTest = async () => {
+    if (!validateSupabaseConfig(storageManagement.connections.supabase)) {
+      return;
+    }
+
+    // Setze Status auf "testing"
+    handleStorageManagementUpdate({
+      connections: {
+        ...storageManagement.connections,
+        supabase: {
+          ...storageManagement.connections.supabase,
+          connectionStatus: false,
+          lastTested: new Date().toISOString(),
+          testMessage: 'Verbindungstest läuft... Teste Verbindung zu Supabase...'
+        }
+      }
+    });
+
+    try {
+      const result = await performSupabaseConnectionTest();
+
+      if (result.success) {
+        // Erfolgreiche Verbindung
+        handleStorageManagementUpdate({
+          connections: {
+            ...storageManagement.connections,
+            supabase: {
+              ...storageManagement.connections.supabase,
+              connectionStatus: true,
+              lastTested: new Date().toISOString(),
+              testMessage: result.message
+            }
+          }
+        });
+
+        // Setze automatisch Supabase als selectedDataStorage und selectedPictureStorage
+        handleStorageManagementUpdate({
+          selectedStorage: {
+            ...storageManagement.selectedStorage,
+            selectedDataStorage: 'Supabase',
+            selectedPictureStorage: 'Supabase'
+          }
+        });
+      } else {
+        // Fehlgeschlagene Verbindung
+        handleStorageManagementUpdate({
+          connections: {
+            ...storageManagement.connections,
+            supabase: {
+              ...storageManagement.connections.supabase,
+              connectionStatus: false,
+              lastTested: new Date().toISOString(),
+              testMessage: result.message
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Supabase-Verbindungstest fehlgeschlagen:', error);
+      handleStorageManagementUpdate({
+        connections: {
+          ...storageManagement.connections,
+          supabase: {
+            ...storageManagement.connections.supabase,
             connectionStatus: false,
             lastTested: new Date().toISOString(),
             testMessage: `❌ Verbindung fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
@@ -5974,6 +6207,286 @@ const StorageManagement: React.FC = () => {
 
             </div>
 
+          )}
+
+          {/* Supabase-Konfiguration */}
+          {supabaseSectionVisible && (
+            <div className={`card mb-4 storage-section ${supabaseSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
+              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+                <h5 className="mb-0" style={{ color: colors.text }}>
+                  <FaCloud className="me-2" />
+                  Supabase-Konfiguration
+                </h5>
+              </div>
+              <div className="card-body" style={{ padding: '20px' }}>
+                {/* Info-Banner */}
+                <div className="alert alert-info mb-4" style={{ backgroundColor: '#3ecf8e20', borderColor: '#3ecf8e' }}>
+                  <FaInfoCircle className="me-2" />
+                  <strong>Supabase Cloud:</strong> Vollständig verwaltete PostgreSQL-Datenbank und Object Storage.
+                  <br />
+                  <small>Erstellen Sie ein kostenloses Projekt auf <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" style={{ color: '#3ecf8e' }}>supabase.com</a></small>
+                </div>
+
+                <div className="row">
+                  {/* Gruppe 1: URL */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaCloud className="me-2" style={{ color: '#3ecf8e' }} />
+                        Supabase Project URL
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${storageManagement.connections.supabase.url && !validateSupabaseURL(storageManagement.connections.supabase.url).isValid ? 'is-invalid' : ''}`}
+                        value={storageManagement.connections.supabase.url}
+                        onChange={(e) => updateConnection('supabase', { url: e.target.value })}
+                        placeholder="https://xxxxx.supabase.co"
+                        style={{
+                          backgroundColor: !storageManagement.connections.supabase.url ? colors.accent + '20' : undefined,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          transition: 'all 0.2s ease',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.cardBorder;
+                        }}
+                      />
+                      {/* URL-Validierung */}
+                      {storageManagement.connections.supabase.url && validationMessages['supabase-url'] && !validateSupabaseURL(storageManagement.connections.supabase.url).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateSupabaseURL(storageManagement.connections.supabase.url).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.supabase.url && validationMessages['supabase-url'] && validateSupabaseURL(storageManagement.connections.supabase.url).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateSupabaseURL(storageManagement.connections.supabase.url).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Gruppe 2: API Keys */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaKey className="me-2" style={{ color: '#3ecf8e' }} />
+                        Anon (Public) Key
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type={showPasswords.supabaseAnon ? 'text' : 'password'}
+                          className={`form-control ${storageManagement.connections.supabase.anonKey && !validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').isValid ? 'is-invalid' : ''}`}
+                          value={storageManagement.connections.supabase.anonKey}
+                          onChange={(e) => updateConnection('supabase', { anonKey: e.target.value })}
+                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          style={{
+                            backgroundColor: !storageManagement.connections.supabase.anonKey ? colors.accent + '20' : undefined,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease',
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                          }}
+                        />
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() => togglePasswordVisibility('supabaseAnon')}
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            backgroundColor: colors.card
+                          }}
+                          title={showPasswords.supabaseAnon ? 'Key verbergen' : 'Key anzeigen'}
+                        >
+                          {showPasswords.supabaseAnon ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                      </div>
+                      {/* Anon Key-Validierung */}
+                      {storageManagement.connections.supabase.anonKey && validationMessages['supabase-anonKey'] && !validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').message}
+                        </div>
+                      )}
+                      {storageManagement.connections.supabase.anonKey && validationMessages['supabase-anonKey'] && validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').message}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaShieldAlt className="me-2" style={{ color: '#3ecf8e' }} />
+                        Service Role Key
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type={showPasswords.supabaseService ? 'text' : 'password'}
+                          className={`form-control ${storageManagement.connections.supabase.serviceRoleKey && !validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').isValid ? 'is-invalid' : ''}`}
+                          value={storageManagement.connections.supabase.serviceRoleKey}
+                          onChange={(e) => updateConnection('supabase', { serviceRoleKey: e.target.value })}
+                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          style={{
+                            backgroundColor: !storageManagement.connections.supabase.serviceRoleKey ? colors.accent + '20' : undefined,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease',
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                          }}
+                        />
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() => togglePasswordVisibility('supabaseService')}
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            backgroundColor: colors.card
+                          }}
+                          title={showPasswords.supabaseService ? 'Key verbergen' : 'Key anzeigen'}
+                        >
+                          {showPasswords.supabaseService ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                      </div>
+                      {/* Service Role Key-Validierung */}
+                      {storageManagement.connections.supabase.serviceRoleKey && validationMessages['supabase-serviceRoleKey'] && !validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').message}
+                        </div>
+                      )}
+                      {storageManagement.connections.supabase.serviceRoleKey && validationMessages['supabase-serviceRoleKey'] && validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').message}
+                        </div>
+                      )}
+                      
+                      {/* Sicherheitshinweis */}
+                      <div className="alert alert-warning mt-2 mb-0" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.85rem' }}>
+                        <FaExclamationTriangle className="me-2" />
+                        <strong>Wichtig:</strong> Der Service Role Key hat vollständigen Zugriff. Behandeln Sie ihn wie ein Passwort!
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verbindungsstatus und Test-Button */}
+                <div className="mt-4">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div className="d-flex align-items-center">
+                      <FaWifi className="me-2" style={{ color: colors.textSecondary }} />
+                      <span style={{ color: colors.text }}>
+                        Verbindungsstatus:
+                        <span className={`ms-2 ${storageManagement.connections.supabase.connectionStatus ? 'text-success' : 'text-danger'}`}>
+                          {storageManagement.connections.supabase.connectionStatus ? 'Verbunden' : 'Nicht verbunden'}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-outline-secondary"
+                        onClick={() => window.open('https://supabase.com/dashboard', '_blank')}
+                        style={{
+                          borderColor: '#3ecf8e',
+                          color: '#3ecf8e'
+                        }}
+                        title="Supabase Dashboard öffnen"
+                      >
+                        <FaExternalLinkAlt className="me-1" />
+                        Dashboard
+                      </button>
+                      <button
+                        className={`btn ${isSupabaseButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={handleSupabaseConnectionTest}
+                        disabled={!isSupabaseButtonEnabled}
+                        style={{
+                          opacity: isSupabaseButtonEnabled ? 1 : 0.6,
+                          cursor: isSupabaseButtonEnabled ? 'pointer' : 'not-allowed'
+                        }}
+                        title={isSupabaseButtonEnabled ? 'Supabase-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Testmeldungen anzeigen */}
+                  {storageManagement.connections.supabase.testMessage && (
+                    <div className="mt-3">
+                      <div
+                        className="alert alert-info"
+                        style={{
+                          backgroundColor: colors.card,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          fontSize: '0.875em',
+                          marginBottom: '0'
+                        }}
+                      >
+                        <div className="d-flex align-items-start">
+                          <FaInfoCircle className="me-2 mt-1" style={{ flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <pre style={{
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              fontFamily: 'inherit',
+                              fontSize: 'inherit'
+                            }}>
+                              {storageManagement.connections.supabase.testMessage}
+                            </pre>
+                            {storageManagement.connections.supabase.lastTested && (
+                              <div className="mt-2">
+                                <small className="text-muted">
+                                  {new Date(storageManagement.connections.supabase.lastTested).toLocaleString('de-DE')}
+                                </small>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hilfreiche Links */}
+                  {storageManagement.connections.supabase.connectionStatus && (
+                    <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#3ecf8e20', border: `1px solid #3ecf8e` }}>
+                      <div className="d-flex align-items-start">
+                        <FaCheckCircle className="me-2 mt-1" style={{ color: '#3ecf8e', fontSize: '1.2rem' }} />
+                        <div style={{ flex: 1 }}>
+                          <strong style={{ color: colors.text }}>Verbindung erfolgreich!</strong>
+                          <div className="mt-2" style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
+                            <div className="d-flex flex-column gap-1">
+                              <span>✅ Daten & Bilder werden über Supabase synchronisiert</span>
+                              <span>✅ Automatische Backups durch Supabase</span>
+                              <span>✅ Zugriff von überall (auch über Netlify)</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* MinIO-Konfiguration - nur anzeigen wenn nicht lokal und nicht Browser-Speicher */}
