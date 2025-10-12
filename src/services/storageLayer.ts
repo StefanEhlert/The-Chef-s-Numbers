@@ -1690,7 +1690,16 @@ class SupabaseAdapter implements StorageAdapter {
         delete (itemData as any).isDirty;
         delete (itemData as any).isNew;
         delete (itemData as any).syncStatus;
-
+        delete (itemData as any).nutrition; // Veraltetes Feld, nur nutritionInfo wird verwendet
+        
+        // Setze Timestamps für INSERT (wenn nicht vorhanden)
+        if (!(itemData as any).createdAt) {
+          (itemData as any).createdAt = new Date().toISOString();
+        }
+        if (!(itemData as any).updatedAt) {
+          (itemData as any).updatedAt = new Date().toISOString();
+        }
+        
         // Transformiere camelCase → snake_case für Supabase
         itemData = this.transformToSnakeCase(itemData) as any;
 
