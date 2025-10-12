@@ -1061,6 +1061,190 @@ SELECT rolname as benutzer FROM pg_roles WHERE rolcanlogin = true;
   return script;
 }
 
+// Generiere vollständige Init-Script für MariaDB/MySQL
+function generateMariaDBInitScript(definitions: SchemaDefinitions, dbType: 'mariadb' | 'mysql'): string {
+  const timestamp = new Date().toISOString();
+  const currentVersion = '2.0.0';
+  const targetVersion = '2.2.2';
+  const dbName = dbType === 'mariadb' ? 'MariaDB' : 'MySQL';
+  
+  let script = `-- Chef Numbers Database Initialization Script (${dbName})
+-- Frontend-synchronisiertes Schema v${targetVersion}
+-- Automatisch generiert am: ${timestamp}
+
+-- Erstelle die Datenbank falls sie nicht existiert
+CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE chef_numbers;
+
+-- ========================================
+-- Automatisch generierte Tabellen aus TypeScript-Interfaces
+-- ========================================
+
+`;
+
+  // Generiere Tabellen für jede Definition
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    script += `-- ========================================\n`;
+    script += `-- Tabelle: ${definition.tableName} (Interface: ${definition.interfaceName})\n`;
+    script += `-- ========================================\n\n`;
+
+    script += `CREATE TABLE IF NOT EXISTS ${definition.tableName} (\n`;
+    
+    const columnDefinitions: string[] = [];
+    
+    for (const column of definition.columns) {
+      // MariaDB/MySQL Typ-Mapping
+      let mysqlType = column.type;
+      
+      // Typ-Konvertierungen für MariaDB/MySQL
+      if (mysqlType === 'UUID') {
+        mysqlType = 'CHAR(36)';  // UUIDs als CHAR(36) in MySQL
+      } else if (mysqlType === 'TEXT[]') {
+        mysqlType = 'JSON';  // Arrays als JSON in MySQL
+      } else if (mysqlType === 'JSONB') {
+        mysqlType = 'JSON';  // JSONB wird zu JSON in MySQL
+      } else if (mysqlType === 'TIMESTAMP') {
+        mysqlType = 'DATETIME';  // TIMESTAMP als DATETIME
+      } else if (mysqlType === 'sync_status_enum') {
+        mysqlType = "ENUM('synced', 'pending', 'error', 'conflict')";
+      }
+      
+      const nullable = column.nullable ? 'NULL' : 'NOT NULL';
+      const primary = column.primary ? 'PRIMARY KEY' : '';
+      
+      // Default-Werte für MySQL
+      let defaultVal = '';
+      if (column.defaultValue !== undefined) {
+        if (column.defaultValue === 'gen_random_uuid()') {
+          // MySQL unterstützt keine UUID-Generierung - wird von der App gesetzt
+          defaultVal = '';
+        } else if (column.defaultValue === 'CURRENT_TIMESTAMP') {
+          defaultVal = 'DEFAULT CURRENT_TIMESTAMP';
+        } else if (typeof column.defaultValue === 'string') {
+          defaultVal = `DEFAULT '${column.defaultValue}'`;
+        } else {
+          defaultVal = `DEFAULT ${column.defaultValue}`;
+        }
+      }
+      
+      // Spezielle Behandlung für updated_at
+      let onUpdate = '';
+      if (column.name === 'updated_at') {
+        onUpdate = 'ON UPDATE CURRENT_TIMESTAMP';
+      }
+      
+      const columnDef = `${column.name} ${mysqlType} ${primary} ${defaultVal} ${onUpdate} ${nullable}`.replace(/\s+/g, ' ').trim();
+      columnDefinitions.push(`    ${columnDef}`);
+    }
+    
+    script += columnDefinitions.join(',\n');
+    script += '\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n';
+
+    // Indizes
+    script += `-- Indizes für ${definition.tableName}\n`;
+    
+    const hasId = definition.columns.find(col => col.name === 'id');
+    const hasDbId = definition.columns.find(col => col.name === 'db_id' && col.primary);
+    const hasCreatedAt = definition.columns.find(col => col.name === 'created_at');
+    const hasUpdatedAt = definition.columns.find(col => col.name === 'updated_at');
+    
+    if (hasId && !hasId.primary) {
+      script += `CREATE INDEX idx_${definition.tableName}_id ON ${definition.tableName}(id);\n`;
+    }
+    if (hasCreatedAt) {
+      script += `CREATE INDEX idx_${definition.tableName}_created_at ON ${definition.tableName}(created_at);\n`;
+    }
+    if (hasUpdatedAt) {
+      script += `CREATE INDEX idx_${definition.tableName}_updated_at ON ${definition.tableName}(updated_at);\n`;
+    }
+    
+    // Spezielle Indizes basierend auf Interface
+    if (definition.interfaceName === 'Article') {
+      const supplierIdColumn = definition.columns.find(col => col.name === 'supplier_id');
+      const categoryColumn = definition.columns.find(col => col.name === 'category');
+      
+      if (supplierIdColumn) {
+        script += `CREATE INDEX idx_${definition.tableName}_supplier_id ON ${definition.tableName}(supplier_id);\n`;
+      }
+      if (categoryColumn) {
+        script += `CREATE INDEX idx_${definition.tableName}_category ON ${definition.tableName}(category(100));\n`;
+      }
+    }
+    
+    script += '\n';
+  }
+
+  // System-Tabellen
+  script += `-- System-Info Tabelle
+CREATE TABLE IF NOT EXISTS system_info (
+    id CHAR(36) PRIMARY KEY,
+    \`key\` VARCHAR(100) UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Design-Tabelle für UI-Einstellungen
+CREATE TABLE IF NOT EXISTS design (
+    id CHAR(36) PRIMARY KEY,
+    theme VARCHAR(50) DEFAULT 'light',
+    primary_color VARCHAR(7) DEFAULT '#007bff',
+    secondary_color VARCHAR(7) DEFAULT '#6c757d',
+    accent_color VARCHAR(7) DEFAULT '#28a745',
+    background_color VARCHAR(7) DEFAULT '#ffffff',
+    text_color VARCHAR(7) DEFAULT '#212529',
+    card_color VARCHAR(7) DEFAULT '#f8f9fa',
+    border_color VARCHAR(7) DEFAULT '#dee2e6',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Shopping List Tabelle
+CREATE TABLE IF NOT EXISTS shopping_list (
+    id CHAR(36) PRIMARY KEY,
+    name TEXT NOT NULL,
+    items JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Inventory Tabelle
+CREATE TABLE IF NOT EXISTS inventory (
+    id CHAR(36) PRIMARY KEY,
+    article_id CHAR(36),
+    quantity DECIMAL(10,3) DEFAULT 0,
+    unit VARCHAR(50) DEFAULT 'Stück',
+    expiry_date DATE,
+    location TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+`;
+
+  // System-Informationen
+  script += `-- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
+INSERT INTO system_info (\`key\`, value, description) VALUES 
+    ('app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
+    ('version', '${targetVersion}', 'Aktuelle Version'),
+    ('database_created', NOW(), 'Datum der Datenbankerstellung'),
+    ('connection_tested_at', NOW(), 'Letzter Verbindungstest'),
+    ('${dbType.toLowerCase()}_version', '${targetVersion}', '${dbName} Frontend-synchronisiert Version'),
+    ('setup_completed', 'true', 'Initial Setup abgeschlossen'),
+    ('schema_version', '${targetVersion}', 'Frontend-synchronisiertes Schema - Version ${targetVersion}')
+ON DUPLICATE KEY UPDATE 
+    value = VALUES(value),
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Erfolgsmeldung
+SELECT '${dbName}-Initialisierung erfolgreich abgeschlossen!' as status;
+SELECT 'Frontend-synchronisiertes Schema v${targetVersion} installiert' as schema_info;
+`;
+
+  return script;
+}
+
 // Hauptfunktion
 const main = () => {
   try {
@@ -1140,11 +1324,17 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
     fs.writeFileSync(postgresInitPath, postgresInitScript);
     console.log(`✅ PostgreSQL Init-Script geschrieben: ${postgresInitPath}`);
     
-    // TODO: MySQL und MariaDB Init-Scripts (falls benötigt)
-    // const mysqlInitScript = generateMySQLInitScript(definitions);
-    // const mysqlInitPath = path.join(initScriptsDir, 'init-chef-numbers-mysql.sql');
-    // fs.writeFileSync(mysqlInitPath, mysqlInitScript);
-    // console.log(`✅ MySQL Init-Script geschrieben: ${mysqlInitPath}`);
+    // MariaDB Init-Script
+    const mariadbInitScript = generateMariaDBInitScript(definitions, 'mariadb');
+    const mariadbInitPath = path.join(initScriptsDir, 'init-chef-numbers-mariadb.sql');
+    fs.writeFileSync(mariadbInitPath, mariadbInitScript);
+    console.log(`✅ MariaDB Init-Script geschrieben: ${mariadbInitPath}`);
+    
+    // MySQL Init-Script
+    const mysqlInitScript = generateMariaDBInitScript(definitions, 'mysql');
+    const mysqlInitPath = path.join(initScriptsDir, 'init-chef-numbers-mysql.sql');
+    fs.writeFileSync(mysqlInitPath, mysqlInitScript);
+    console.log(`✅ MySQL Init-Script geschrieben: ${mysqlInitPath}`);
     
     console.log('✅ Automatische Schema-Generierung abgeschlossen!');
     console.log(`📊 Generiert: ${Object.keys(definitions).length} Interfaces`);
@@ -1166,6 +1356,8 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
     
     console.log('\n📄 Init-Scripts aktualisiert:');
     console.log(`  🐘 PostgreSQL: ${postgresInitPath}`);
+    console.log(`  🔧 MariaDB: ${mariadbInitPath}`);
+    console.log(`  🔧 MySQL: ${mysqlInitPath}`);
     
   } catch (error) {
     console.error('❌ Fehler bei automatischer Schema-Generierung:', error);

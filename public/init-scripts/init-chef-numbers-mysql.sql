@@ -1,153 +1,245 @@
 -- Chef Numbers Database Initialization Script (MySQL)
--- Frontend-synchronisiertes Schema v2.0.0
+-- Frontend-synchronisiertes Schema v2.2.2
+-- Automatisch generiert am: 2025-10-12T17:47:52.786Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE chef_numbers;
 
--- Erstelle die articles-Tabelle (harmonisiert mit Frontend)
-CREATE TABLE IF NOT EXISTS articles (
-    id VARCHAR(36) PRIMARY KEY,
-    name TEXT NOT NULL,
-    category TEXT,
-    supplier_id VARCHAR(36),
-    supplier_article_number TEXT,
-    bundle_unit TEXT,
-    bundle_price DECIMAL(10,2),
-    bundle_ean_code TEXT,
-    content DECIMAL(10,3),
-    content_unit TEXT,
-    content_ean_code TEXT,
-    price_per_unit DECIMAL(10,4),
-    vat_rate DECIMAL(5,2) DEFAULT 19.00,
-    allergens JSON,
-    additives JSON,
-    ingredients TEXT,
-    nutrition_info JSON,
-    notes TEXT,
-    image_url TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    created_by TEXT,
-    updated_by TEXT,
-    last_modified_by TEXT
-);
+-- ========================================
+-- Automatisch generierte Tabellen aus TypeScript-Interfaces
+-- ========================================
 
--- Erstelle die suppliers-Tabelle (harmonisiert mit Frontend)
+-- ========================================
+-- Tabelle: einkaufsitems (Interface: EinkaufsItem)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS einkaufsitems (
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    id CHAR(36) NOT NULL,
+    artikel_name TEXT NOT NULL,
+    menge DECIMAL NULL,
+    einheit TEXT NULL,
+    lieferant TEXT NULL,
+    preis DECIMAL NULL,
+    bestelldatum DATETIME NULL,
+    lieferdatum DATETIME NULL,
+    status TEXT NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Indizes für einkaufsitems
+CREATE INDEX idx_einkaufsitems_id ON einkaufsitems(id);
+CREATE INDEX idx_einkaufsitems_created_at ON einkaufsitems(created_at);
+CREATE INDEX idx_einkaufsitems_updated_at ON einkaufsitems(updated_at);
+
+-- ========================================
+-- Tabelle: suppliers (Interface: Supplier)
+-- ========================================
+
 CREATE TABLE IF NOT EXISTS suppliers (
-    id VARCHAR(36) PRIMARY KEY,
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    id CHAR(36) NOT NULL,
     name TEXT NOT NULL,
-    contact_person TEXT,
-    email TEXT,
-    website TEXT,
-    address JSON,
-    phone_numbers JSON,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    created_by TEXT,
-    updated_by TEXT,
-    last_modified_by TEXT
-);
+    contact_person TEXT NULL,
+    email TEXT NULL,
+    website TEXT NULL,
+    address JSON NULL,
+    phone_numbers JSON NULL,
+    notes TEXT NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Erstelle die recipes-Tabelle (harmonisiert mit Frontend)
-CREATE TABLE IF NOT EXISTS recipes (
-    id VARCHAR(36) PRIMARY KEY,
+-- Indizes für suppliers
+CREATE INDEX idx_suppliers_id ON suppliers(id);
+CREATE INDEX idx_suppliers_created_at ON suppliers(created_at);
+CREATE INDEX idx_suppliers_updated_at ON suppliers(updated_at);
+
+-- ========================================
+-- Tabelle: articles (Interface: Article)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS articles (
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    id CHAR(36) NOT NULL,
     name TEXT NOT NULL,
-    description TEXT,
-    portions INT DEFAULT 1,
-    preparation_time INT DEFAULT 0,
-    difficulty INT DEFAULT 1,
-    ingredients JSON,
-    used_recipes JSON,
-    preparation_steps JSON,
-    material_costs DECIMAL(10,2) DEFAULT 0,
-    markup_percentage DECIMAL(5,2) DEFAULT 300.00,
-    vat_rate DECIMAL(5,2) DEFAULT 19.00,
-    selling_price DECIMAL(10,2) DEFAULT 0,
-    total_nutrition_info JSON,
-    allergens JSON,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    created_by TEXT,
-    updated_by TEXT,
-    last_modified_by TEXT
-);
+    category TEXT NOT NULL,
+    supplier_id CHAR(36) NOT NULL,
+    supplier_article_number TEXT NULL,
+    bundle_unit TEXT NULL,
+    bundle_price DECIMAL NULL,
+    bundle_ean_code TEXT NULL,
+    content DECIMAL NULL,
+    content_unit TEXT NULL,
+    content_ean_code TEXT NULL,
+    price_per_unit DECIMAL NULL,
+    vat_rate DECIMAL DEFAULT 19 NULL,
+    allergens JSON NULL,
+    additives JSON NULL,
+    ingredients TEXT NULL,
+    nutrition_info JSON NULL,
+    open_food_facts_code TEXT NULL,
+    notes TEXT NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Erstelle die design-Tabelle
-CREATE TABLE IF NOT EXISTS design (
-    id VARCHAR(36) PRIMARY KEY,
-    template_name VARCHAR(100),
-    colors JSON,
-    settings JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    created_by TEXT,
-    updated_by TEXT,
-    last_modified_by TEXT
-);
-
--- Erstelle die shopping_list-Tabelle (umbenannt von einkauf)
-CREATE TABLE IF NOT EXISTS shopping_list (
-    id VARCHAR(36) PRIMARY KEY,
-    article_id VARCHAR(36),
-    quantity DECIMAL(10,2) NOT NULL,
-    unit TEXT DEFAULT 'Stück',
-    priority TEXT DEFAULT 'normal',
-    notes TEXT,
-    completed BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Erstelle die inventory-Tabelle (umbenannt von inventur)
-CREATE TABLE IF NOT EXISTS inventory (
-    id VARCHAR(36) PRIMARY KEY,
-    article_id VARCHAR(36),
-    counted_quantity DECIMAL(10,2) NOT NULL,
-    unit TEXT DEFAULT 'Stück',
-    notes TEXT,
-    counted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    counted_by TEXT DEFAULT 'Benutzer'
-);
-
--- Erstelle die system_info-Tabelle
-CREATE TABLE IF NOT EXISTS system_info (
-    id VARCHAR(36) PRIMARY KEY,
-    key VARCHAR(100) UNIQUE NOT NULL,
-    value TEXT,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Erstelle Indizes für bessere Performance
-CREATE INDEX idx_articles_name ON articles(name(255));
-CREATE INDEX idx_articles_category ON articles(category(255));
+-- Indizes für articles
+CREATE INDEX idx_articles_id ON articles(id);
+CREATE INDEX idx_articles_created_at ON articles(created_at);
+CREATE INDEX idx_articles_updated_at ON articles(updated_at);
 CREATE INDEX idx_articles_supplier_id ON articles(supplier_id);
-CREATE INDEX idx_suppliers_name ON suppliers(name(255));
-CREATE INDEX idx_suppliers_email ON suppliers(email(255));
-CREATE INDEX idx_recipes_name ON recipes(name(255));
-CREATE INDEX idx_recipes_created_at ON recipes(created_at);
-CREATE INDEX idx_shopping_list_article_id ON shopping_list(article_id);
-CREATE INDEX idx_shopping_list_completed ON shopping_list(completed);
-CREATE INDEX idx_inventory_article_id ON inventory(article_id);
-CREATE INDEX idx_inventory_counted_at ON inventory(counted_at);
+CREATE INDEX idx_articles_category ON articles(category(100));
 
--- Füge System-Informationen hinzu
-INSERT INTO system_info (id, `key`, value, description) VALUES 
-    (UUID(), 'app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
-    (UUID(), 'version', '2.0.0', 'Aktuelle Version'),
-    (UUID(), 'database_created', NOW(), 'Datum der Datenbankerstellung'),
-    (UUID(), 'connection_tested_at', NOW(), 'Letzter Verbindungstest'),
-    (UUID(), 'mysql_version', '2.0.0', 'MySQL Frontend-synchronisiert Version'),
-    (UUID(), 'setup_completed', 'true', 'Initial Setup abgeschlossen'),
-    (UUID(), 'schema_version', '2.0.0', 'Frontend-synchronisiertes Schema')
+-- ========================================
+-- Tabelle: recipes (Interface: Recipe)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS recipes (
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    id CHAR(36) NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    portions DECIMAL DEFAULT 1 NULL,
+    preparation_time DECIMAL NULL,
+    difficulty INTEGER NULL,
+    energy DECIMAL NULL,
+    image TEXT NULL,
+    ingredients JSON NULL,
+    used_recipes JSON NULL,
+    preparation_steps JSON NULL,
+    material_costs DECIMAL NULL,
+    markup_percentage DECIMAL DEFAULT 300 NULL,
+    vat_rate DECIMAL DEFAULT 19 NULL,
+    selling_price DECIMAL NULL,
+    total_nutrition_info JSON NULL,
+    allergens JSON NULL,
+    notes TEXT NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Indizes für recipes
+CREATE INDEX idx_recipes_id ON recipes(id);
+CREATE INDEX idx_recipes_created_at ON recipes(created_at);
+CREATE INDEX idx_recipes_updated_at ON recipes(updated_at);
+
+-- ========================================
+-- Tabelle: inventuritems (Interface: InventurItem)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS inventuritems (
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    id CHAR(36) NOT NULL,
+    artikel_name TEXT NOT NULL,
+    kategorie TEXT NOT NULL,
+    soll_bestand DECIMAL NULL,
+    ist_bestand DECIMAL NULL,
+    einheit TEXT NULL,
+    preis DECIMAL NULL,
+    inventur_datum DATETIME NULL,
+    differenz DECIMAL NULL,
+    bemerkung TEXT NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status ENUM('synced', 'pending', 'error', 'conflict') DEFAULT 'pending' NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Indizes für inventuritems
+CREATE INDEX idx_inventuritems_id ON inventuritems(id);
+CREATE INDEX idx_inventuritems_created_at ON inventuritems(created_at);
+CREATE INDEX idx_inventuritems_updated_at ON inventuritems(updated_at);
+
+-- System-Info Tabelle
+CREATE TABLE IF NOT EXISTS system_info (
+    id CHAR(36) PRIMARY KEY,
+    `key` VARCHAR(100) UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Design-Tabelle für UI-Einstellungen
+CREATE TABLE IF NOT EXISTS design (
+    id CHAR(36) PRIMARY KEY,
+    theme VARCHAR(50) DEFAULT 'light',
+    primary_color VARCHAR(7) DEFAULT '#007bff',
+    secondary_color VARCHAR(7) DEFAULT '#6c757d',
+    accent_color VARCHAR(7) DEFAULT '#28a745',
+    background_color VARCHAR(7) DEFAULT '#ffffff',
+    text_color VARCHAR(7) DEFAULT '#212529',
+    card_color VARCHAR(7) DEFAULT '#f8f9fa',
+    border_color VARCHAR(7) DEFAULT '#dee2e6',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Shopping List Tabelle
+CREATE TABLE IF NOT EXISTS shopping_list (
+    id CHAR(36) PRIMARY KEY,
+    name TEXT NOT NULL,
+    items JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Inventory Tabelle
+CREATE TABLE IF NOT EXISTS inventory (
+    id CHAR(36) PRIMARY KEY,
+    article_id CHAR(36),
+    quantity DECIMAL(10,3) DEFAULT 0,
+    unit VARCHAR(50) DEFAULT 'Stück',
+    expiry_date DATE,
+    location TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
+INSERT INTO system_info (`key`, value, description) VALUES 
+    ('app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
+    ('version', '2.2.2', 'Aktuelle Version'),
+    ('database_created', NOW(), 'Datum der Datenbankerstellung'),
+    ('connection_tested_at', NOW(), 'Letzter Verbindungstest'),
+    ('mysql_version', '2.2.2', 'MySQL Frontend-synchronisiert Version'),
+    ('setup_completed', 'true', 'Initial Setup abgeschlossen'),
+    ('schema_version', '2.2.2', 'Frontend-synchronisiertes Schema - Version 2.2.2')
 ON DUPLICATE KEY UPDATE 
     value = VALUES(value),
-    updated_at = NOW();
+    updated_at = CURRENT_TIMESTAMP;
 
 -- Erfolgsmeldung
 SELECT 'MySQL-Initialisierung erfolgreich abgeschlossen!' as status;
-SELECT 'Frontend-synchronisiertes Schema v2.0.0 installiert' as schema_info;
+SELECT 'Frontend-synchronisiertes Schema v2.2.2 installiert' as schema_info;

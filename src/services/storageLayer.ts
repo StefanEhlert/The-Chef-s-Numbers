@@ -1325,10 +1325,16 @@ class PrismaAdapter implements StorageAdapter {
   name = 'PrismaAdapter';
   type = 'prisma';
 
-  constructor(private connectionData: any, private dbType: 'mariadb' | 'mysql') {}
+  constructor(private connectionData: any, private dbType: 'mariadb' | 'mysql') {
+    console.log(`🔧 ${this.dbType.toUpperCase()}Adapter erstellt mit ConnectionData:`, connectionData);
+  }
 
   private getBaseUrl(): string {
-    return `http://${this.connectionData.host}:${this.connectionData.prismaPort}`;
+    const port = this.connectionData.prismaPort || '3001';
+    const host = this.connectionData.host || 'localhost';
+    const baseUrl = `http://${host}:${port}`;
+    console.log(`🔧 ${this.dbType.toUpperCase()} BaseUrl: ${baseUrl}`);
+    return baseUrl;
   }
 
   private getAuthHeaders(): HeadersInit {
@@ -1339,14 +1345,307 @@ class PrismaAdapter implements StorageAdapter {
   }
 
   private mapKeyToTable(key: string): string {
+    // Verwende die gleichen Tabellennamen wie im autoSchemaGenerator
     const keyMap: { [key: string]: string } = {
-      'articles': 'artikel',
-      'suppliers': 'lieferanten',
-      'recipes': 'rezepte',
-      'einkaufsListe': 'einkauf',
-      'inventurListe': 'inventur',
+      'articles': 'articles',
+      'suppliers': 'suppliers',
+      'recipes': 'recipes',
+      'einkaufsListe': 'einkaufsitems',
+      'inventurListe': 'inventuritems',
     };
     return keyMap[key] || key;
+  }
+
+  // Transformiere Daten für MariaDB/MySQL (identisch mit PostgreSQL-Logik)
+  private transformDataForMySQL<T extends StorageEntity>(data: T[]): any[] {
+    return data.map(item => {
+      const transformed: any = { ...item };
+      
+      // db_id/id Handling (identisch mit PostgreSQL)
+      if (transformed.dbId) {
+        transformed.db_id = transformed.dbId;
+        delete transformed.dbId;
+        console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Update für bestehenden Datensatz mit db_id: ${transformed.db_id}`);
+      } else {
+        delete transformed.dbId;
+        console.log(`🆕 ${this.dbType.toUpperCase()} Transform: Neuer Datensatz, db_id wird generiert`);
+      }
+      
+      // Entferne Sync-Felder
+      delete transformed.isDirty;
+      delete transformed.isNew;
+      delete transformed.syncStatus;
+      delete transformed.supplier;
+      
+      // Feldnamen-Mapping (camelCase zu snake_case)
+      if (transformed.supplierId) {
+        transformed.supplier_id = transformed.supplierId;
+        delete transformed.supplierId;
+      }
+      if (transformed.supplierArticleNumber) {
+        transformed.supplier_article_number = transformed.supplierArticleNumber;
+        delete transformed.supplierArticleNumber;
+      }
+      if (transformed.bundleUnit) {
+        transformed.bundle_unit = transformed.bundleUnit;
+        delete transformed.bundleUnit;
+      }
+      if (transformed.bundlePrice) {
+        transformed.bundle_price = transformed.bundlePrice;
+        delete transformed.bundlePrice;
+      }
+      if (transformed.bundleEanCode) {
+        transformed.bundle_ean_code = transformed.bundleEanCode;
+        delete transformed.bundleEanCode;
+      }
+      if (transformed.contentUnit) {
+        transformed.content_unit = transformed.contentUnit;
+        delete transformed.contentUnit;
+      }
+      if (transformed.contentEanCode) {
+        transformed.content_ean_code = transformed.contentEanCode;
+        delete transformed.contentEanCode;
+      }
+      if (transformed.pricePerUnit) {
+        transformed.price_per_unit = transformed.pricePerUnit;
+        delete transformed.pricePerUnit;
+      }
+      if (transformed.vatRate) {
+        transformed.vat_rate = transformed.vatRate;
+        delete transformed.vatRate;
+      }
+      if (transformed.openFoodFactsCode) {
+        transformed.open_food_facts_code = transformed.openFoodFactsCode;
+        delete transformed.openFoodFactsCode;
+      }
+      
+      // Nutrition Info
+      if (transformed.nutrition || transformed.nutritionInfo) {
+        const nutritionData = transformed.nutritionInfo || transformed.nutrition;
+        if (nutritionData && typeof nutritionData === 'object' && Object.keys(nutritionData).length > 0) {
+          transformed.nutrition_info = nutritionData;
+        }
+        delete transformed.nutrition;
+        delete transformed.nutritionInfo;
+      }
+      
+      // Recipe-Felder
+      if (transformed.preparationTime !== undefined) {
+        transformed.preparation_time = transformed.preparationTime;
+        delete transformed.preparationTime;
+      }
+      if (transformed.markupPercentage !== undefined) {
+        transformed.markup_percentage = transformed.markupPercentage;
+        delete transformed.markupPercentage;
+      }
+      if (transformed.materialCosts !== undefined) {
+        transformed.material_costs = transformed.materialCosts;
+        delete transformed.materialCosts;
+      }
+      if (transformed.sellingPrice !== undefined) {
+        transformed.selling_price = transformed.sellingPrice;
+        delete transformed.sellingPrice;
+      }
+      if (transformed.preparationSteps) {
+        transformed.preparation_steps = transformed.preparationSteps;
+        delete transformed.preparationSteps;
+      }
+      if (transformed.usedRecipes) {
+        transformed.used_recipes = transformed.usedRecipes;
+        delete transformed.usedRecipes;
+      }
+      if (transformed.totalNutritionInfo) {
+        transformed.total_nutrition_info = transformed.totalNutritionInfo;
+        delete transformed.totalNutritionInfo;
+      }
+      
+      // Supplier-Felder
+      if (transformed.contactPerson) {
+        transformed.contact_person = transformed.contactPerson;
+        delete transformed.contactPerson;
+      }
+      if (transformed.phoneNumbers) {
+        transformed.phone_numbers = transformed.phoneNumbers;
+        delete transformed.phoneNumbers;
+      }
+      
+      // Entferne Timestamp-Felder (werden von DB verwaltet)
+      delete transformed.createdAt;
+      delete transformed.updatedAt;
+      delete transformed.created_at;
+      delete transformed.updated_at;
+      delete transformed.createdBy;
+      delete transformed.updatedBy;
+      delete transformed.lastModifiedBy;
+      delete transformed.created_by;
+      delete transformed.updated_by;
+      delete transformed.last_modified_by;
+      delete transformed.image;
+      
+      return transformed;
+    });
+  }
+
+  // Transformiere Daten von MariaDB/MySQL zurück zu Frontend-Format
+  private transformDataFromMySQL(data: any[]): any[] {
+    return data.map(item => {
+      const transformed: any = { ...item };
+      
+      // db_id/id Handling
+      transformed.dbId = transformed.db_id;
+      delete transformed.db_id;
+      transformed.isDirty = false;
+      transformed.isNew = false;
+      transformed.syncStatus = 'synced';
+      
+      // Feldnamen-Mapping (snake_case zu camelCase)
+      if (transformed.supplier_id) {
+        transformed.supplierId = transformed.supplier_id;
+        delete transformed.supplier_id;
+      }
+      if (transformed.supplier_article_number) {
+        transformed.supplierArticleNumber = transformed.supplier_article_number;
+        delete transformed.supplier_article_number;
+      }
+      if (transformed.bundle_unit) {
+        transformed.bundleUnit = transformed.bundle_unit;
+        delete transformed.bundle_unit;
+      }
+      if (transformed.bundle_price) {
+        transformed.bundlePrice = transformed.bundle_price;
+        delete transformed.bundle_price;
+      }
+      if (transformed.bundle_ean_code) {
+        transformed.bundleEanCode = transformed.bundle_ean_code;
+        delete transformed.bundle_ean_code;
+      }
+      if (transformed.content_unit) {
+        transformed.contentUnit = transformed.content_unit;
+        delete transformed.content_unit;
+      }
+      if (transformed.content_ean_code) {
+        transformed.contentEanCode = transformed.content_ean_code;
+        delete transformed.content_ean_code;
+      }
+      if (transformed.price_per_unit) {
+        transformed.pricePerUnit = transformed.price_per_unit;
+        delete transformed.price_per_unit;
+      }
+      if (transformed.vat_rate) {
+        transformed.vatRate = transformed.vat_rate;
+        delete transformed.vat_rate;
+      }
+      if (transformed.open_food_facts_code) {
+        transformed.openFoodFactsCode = transformed.open_food_facts_code;
+        delete transformed.open_food_facts_code;
+      }
+      
+      // Nutrition Info
+      if (transformed.nutrition_info) {
+        let nutritionData = transformed.nutrition_info;
+        if (typeof nutritionData === 'string') {
+          try {
+            nutritionData = JSON.parse(nutritionData);
+          } catch (e) {
+            nutritionData = null;
+          }
+        }
+        if (nutritionData && typeof nutritionData === 'object') {
+          transformed.nutritionInfo = {
+            calories: nutritionData.calories || 0,
+            kilojoules: nutritionData.kilojoules || 0,
+            protein: nutritionData.protein || 0,
+            fat: nutritionData.fat || 0,
+            carbohydrates: nutritionData.carbohydrates || 0,
+            fiber: nutritionData.fiber !== undefined ? nutritionData.fiber : 0,
+            sugar: nutritionData.sugar,
+            salt: nutritionData.salt
+          };
+        }
+        delete transformed.nutrition_info;
+      }
+      
+      // Recipe-Felder
+      if (transformed.preparation_time !== undefined) {
+        transformed.preparationTime = transformed.preparation_time;
+        delete transformed.preparation_time;
+      }
+      if (transformed.markup_percentage !== undefined) {
+        transformed.markupPercentage = transformed.markup_percentage;
+        delete transformed.markup_percentage;
+      }
+      if (transformed.material_costs !== undefined) {
+        transformed.materialCosts = transformed.material_costs;
+        delete transformed.material_costs;
+      }
+      if (transformed.selling_price !== undefined) {
+        transformed.sellingPrice = transformed.selling_price;
+        delete transformed.selling_price;
+      }
+      if (transformed.preparation_steps) {
+        transformed.preparationSteps = typeof transformed.preparation_steps === 'string' 
+          ? JSON.parse(transformed.preparation_steps) 
+          : transformed.preparation_steps;
+        delete transformed.preparation_steps;
+      }
+      if (transformed.used_recipes) {
+        transformed.usedRecipes = typeof transformed.used_recipes === 'string'
+          ? JSON.parse(transformed.used_recipes)
+          : transformed.used_recipes;
+        delete transformed.used_recipes;
+      }
+      if (transformed.total_nutrition_info) {
+        transformed.totalNutritionInfo = typeof transformed.total_nutrition_info === 'string'
+          ? JSON.parse(transformed.total_nutrition_info)
+          : transformed.total_nutrition_info;
+        delete transformed.total_nutrition_info;
+      }
+      
+      // Supplier-Felder
+      if (transformed.contact_person) {
+        transformed.contactPerson = transformed.contact_person;
+        delete transformed.contact_person;
+      }
+      if (transformed.phone_numbers) {
+        transformed.phoneNumbers = typeof transformed.phone_numbers === 'string'
+          ? JSON.parse(transformed.phone_numbers)
+          : transformed.phone_numbers;
+        delete transformed.phone_numbers;
+      }
+      if (transformed.address) {
+        if (typeof transformed.address === 'string') {
+          try {
+            transformed.address = JSON.parse(transformed.address);
+          } catch (e) {
+            transformed.address = null;
+          }
+        }
+      }
+      
+      // Timestamp-Felder
+      if (transformed.created_at) {
+        transformed.createdAt = transformed.created_at;
+        delete transformed.created_at;
+      }
+      if (transformed.updated_at) {
+        transformed.updatedAt = transformed.updated_at;
+        delete transformed.updated_at;
+      }
+      if (transformed.created_by) {
+        transformed.createdBy = transformed.created_by;
+        delete transformed.created_by;
+      }
+      if (transformed.updated_by) {
+        transformed.updatedBy = transformed.updated_by;
+        delete transformed.updated_by;
+      }
+      if (transformed.last_modified_by) {
+        transformed.lastModifiedBy = transformed.last_modified_by;
+        delete transformed.last_modified_by;
+      }
+      
+      return transformed;
+    });
   }
 
   async save<T extends StorageEntity>(
@@ -1357,19 +1656,65 @@ class PrismaAdapter implements StorageAdapter {
     try {
       console.log(`🔧 ${this.dbType.toUpperCase()}: ${key} speichern (${data.length} Einträge)`);
       
+      // Transformiere Daten für MySQL
+      const transformedData = this.transformDataForMySQL(data);
+      
       if (onProgress) {
         onProgress(0, data.length);
       }
       
       const tableName = this.mapKeyToTable(key);
-      const response = await fetch(`${this.getBaseUrl()}/api/${tableName}`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(data)
-      });
+      
+      // Speichere jedes Item einzeln (für db_id-Handling)
+      let allSuccess = true;
+      for (let i = 0; i < transformedData.length; i++) {
+        const item = transformedData[i];
+        
+        if (onProgress) {
+          onProgress(i, transformedData.length);
+        }
+        
+        // Bestimme ob Update oder Insert
+        const isUpdate = !!item.db_id;
+        const method = isUpdate ? 'PUT' : 'POST';
+        const url = isUpdate
+          ? `${this.getBaseUrl()}/api/${tableName}/${item.db_id}`
+          : `${this.getBaseUrl()}/api/${tableName}`;
+        
+        console.log(`🔧 ${this.dbType.toUpperCase()} ${method}: ${url}`);
+        
+        const response = await fetch(url, {
+          method,
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify(item)
+        });
 
-      if (!response.ok) {
-        throw new Error(`${this.dbType.toUpperCase()} Fehler: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ ${this.dbType.toUpperCase()} Fehler: ${response.status}`, errorText);
+          allSuccess = false;
+          break;
+        }
+        
+        // Bei POST: Lese generierte db_id
+        if (!isUpdate) {
+          try {
+            const responseData = await response.json();
+            if (responseData && responseData.db_id) {
+              const originalItem = data.find(orig => orig.id === item.id);
+              if (originalItem) {
+                originalItem.dbId = responseData.db_id;
+                console.log(`✅ db_id generiert: ${responseData.db_id} für Frontend-ID: ${item.id}`);
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Konnte generierte db_id nicht lesen:', e);
+          }
+        }
+      }
+
+      if (!allSuccess) {
+        throw new Error(`${this.dbType.toUpperCase()} Fehler beim Speichern von ${key}`);
       }
 
       if (onProgress) {
@@ -1400,7 +1745,11 @@ class PrismaAdapter implements StorageAdapter {
 
       const data = await response.json();
       console.log(`✅ ${this.dbType.toUpperCase()}: ${key} erfolgreich geladen (${data.length} Einträge)`);
-      return data;
+      
+      // Transformiere Daten zurück zu Frontend-Format
+      const transformedData = this.transformDataFromMySQL(data);
+      
+      return transformedData;
     } catch (error) {
       console.error(`❌ ${this.dbType.toUpperCase()} Fehler beim Laden von ${key}:`, error);
       return null;
@@ -1409,19 +1758,24 @@ class PrismaAdapter implements StorageAdapter {
 
   async delete<T extends StorageEntity>(key: string, id: string): Promise<boolean> {
     try {
-      console.log(`🔧 ${this.dbType.toUpperCase()}: ${key} löschen (ID: ${id})`);
+      console.log(`🔧 ${this.dbType.toUpperCase()}: ${key} löschen (Frontend-ID: ${id})`);
       
       const tableName = this.mapKeyToTable(key);
-      const response = await fetch(`${this.getBaseUrl()}/api/${tableName}/${id}`, {
+      
+      // Lösche über Frontend-ID (nicht db_id)
+      // Prisma API sollte einen Query-Parameter akzeptieren: ?id=eq.{id}
+      const response = await fetch(`${this.getBaseUrl()}/api/${tableName}?id=${id}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders()
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ ${this.dbType.toUpperCase()} Fehler: ${response.status}`, errorText);
         throw new Error(`${this.dbType.toUpperCase()} Fehler: ${response.status} ${response.statusText}`);
       }
 
-      console.log(`✅ ${this.dbType.toUpperCase()}: ${key} erfolgreich gelöscht (ID: ${id})`);
+      console.log(`✅ ${this.dbType.toUpperCase()}: ${key} erfolgreich gelöscht (Frontend-ID: ${id})`);
       return true;
     } catch (error) {
       console.error(`❌ ${this.dbType.toUpperCase()} Fehler beim Löschen von ${key}:`, error);
