@@ -1643,6 +1643,35 @@ class SupabaseAdapter implements StorageAdapter {
     };
   }
 
+  // Konvertiere camelCase zu snake_case für Supabase
+  private camelToSnake(str: string): string {
+    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+  }
+
+  // Transformiere Objekt von camelCase zu snake_case
+  private transformToSnakeCase(obj: any): any {
+    const transformed: any = {};
+    
+    for (const [key, value] of Object.entries(obj)) {
+      const snakeKey = this.camelToSnake(key);
+      transformed[snakeKey] = value;
+    }
+    
+    return transformed;
+  }
+
+  // Transformiere Objekt von snake_case zu camelCase
+  private transformToCamelCase(obj: any): any {
+    const transformed: any = {};
+    
+    for (const [key, value] of Object.entries(obj)) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      transformed[camelKey] = value;
+    }
+    
+    return transformed;
+  }
+
   async save<T extends StorageEntity>(
     entityType: string,
     data: T | T[]
@@ -1654,13 +1683,16 @@ class SupabaseAdapter implements StorageAdapter {
       const baseUrl = this.getBaseUrl();
       
       for (const item of items) {
-        const itemData = { ...item };
+        let itemData = { ...item };
         
         // Entferne Frontend-spezifische Felder
         delete (itemData as any).dbId;
         delete (itemData as any).isDirty;
         delete (itemData as any).isNew;
         delete (itemData as any).syncStatus;
+
+        // Transformiere camelCase → snake_case für Supabase
+        itemData = this.transformToSnakeCase(itemData) as any;
 
         // Prüfe ob UPDATE oder INSERT (basierend auf id)
         const existingCheck = await fetch(`${baseUrl}/${entityType}?id=eq.${item.id}`, {
@@ -1730,8 +1762,12 @@ class SupabaseAdapter implements StorageAdapter {
       }
 
       const data = await response.json();
-      console.log(`✅ SUPABASE: ${data.length} ${entityType} geladen`);
-      return data as T[];
+      
+      // Transformiere snake_case → camelCase für Frontend
+      const transformedData = data.map((item: any) => this.transformToCamelCase(item));
+      
+      console.log(`✅ SUPABASE: ${transformedData.length} ${entityType} geladen`);
+      return transformedData as T[];
     } catch (error) {
       console.error(`❌ SUPABASE Fehler beim Laden von ${entityType}:`, error);
       return [];
