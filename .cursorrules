@@ -1,0 +1,16 @@
+# Cursor AI Rules für dieses Projekt
+
+## Terminal-Befehle - UTF-8 Workaround
+Whenever a terminal command is executed, always prepend the command with UTF-8 encoding settings:
+```
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```
+
+All terminal commands must follow this pattern:
+```powershell
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [actual command here]
+```
+
+This prevents Base64 encoding issues with environment variables containing curly braces in PowerShell.
+
+
