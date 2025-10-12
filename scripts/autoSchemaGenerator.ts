@@ -1465,6 +1465,35 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Test Connection Endpoint (für Frontend-Verbindungstests)
+app.post('/api/test-connection', async (req, res) => {
+  try {
+    const { host, port, database, username, password } = req.body;
+    
+    console.log('🔍 Teste Datenbankverbindung:', { host, port, database, username: '[HIDDEN]' });
+    
+    // Teste die Prisma-Verbindung
+    const result = await prisma.$queryRaw\`SELECT 1 as test\`;
+    
+    console.log('✅ Datenbankverbindung erfolgreich getestet');
+    
+    res.json({ 
+      success: true, 
+      message: \`Verbindung zur Datenbank "\${database}" erfolgreich\`,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Datenbankverbindung fehlgeschlagen:', error);
+    
+    res.status(400).json({ 
+      success: false, 
+      message: \`Datenbankverbindung fehlgeschlagen: \${error.message}\`,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 `;
 
   // Generiere REST-Endpunkte für jede Tabelle

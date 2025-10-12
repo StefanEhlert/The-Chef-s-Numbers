@@ -1,5 +1,5 @@
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-12T18:28:28.155Z
+-- Generiert am: 2025-10-12T18:44:35.261Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
