@@ -1361,47 +1361,49 @@ class PrismaAdapter implements StorageAdapter {
   // Die Prisma-Schema-Mappings (@map) kümmern sich um die DB-Konvertierung
   private transformDataForMySQL<T extends StorageEntity>(data: T[]): any[] {
     return data.map(item => {
-      const transformed: any = { ...item };
+      const transformed: any = {};
+      
+      // Kopiere nur camelCase Felder (filtere alle snake_case Felder raus!)
+      for (const [key, value] of Object.entries(item)) {
+        // Ignoriere snake_case Felder komplett (enthalten "_")
+        if (key.includes('_')) {
+          console.log(`🗑️ Ignoriere snake_case Feld: ${key}`);
+          continue;
+        }
+        
+        // Ignoriere Frontend-spezifische Felder
+        if (['isDirty', 'isNew', 'syncStatus', 'supplier', 'image', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'lastModifiedBy'].includes(key)) {
+          console.log(`🗑️ Ignoriere Frontend-Feld: ${key}`);
+          continue;
+        }
+        
+        // Ignoriere nutritionInfo bei Suppliers (nur Articles haben das)
+        if (key === 'nutritionInfo' && !item.hasOwnProperty('category')) {
+          console.log(`🗑️ Ignoriere nutritionInfo bei Supplier`);
+          continue;
+        }
+        
+        // Kopiere das Feld (camelCase)
+        transformed[key] = value;
+      }
       
       // db_id/id Handling für Prisma (camelCase!)
       if (transformed.dbId) {
-        // Behalte dbId (Prisma erwartet dbId, nicht db_id)
         console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Update für bestehenden Datensatz mit dbId: ${transformed.dbId}`);
       } else {
-        // Kein dbId - Prisma/Server generiert es automatisch
         delete transformed.dbId;
         console.log(`🆕 ${this.dbType.toUpperCase()} Transform: Neuer Datensatz, dbId wird vom Server generiert`);
       }
-      
-      // Entferne Frontend-spezifische Felder (Prisma kennt diese nicht)
-      delete transformed.isDirty;
-      delete transformed.isNew;
-      delete transformed.syncStatus;
-      delete transformed.supplier;  // Nur supplierId behalten
-      delete transformed.image;  // Wird separat gespeichert
-      
-      // WICHTIG: Prisma erwartet camelCase-Felder!
-      // Entferne nur Timestamp-Felder (werden von Prisma automatisch verwaltet)
-      delete transformed.createdAt;
-      delete transformed.updatedAt;
-      delete transformed.created_at;
-      delete transformed.updated_at;
-      delete transformed.createdBy;
-      delete transformed.updatedBy;
-      delete transformed.lastModifiedBy;
-      delete transformed.created_by;
-      delete transformed.updated_by;
-      delete transformed.last_modified_by;
       
       // Merge nutrition und nutritionInfo (falls beide vorhanden)
       if (transformed.nutrition && !transformed.nutritionInfo) {
         transformed.nutritionInfo = transformed.nutrition;
         delete transformed.nutrition;
       } else if (transformed.nutrition) {
-        // Behalte nutritionInfo, lösche nutrition
         delete transformed.nutrition;
       }
       
+      console.log(`✅ Transformiert für Prisma (nur camelCase):`, Object.keys(transformed));
       return transformed;
     });
   }
