@@ -1617,6 +1617,257 @@ class PrismaAdapter implements StorageAdapter {
   }
 }
 
+// Supabase Adapter (für Daten UND Bilder)
+class SupabaseAdapter implements StorageAdapter {
+  name = 'SupabaseAdapter';
+  type = 'supabase';
+
+  constructor(private connectionData: any) {
+    console.log('☁️ SupabaseAdapter erstellt mit ConnectionData:', {
+      url: connectionData?.url,
+      hasAnonKey: !!connectionData?.anonKey,
+      hasServiceKey: !!connectionData?.serviceRoleKey
+    });
+  }
+
+  private getBaseUrl(): string {
+    return `${this.connectionData.url}/rest/v1`;
+  }
+
+  private getAuthHeaders(): HeadersInit {
+    return {
+      'apikey': this.connectionData.serviceRoleKey,
+      'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
+  }
+
+  async save<T extends StorageEntity>(
+    entityType: string,
+    data: T | T[]
+  ): Promise<boolean> {
+    try {
+      const items = Array.isArray(data) ? data : [data];
+      console.log(`☁️ SUPABASE: Speichere ${items.length} ${entityType}`);
+
+      const baseUrl = this.getBaseUrl();
+      
+      for (const item of items) {
+        const itemData = { ...item };
+        
+        // Entferne Frontend-spezifische Felder
+        delete (itemData as any).dbId;
+        delete (itemData as any).isDirty;
+        delete (itemData as any).isNew;
+        delete (itemData as any).syncStatus;
+
+        // Prüfe ob UPDATE oder INSERT (basierend auf id)
+        const existingCheck = await fetch(`${baseUrl}/${entityType}?id=eq.${item.id}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders()
+        });
+
+        if (existingCheck.ok) {
+          const existing = await existingCheck.json();
+          
+          if (existing && existing.length > 0) {
+            // UPDATE
+            console.log(`☁️ UPDATE: ${entityType} mit id=${item.id}`);
+            const response = await fetch(`${baseUrl}/${entityType}?id=eq.${item.id}`, {
+              method: 'PATCH',
+              headers: this.getAuthHeaders(),
+              body: JSON.stringify(itemData)
+            });
+
+            if (!response.ok) {
+              const error = await response.text();
+              console.error(`❌ UPDATE fehlgeschlagen:`, error);
+              throw new Error(`UPDATE fehlgeschlagen: ${response.status}`);
+            }
+          } else {
+            // INSERT
+            console.log(`☁️ INSERT: ${entityType} mit id=${item.id}`);
+            const response = await fetch(`${baseUrl}/${entityType}`, {
+              method: 'POST',
+              headers: this.getAuthHeaders(),
+              body: JSON.stringify(itemData)
+            });
+
+            if (!response.ok) {
+              const error = await response.text();
+              console.error(`❌ INSERT fehlgeschlagen:`, error);
+              throw new Error(`INSERT fehlgeschlagen: ${response.status}`);
+            }
+          }
+        }
+      }
+
+      console.log(`✅ SUPABASE: ${items.length} ${entityType} erfolgreich gespeichert`);
+      return true;
+    } catch (error) {
+      console.error(`❌ SUPABASE Fehler beim Speichern von ${entityType}:`, error);
+      return false;
+    }
+  }
+
+  async load<T extends StorageEntity>(entityType: string): Promise<T[]> {
+    try {
+      console.log(`☁️ SUPABASE: Lade ${entityType}`);
+      const baseUrl = this.getBaseUrl();
+      
+      const response = await fetch(`${baseUrl}/${entityType}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`⚠️ Tabelle ${entityType} existiert nicht - returniere leeres Array`);
+          return [];
+        }
+        throw new Error(`Fehler beim Laden: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ SUPABASE: ${data.length} ${entityType} geladen`);
+      return data as T[];
+    } catch (error) {
+      console.error(`❌ SUPABASE Fehler beim Laden von ${entityType}:`, error);
+      return [];
+    }
+  }
+
+  async delete(entityType: string, id: string): Promise<boolean> {
+    try {
+      console.log(`☁️ SUPABASE: Lösche ${entityType} mit id=${id}`);
+      const baseUrl = this.getBaseUrl();
+      
+      const response = await fetch(`${baseUrl}/${entityType}?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Fehler beim Löschen: ${response.status}`);
+      }
+
+      console.log(`✅ SUPABASE: ${entityType} gelöscht`);
+      return true;
+    } catch (error) {
+      console.error(`❌ SUPABASE Fehler beim Löschen von ${entityType}:`, error);
+      return false;
+    }
+  }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      console.log('☁️ SUPABASE: Verbindungstest');
+      const baseUrl = this.getBaseUrl();
+      
+      const response = await fetch(`${baseUrl}/system_info?limit=1`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      const success = response.ok;
+      console.log(`${success ? '✅' : '❌'} SUPABASE Verbindungstest: ${success ? 'Erfolgreich' : 'Fehlgeschlagen'}`);
+      return success;
+    } catch (error) {
+      console.error('❌ SUPABASE Verbindungstest fehlgeschlagen:', error);
+      return false;
+    }
+  }
+
+  // Bild-Methoden für Supabase Storage
+  async saveImage(path: string, file: File): Promise<boolean> {
+    try {
+      console.log(`📷 SUPABASE Storage: Speichere Bild: ${path}`);
+      
+      const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${path}`;
+      
+      const response = await fetch(storageUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': this.connectionData.serviceRoleKey,
+          'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+        },
+        body: file
+      });
+
+      if (!response.ok) {
+        // Falls Bild existiert, versuche UPDATE
+        const updateResponse = await fetch(storageUrl, {
+          method: 'PUT',
+          headers: {
+            'apikey': this.connectionData.serviceRoleKey,
+            'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+          },
+          body: file
+        });
+
+        if (!updateResponse.ok) {
+          throw new Error(`Fehler beim Speichern: ${updateResponse.status}`);
+        }
+      }
+
+      console.log(`✅ SUPABASE Storage: Bild gespeichert`);
+      return true;
+    } catch (error) {
+      console.error(`❌ SUPABASE Storage Fehler beim Speichern:`, error);
+      return false;
+    }
+  }
+
+  async loadImage(path: string): Promise<string | null> {
+    try {
+      console.log(`📷 SUPABASE Storage: Lade Bild: ${path}`);
+      
+      const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/${path}`;
+      
+      // Teste ob Bild existiert
+      const response = await fetch(publicUrl, { method: 'HEAD' });
+      
+      if (!response.ok) {
+        console.log(`⚠️ Bild nicht gefunden: ${path}`);
+        return null;
+      }
+
+      console.log(`✅ SUPABASE Storage: Bild-URL: ${publicUrl}`);
+      return publicUrl;
+    } catch (error) {
+      console.error(`❌ SUPABASE Storage Fehler beim Laden:`, error);
+      return null;
+    }
+  }
+
+  async deleteImage(path: string): Promise<boolean> {
+    try {
+      console.log(`📷 SUPABASE Storage: Lösche Bild: ${path}`);
+      
+      const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${path}`;
+      
+      const response = await fetch(storageUrl, {
+        method: 'DELETE',
+        headers: {
+          'apikey': this.connectionData.serviceRoleKey,
+          'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+        }
+      });
+
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Fehler beim Löschen: ${response.status}`);
+      }
+
+      console.log(`✅ SUPABASE Storage: Bild gelöscht`);
+      return true;
+    } catch (error) {
+      console.error(`❌ SUPABASE Storage Fehler beim Löschen:`, error);
+      return false;
+    }
+  }
+}
+
 // MinIO Adapter (für Bilder)
 class MinIOAdapter implements StorageAdapter {
   name = 'MinIOAdapter';
@@ -2233,6 +2484,10 @@ export class StorageLayer {
         console.log(`🔧 MySQL ConnectionData:`, connectionData?.mysql);
         return new PrismaAdapter(connectionData?.mysql, 'mysql');
       
+      case 'Supabase':
+        console.log(`☁️ Supabase ConnectionData:`, connectionData?.supabase);
+        return new SupabaseAdapter(connectionData?.supabase);
+      
       case 'SQLite':
         console.log(`📱 SQLite - verwende LocalStorage`);
         return new LocalStorageAdapter();
@@ -2251,6 +2506,10 @@ export class StorageLayer {
       case 'MinIO':
         console.log(`📦 MinIO ConnectionData:`, connectionData?.minio);
         return new MinIOAdapter(connectionData?.minio);
+      
+      case 'Supabase':
+        console.log(`☁️ Supabase Storage ConnectionData:`, connectionData?.supabase);
+        return new SupabaseAdapter(connectionData?.supabase);
       
       case 'LocalPath':
         return new LocalStorageAdapter();
