@@ -167,81 +167,20 @@ export const useArticleHandlers = (
         nutrition: article.nutritionInfo || article.nutrition || {}
       };
       
-      // Prüfe den aktuellen Speichermodus
-      const currentStorageMode = localStorage.getItem('chef_storage_mode') as string;
-      
-      if (currentStorageMode === 'backend' || currentStorageMode === 'hybrid') {
-        // Verwende die neue intelligente Speicher-Route
-        console.log(`💾 Intelligente Speicherung über Backend-API: ${newArticle.name}`);
+      // Speichere Artikel über StorageLayer
+      setArticles((prev: any[]) => {
+        const updatedArticles = editingArticle 
+          ? prev.map(a => a.id === editingArticle.id ? newArticle : a)
+          : [...prev, newArticle];
         
-        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
-        const response = await fetch(`${backendUrl}/api/v1/articles/smart-save`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(newArticle)
-        });
+        // Aktualisiere den CategoryManager mit den neuen Artikeldaten
+        categoryManager.updateCategories(updatedArticles);
         
-        const result = await response.json();
+        // Speichere die aktualisierten Artikel im LocalStorage
+        saveAppData({ articles: updatedArticles });
         
-        if (!response.ok) {
-          // Spezielle Behandlung für Duplikat-Fehler
-          if (response.status === 409 && result.isDuplicate) {
-            console.warn(`⚠️ Duplikat gefunden: ${result.message}`);
-            console.log('🔍 Backend-Response:', result);
-            console.log('🔍 Existing Article:', result.existingArticle);
-            // Werfe einen benutzerdefinierten Fehler mit den Duplikat-Daten
-            const duplicateError = new Error(`Duplikat gefunden: ${result.message}`);
-            (duplicateError as any).isDuplicate = true;
-            (duplicateError as any).existingArticle = result.existingArticle;
-            throw duplicateError;
-          }
-          
-          throw new Error(`HTTP ${response.status}: ${result.message || response.statusText}`);
-        }
-        
-        console.log(`✅ Artikel erfolgreich über intelligente Backend-Route gespeichert:`, result.message);
-        
-        // Verwende die vom Backend zurückgegebenen Daten
-        const savedArticle = result.data;
-        
-        setArticles((prev: any[]) => {
-          let updatedArticles;
-          if (isEditingDbArticle) {
-            // Ersetze bestehenden DB-Artikel
-            updatedArticles = prev.map(a => a.id === editingArticle.id ? savedArticle : a);
-          } else {
-            // Ersetze lokalen Artikel mit String-ID durch DB-Artikel mit Integer-ID
-            updatedArticles = editingArticle 
-              ? prev.map(a => a.id === editingArticle.id ? savedArticle : a)
-              : [...prev, savedArticle];
-          }
-          
-          // Aktualisiere den CategoryManager mit den neuen Artikeldaten
-          categoryManager.updateCategories(updatedArticles);
-          
-          return updatedArticles;
-        });
-        
-        // Speichere nicht erneut über saveAppData, da der Artikel bereits in der DB ist
-        console.log('✅ Artikel erfolgreich in der Datenbank gespeichert, skip saveAppData');
-      } else {
-        // Lokaler Speichermodus - wie bisher
-        setArticles((prev: any[]) => {
-          const updatedArticles = editingArticle 
-            ? prev.map(a => a.id === editingArticle.id ? newArticle : a)
-            : [...prev, newArticle];
-          
-          // Aktualisiere den CategoryManager mit den neuen Artikeldaten
-          categoryManager.updateCategories(updatedArticles);
-          
-          // Speichere die aktualisierten Artikel im LocalStorage
-          saveAppData({ articles: updatedArticles });
-          
-          return updatedArticles;
-        });
-      }
+        return updatedArticles;
+      });
       
              if (setEditingArticle) {
          setEditingArticle(null);

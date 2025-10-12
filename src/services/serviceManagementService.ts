@@ -7,7 +7,7 @@ import {
   ServiceDiscoveryResult,
   DiscoveredService
 } from '../types/serviceConfig';
-import { minioService, MinIOConfig } from './minioService';
+import { S3Client, ListBucketsCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 
 export class ServiceManagementService {
   private readonly STORAGE_KEY = 'chef_service_configs';
@@ -291,52 +291,66 @@ export class ServiceManagementService {
   }
 
   /**
-   * Testet MinIO-Verbindung
+   * Testet MinIO-Verbindung (direkt mit S3Client ohne Backend)
    */
   private async testMinIOConnection(service: ServiceConfig): Promise<{ success: boolean; details?: any }> {
+    const startTime = Date.now();
+    
     try {
-      const minioConfig: MinIOConfig = {
+      console.log('🔍 Teste MinIO-Verbindung...', {
         host: service.host,
         port: service.port,
-        accessKey: service.credentials.username || '',
-        secretKey: service.credentials.password || '',
-        bucket: service.credentials.database || 'test-bucket',
-        useSSL: false // Standardmäßig ohne SSL, kann später konfigurierbar gemacht werden
-      };
-
-      console.log('🔍 Teste MinIO-Verbindung...', {
-        host: minioConfig.host,
-        port: minioConfig.port,
-        bucket: minioConfig.bucket
+        bucket: service.credentials.database || 'test-bucket'
       });
 
-      const result = await minioService.testConnection(minioConfig);
+      // S3Client direkt initialisieren (wie im MinIOAdapter)
+      const s3Client = new S3Client({
+        endpoint: `http://${service.host}:${service.port}`,
+        region: 'us-east-1', // MinIO Standard
+        credentials: {
+          accessKeyId: service.credentials.username || '',
+          secretAccessKey: service.credentials.password || ''
+        },
+        forcePathStyle: true, // MinIO erfordert path-style URLs
+      });
+
+      // Teste Verbindung mit ListBuckets
+      const listBucketsCommand = new ListBucketsCommand({});
+      const listBucketsResponse = await s3Client.send(listBucketsCommand);
       
-      if (result.success) {
-        console.log('✅ MinIO-Verbindung erfolgreich:', result.message);
-        console.log('📊 Test-Details:', {
-          responseTime: `${result.responseTime}ms`,
-          bucketExists: result.bucketExists,
-          canCreateBucket: result.canCreateBucket,
-          canUpload: result.canUpload,
-          canDownload: result.canDownload
-        });
-        return { 
-          success: true, 
-          details: {
-            bucketExists: result.bucketExists,
-            canCreateBucket: result.canCreateBucket,
-            canUpload: result.canUpload,
-            canDownload: result.canDownload
-          }
-        };
-      } else {
-        console.error('❌ MinIO-Verbindung fehlgeschlagen:', result.error);
-        return { success: false };
+      const responseTime = Date.now() - startTime;
+      const bucketName = service.credentials.database || 'test-bucket';
+      
+      // Prüfe ob spezifischer Bucket existiert
+      let bucketExists = false;
+      if (listBucketsResponse.Buckets) {
+        bucketExists = listBucketsResponse.Buckets.some(b => b.Name === bucketName);
       }
+      
+      console.log('✅ MinIO-Verbindung erfolgreich:', {
+        responseTime: `${responseTime}ms`,
+        bucketsFound: listBucketsResponse.Buckets?.length || 0,
+        bucketExists
+      });
+      
+      return { 
+        success: true, 
+        details: {
+          responseTime: `${responseTime}ms`,
+          bucketsFound: listBucketsResponse.Buckets?.length || 0,
+          bucketExists
+        }
+      };
     } catch (error) {
-      console.error('❌ Fehler beim MinIO-Verbindungstest:', error);
-      return { success: false };
+      const responseTime = Date.now() - startTime;
+      console.error('❌ MinIO-Verbindung fehlgeschlagen:', error);
+      return { 
+        success: false,
+        details: {
+          responseTime: `${responseTime}ms`,
+          error: error instanceof Error ? error.message : 'Unbekannter Fehler'
+        }
+      };
     }
   }
 

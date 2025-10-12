@@ -737,28 +737,7 @@ function AppContent() {
             }}
                                      handleDeleteSingleRecipe={async (recipeId) => {
               try {
-                // Prüfe den aktuellen Speichermodus
-                const currentStorageMode = localStorage.getItem('chef_storage_mode') as string;
-                
-                if (currentStorageMode === 'backend' || currentStorageMode === 'hybrid') {
-                  // Lösche Rezept aus der Datenbank
-                  console.log(`🗑️ Lösche Rezept ${recipeId} aus der Datenbank...`);
-                  
-                  const response = await fetch(`http://localhost:3001/api/v1/recipes/${recipeId}`, {
-                    method: 'DELETE',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    }
-                  });
-                  
-                  if (!response.ok) {
-                    console.warn(`⚠️ Rezept ${recipeId} konnte nicht aus der Datenbank gelöscht werden`);
-                  } else {
-                    console.log(`✅ Rezept ${recipeId} erfolgreich aus der Datenbank gelöscht`);
-                  }
-                } else {
-                  console.log(`🗑️ Lösche Rezept ${recipeId} aus dem lokalen Speicher...`);
-                }
+                console.log(`🗑️ Lösche Rezept ${recipeId}...`);
                 
                 // Lösche Rezept über StorageLayer
                 const success = await storageLayer.delete('recipes', recipeId);
