@@ -224,6 +224,13 @@ const StorageManagement: React.FC = () => {
   const [mergeStrategy, setMergeStrategy] = useState<'overwrite' | 'merge'>('merge');
   const [conflictResolution, setConflictResolution] = useState<'keep_existing' | 'overwrite_with_new'>('keep_existing');
   const [targetStorageHasData, setTargetStorageHasData] = useState(false);
+  const [supabaseSchemaStatus, setSupabaseSchemaStatus] = useState<{
+    exists: boolean;
+    version?: string;
+    needsUpdate?: boolean;
+    message: string;
+    checking: boolean;
+  }>({ exists: false, message: '', checking: false });
   const [dataTransferProgress, setDataTransferProgress] = useState<{
     current: number;
     total: number;
@@ -3609,6 +3616,87 @@ const StorageManagement: React.FC = () => {
     }
   };
 
+  // Supabase Schema-Status-Prüfung
+  const checkSupabaseSchemaStatus = async (): Promise<{ 
+    exists: boolean; 
+    version?: string; 
+    needsUpdate?: boolean;
+    message: string;
+  }> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🔍 Prüfe Supabase Schema-Status...');
+
+      // Prüfe ob system_info Tabelle existiert (mit Service Role Key für vollen Zugriff)
+      const response = await fetch(`${url}/rest/v1/system_info?select=*&key=eq.schema_version`, {
+        method: 'GET',
+        headers: {
+          'apikey': serviceRoleKey,
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 404) {
+        // Tabelle existiert nicht - Schema muss initialisiert werden
+        console.log('📋 Schema existiert nicht');
+        return {
+          exists: false,
+          message: 'Schema nicht gefunden - Initialisierung erforderlich'
+        };
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          const currentVersion = data[0].value;
+          const expectedVersion = '2.2.2'; // Aktuelle Schema-Version
+          
+          console.log('📊 Schema gefunden:', { currentVersion, expectedVersion });
+          
+          if (currentVersion === expectedVersion) {
+            return {
+              exists: true,
+              version: currentVersion,
+              needsUpdate: false,
+              message: `Schema aktuell (v${currentVersion})`
+            };
+          } else {
+            return {
+              exists: true,
+              version: currentVersion,
+              needsUpdate: true,
+              message: `Schema veraltet (v${currentVersion} → v${expectedVersion})`
+            };
+          }
+        } else {
+          // Tabelle existiert, aber keine Version - veraltet
+          return {
+            exists: true,
+            needsUpdate: true,
+            message: 'Schema ohne Versionsinformation - Update erforderlich'
+          };
+        }
+      }
+
+      // Andere Fehler
+      return {
+        exists: false,
+        message: `Schema-Status unbekannt: ${response.status}`
+      };
+
+    } catch (error) {
+      console.error('❌ Fehler bei Schema-Status-Prüfung:', error);
+      return {
+        exists: false,
+        message: 'Schema-Status konnte nicht geprüft werden'
+      };
+    }
+  };
+
   // Supabase-Verbindungstest
   const performSupabaseConnectionTest = async (): Promise<{ success: boolean; message: string }> => {
     const url = storageManagement.connections.supabase.url;
@@ -3700,7 +3788,7 @@ const StorageManagement: React.FC = () => {
       const result = await performSupabaseConnectionTest();
 
       if (result.success) {
-        // Erfolgreiche Verbindung
+        // Erfolgreiche Verbindung - Kombiniere beide Updates in einem Call
         handleStorageManagementUpdate({
           connections: {
             ...storageManagement.connections,
@@ -3710,17 +3798,20 @@ const StorageManagement: React.FC = () => {
               lastTested: new Date().toISOString(),
               testMessage: result.message
             }
-          }
-        });
-
-        // Setze automatisch Supabase als selectedDataStorage und selectedPictureStorage
-        handleStorageManagementUpdate({
+          },
           selectedStorage: {
             ...storageManagement.selectedStorage,
             selectedDataStorage: 'Supabase',
             selectedPictureStorage: 'Supabase'
           }
         });
+
+        // Prüfe Schema-Status automatisch nach erfolgreicher Verbindung
+        console.log('🔍 Prüfe Supabase Schema-Status nach erfolgreicher Verbindung...');
+        setSupabaseSchemaStatus(prev => ({ ...prev, checking: true }));
+        const schemaStatus = await checkSupabaseSchemaStatus();
+        setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+        console.log('📊 Schema-Status:', schemaStatus);
       } else {
         // Fehlgeschlagene Verbindung
         handleStorageManagementUpdate({
@@ -3747,6 +3838,92 @@ const StorageManagement: React.FC = () => {
             testMessage: `❌ Verbindung fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
           }
         }
+      });
+    }
+  };
+
+  // Supabase Schema initialisieren/aktualisieren
+  const initializeSupabaseSchema = async (): Promise<{ success: boolean; message: string }> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🚀 Starte Supabase Schema-Initialisierung...');
+      
+      // Lade SQL-Script vom Server (public-Ordner)
+      const scriptResponse = await fetch('/init-scripts/init-chef-numbers-supabase.sql');
+      
+      if (!scriptResponse.ok) {
+        throw new Error('SQL-Script konnte nicht geladen werden');
+      }
+      
+      const sqlScript = await scriptResponse.text();
+      console.log('📜 SQL-Script geladen:', sqlScript.substring(0, 100) + '...');
+
+      // Führe SQL über Supabase SQL API aus
+      // Supabase ermöglicht SQL-Ausführung über die REST API nicht direkt
+      // Wir müssen das SQL in einzelne Statements aufteilen und über die REST API ausführen
+      
+      // ODER: Verwende Supabase Management API (erfordert zusätzliche Auth)
+      // Für jetzt: Gebe SQL-Script aus und der Benutzer kann es im SQL Editor ausführen
+      
+      return {
+        success: true,
+        message: 'SQL-Script bereit - bitte im Supabase SQL Editor ausführen'
+      };
+
+    } catch (error) {
+      console.error('❌ Schema-Initialisierung fehlgeschlagen:', error);
+      return {
+        success: false,
+        message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      };
+    }
+  };
+
+  // Handler für Schema-Initialisierung-Button
+  const handleSupabaseSchemaInit = async () => {
+    setSupabaseSchemaStatus(prev => ({ ...prev, checking: true, message: 'Initialisiere Schema...' }));
+    
+    try {
+      // Lade SQL-Script
+      const scriptResponse = await fetch('/init-scripts/init-chef-numbers-supabase.sql');
+      
+      if (!scriptResponse.ok) {
+        throw new Error('SQL-Script konnte nicht geladen werden');
+      }
+      
+      const sqlScript = await scriptResponse.text();
+      
+      // Download SQL-Script für manuelles Ausführen im Supabase SQL Editor
+      const blob = new Blob([sqlScript], { type: 'text/plain' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'supabase-schema-init.sql';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+      
+      // Öffne Supabase SQL Editor
+      const projectRef = storageManagement.connections.supabase.url.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
+      if (projectRef) {
+        window.open(`https://supabase.com/dashboard/project/${projectRef}/sql/new`, '_blank');
+      }
+      
+      setSupabaseSchemaStatus({
+        exists: false,
+        checking: false,
+        message: 'SQL-Script heruntergeladen - bitte im Supabase SQL Editor ausführen'
+      });
+      
+    } catch (error) {
+      console.error('❌ Fehler beim Schema-Init:', error);
+      setSupabaseSchemaStatus({
+        exists: false,
+        checking: false,
+        message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
       });
     }
   };
@@ -6495,21 +6672,100 @@ const StorageManagement: React.FC = () => {
 
                   {/* Hilfreiche Links */}
                   {storageManagement.connections.supabase.connectionStatus && (
-                    <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#3ecf8e20', border: `1px solid #3ecf8e` }}>
-                      <div className="d-flex align-items-start">
-                        <FaCheckCircle className="me-2 mt-1" style={{ color: '#3ecf8e', fontSize: '1.2rem' }} />
-                        <div style={{ flex: 1 }}>
-                          <strong style={{ color: colors.text }}>Verbindung erfolgreich!</strong>
-                          <div className="mt-2" style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
-                            <div className="d-flex flex-column gap-1">
-                              <span>✅ Daten & Bilder werden über Supabase synchronisiert</span>
-                              <span>✅ Automatische Backups durch Supabase</span>
-                              <span>✅ Zugriff von überall (auch über Netlify)</span>
+                    <>
+                      <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#3ecf8e20', border: `1px solid #3ecf8e` }}>
+                        <div className="d-flex align-items-start">
+                          <FaCheckCircle className="me-2 mt-1" style={{ color: '#3ecf8e', fontSize: '1.2rem' }} />
+                          <div style={{ flex: 1 }}>
+                            <strong style={{ color: colors.text }}>Verbindung erfolgreich!</strong>
+                            <div className="mt-2" style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
+                              <div className="d-flex flex-column gap-1">
+                                <span>✅ Daten & Bilder werden über Supabase synchronisiert</span>
+                                <span>✅ Automatische Backups durch Supabase</span>
+                                <span>✅ Zugriff von überall (auch über Netlify)</span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+
+                      {/* Schema-Status und Initialisierung */}
+                      <div className="mt-3">
+                        {supabaseSchemaStatus.checking ? (
+                          <div className="alert alert-info" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
+                            <FaSpinner className="fa-spin me-2" />
+                            Prüfe Schema-Status...
+                          </div>
+                        ) : (
+                          <>
+                            {/* Schema existiert nicht - Initialisierung erforderlich */}
+                            {!supabaseSchemaStatus.exists && (
+                              <div className="alert alert-warning" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107' }}>
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div className="d-flex align-items-start flex-grow-1">
+                                    <FaExclamationTriangle className="me-2 mt-1" style={{ color: '#ffc107' }} />
+                                    <div>
+                                      <strong>Schema nicht gefunden</strong>
+                                      <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
+                                        Das Datenbankschema muss initialisiert werden, bevor Sie Daten speichern können.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="btn btn-warning ms-3"
+                                    onClick={handleSupabaseSchemaInit}
+                                    style={{ whiteSpace: 'nowrap' }}
+                                  >
+                                    <FaDatabase className="me-2" />
+                                    Schema initialisieren
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Schema existiert, aber veraltet - Update erforderlich */}
+                            {supabaseSchemaStatus.exists && supabaseSchemaStatus.needsUpdate && (
+                              <div className="alert alert-info" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div className="d-flex align-items-start flex-grow-1">
+                                    <FaInfoCircle className="me-2 mt-1" style={{ color: '#17a2b8' }} />
+                                    <div>
+                                      <strong>Schema-Update verfügbar</strong>
+                                      <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
+                                        Aktuelle Version: {supabaseSchemaStatus.version} → Neue Version: 2.2.2
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="btn btn-info ms-3"
+                                    onClick={handleSupabaseSchemaInit}
+                                    style={{ whiteSpace: 'nowrap' }}
+                                  >
+                                    <FaSync className="me-2" />
+                                    Schema aktualisieren
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Schema aktuell - Alles OK */}
+                            {supabaseSchemaStatus.exists && !supabaseSchemaStatus.needsUpdate && (
+                              <div className="alert alert-success" style={{ backgroundColor: '#28a74520', borderColor: '#28a745' }}>
+                                <div className="d-flex align-items-start">
+                                  <FaCheckCircle className="me-2 mt-1" style={{ color: '#28a745' }} />
+                                  <div>
+                                    <strong>Schema aktuell (v{supabaseSchemaStatus.version})</strong>
+                                    <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
+                                      Ihre Datenbank ist bereit für den Einsatz!
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

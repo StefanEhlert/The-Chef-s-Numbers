@@ -1820,14 +1820,160 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
     fs.writeFileSync(prismaPackageJsonPath, JSON.stringify(prismaPackageJson, null, 2));
     console.log(`✅ Prisma package.json geschrieben: ${prismaPackageJsonPath}`);
     
+    // Generiere Supabase Init-Script
+    console.log('\n📝 Generiere Supabase Init-Script...');
+    const supabaseScript = generateSupabaseInitScript(definitions);
+    const supabaseScriptPath = path.join(__dirname, '../public/init-scripts', 'init-chef-numbers-supabase.sql');
+    fs.writeFileSync(supabaseScriptPath, supabaseScript);
+    console.log(`✅ Supabase Init-Script geschrieben: ${supabaseScriptPath}`);
+    
     console.log('\n🎉 Alle Dateien erfolgreich generiert!');
     console.log(`📦 Prisma API bereit für MariaDB/MySQL`);
+    console.log(`☁️  Supabase Script bereit für Cloud-Deployment`);
     
   } catch (error) {
     console.error('❌ Fehler bei automatischer Schema-Generierung:', error);
     process.exit(1);
   }
 };
+
+// Generiere Supabase Init-Script (PostgreSQL-kompatibel mit RLS)
+function generateSupabaseInitScript(definitions: SchemaDefinitions): string {
+  const timestamp = new Date().toISOString();
+  const targetVersion = '2.2.2';
+  
+  let script = `-- Chef Numbers Database Initialization Script (Supabase)
+-- Frontend-synchronisiertes Schema v${targetVersion}
+-- Automatisch generiert am: ${timestamp}
+-- 
+-- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
+-- - Verwendet UUIDs als Primary Keys
+-- - Beinhaltet RLS (Row Level Security) Policies
+-- - Storage Bucket für Bilder wird separat erstellt
+
+-- ========================================
+-- Haupt-Tabellen
+-- ========================================
+
+`;
+
+  // Generiere Tabellen basierend auf Definitionen
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    const tableName = definition.tableName;
+    
+    script += `-- Tabelle: ${tableName}\n`;
+    script += `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
+    
+    for (const column of definition.columns) {
+      // PostgreSQL/Supabase Typ-Mapping
+      let pgType = column.type;
+      
+      // Typ-Konvertierungen für Supabase (PostgreSQL-kompatibel)
+      if (pgType === 'SERIAL') {
+        pgType = 'INTEGER';
+      } else if (pgType === 'TEXT[]') {
+        pgType = 'TEXT[]';
+      }
+      
+      const nullable = column.nullable ? 'NULL' : 'NOT NULL';
+      const primary = column.primary ? 'PRIMARY KEY' : '';
+      
+      // Default-Werte für Supabase
+      let defaultValue = '';
+      if (column.name === 'db_id') {
+        defaultValue = 'DEFAULT gen_random_uuid()';
+      } else if (column.name === 'created_at') {
+        defaultValue = 'DEFAULT now()';
+      } else if (column.name === 'sync_status') {
+        defaultValue = "DEFAULT 'pending'";
+      } else if (column.name === 'is_dirty' || column.name === 'is_new') {
+        defaultValue = 'DEFAULT false';
+      } else if (column.defaultValue !== undefined && column.defaultValue !== null) {
+        if (typeof column.defaultValue === 'string') {
+          defaultValue = `DEFAULT '${column.defaultValue}'`;
+        } else {
+          defaultValue = `DEFAULT ${column.defaultValue}`;
+        }
+      }
+      
+      script += `    ${column.name} ${pgType} ${defaultValue} ${nullable} ${primary}`.trim();
+      script += ',\n';
+    }
+    
+    // Entferne letztes Komma
+    script = script.slice(0, -2) + '\n';
+    script += `);\n\n`;
+    
+    // Indizes für Performance
+    script += `-- Indizes für ${tableName}\n`;
+    script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_id ON ${tableName}(id);\n`;
+    script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_sync_status ON ${tableName}(sync_status);\n`;
+    script += `\n`;
+  }
+
+  // System-Tabellen
+  script += `-- ========================================\n`;
+  script += `-- System-Tabellen\n`;
+  script += `-- ========================================\n\n`;
+  
+  script += `-- System-Info Tabelle\n`;
+  script += `CREATE TABLE IF NOT EXISTS system_info (\n`;
+  script += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
+  script += `    key TEXT UNIQUE NOT NULL,\n`;
+  script += `    value TEXT NOT NULL,\n`;
+  script += `    description TEXT,\n`;
+  script += `    created_at TIMESTAMP DEFAULT now(),\n`;
+  script += `    updated_at TIMESTAMP DEFAULT now()\n`;
+  script += `);\n\n`;
+  
+  script += `-- Design-Tabelle\n`;
+  script += `CREATE TABLE IF NOT EXISTS design (\n`;
+  script += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
+  script += `    theme TEXT DEFAULT 'light',\n`;
+  script += `    primary_color TEXT DEFAULT '#007bff',\n`;
+  script += `    secondary_color TEXT DEFAULT '#6c757d',\n`;
+  script += `    accent_color TEXT DEFAULT '#28a745',\n`;
+  script += `    background_color TEXT DEFAULT '#ffffff',\n`;
+  script += `    text_color TEXT DEFAULT '#212529',\n`;
+  script += `    card_color TEXT DEFAULT '#f8f9fa',\n`;
+  script += `    border_color TEXT DEFAULT '#dee2e6',\n`;
+  script += `    created_at TIMESTAMP DEFAULT now(),\n`;
+  script += `    updated_at TIMESTAMP DEFAULT now()\n`;
+  script += `);\n\n`;
+
+  // System-Informationen
+  script += `-- System-Informationen initialisieren\n`;
+  script += `INSERT INTO system_info (key, value, description) VALUES\n`;
+  script += `    ('schema_version', '${targetVersion}', 'Frontend-synchronisiertes Schema Version'),\n`;
+  script += `    ('installation_date', now()::text, 'Datum der Schema-Installation'),\n`;
+  script += `    ('last_migration', now()::text, 'Datum der letzten Migration')\n`;
+  script += `ON CONFLICT (key) DO UPDATE SET\n`;
+  script += `    value = EXCLUDED.value,\n`;
+  script += `    updated_at = now();\n\n`;
+
+  // RLS Policies (optional - für später)
+  script += `-- ========================================\n`;
+  script += `-- Row Level Security (RLS) Policies\n`;
+  script += `-- ========================================\n`;
+  script += `-- HINWEIS: RLS ist standardmäßig DEAKTIVIERT\n`;
+  script += `-- Aktivieren Sie RLS nach Bedarf:\n`;
+  script += `-- ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;\n`;
+  script += `-- CREATE POLICY <policy_name> ON <table_name> ...\n\n`;
+
+  script += `-- Beispiel: Alle Zugriffe erlauben (für Service Role)\n`;
+  for (const [_, definition] of Object.entries(definitions)) {
+    const tableName = definition.tableName;
+    script += `-- ALTER TABLE ${tableName} ENABLE ROW LEVEL SECURITY;\n`;
+    script += `-- CREATE POLICY "${tableName}_all_access" ON ${tableName} FOR ALL USING (true);\n`;
+  }
+  
+  script += `\n-- ========================================\n`;
+  script += `-- Schema-Initialisierung abgeschlossen\n`;
+  script += `-- Version: ${targetVersion}\n`;
+  script += `-- ========================================\n`;
+
+  return script;
+}
 
 // Führe Script aus
 if (require.main === module) {

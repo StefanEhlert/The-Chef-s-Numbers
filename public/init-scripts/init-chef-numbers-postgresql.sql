@@ -1,7 +1,7 @@
 -- Chef Numbers Database Initialization Script (PostgreSQL)
 -- Wird beim ersten Start der PostgreSQL-Datenbank ausgeführt
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T21:05:27.788Z
+-- Automatisch generiert am: 2025-10-12T22:53:04.609Z
 
 -- Erstelle Rollen für PostgreSQL
 DO $$
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS system_info (
 -- ========================================
 
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-12T21:05:27.788Z
+-- Generiert am: 2025-10-12T22:53:04.609Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================

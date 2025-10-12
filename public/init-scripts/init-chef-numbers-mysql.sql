@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (MySQL)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T21:05:27.800Z
+-- Automatisch generiert am: 2025-10-12T22:53:04.620Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
