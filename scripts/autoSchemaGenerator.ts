@@ -1863,6 +1863,35 @@ EXCEPTION
 END $$;
 
 -- ========================================
+-- System-Tabellen (ZUERST erstellen!)
+-- ========================================
+
+-- System-Info Tabelle
+CREATE TABLE IF NOT EXISTS system_info (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key TEXT UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
+);
+
+-- Design-Tabelle
+CREATE TABLE IF NOT EXISTS design (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    theme TEXT DEFAULT 'light',
+    primary_color TEXT DEFAULT '#007bff',
+    secondary_color TEXT DEFAULT '#6c757d',
+    accent_color TEXT DEFAULT '#28a745',
+    background_color TEXT DEFAULT '#ffffff',
+    text_color TEXT DEFAULT '#212529',
+    card_color TEXT DEFAULT '#f8f9fa',
+    border_color TEXT DEFAULT '#dee2e6',
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
+);
+
+-- ========================================
 -- Haupt-Tabellen
 -- ========================================
 
@@ -1975,37 +2004,7 @@ END $$;
   script += `    FOR EACH ROW\n`;
   script += `    EXECUTE FUNCTION update_updated_at_column();\n\n`;
 
-  // System-Tabellen
-  script += `-- ========================================\n`;
-  script += `-- System-Tabellen\n`;
-  script += `-- ========================================\n\n`;
-  
-  script += `-- System-Info Tabelle\n`;
-  script += `CREATE TABLE IF NOT EXISTS system_info (\n`;
-  script += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
-  script += `    key TEXT UNIQUE NOT NULL,\n`;
-  script += `    value TEXT NOT NULL,\n`;
-  script += `    description TEXT,\n`;
-  script += `    created_at TIMESTAMP DEFAULT now(),\n`;
-  script += `    updated_at TIMESTAMP DEFAULT now()\n`;
-  script += `);\n\n`;
-  
-  script += `-- Design-Tabelle\n`;
-  script += `CREATE TABLE IF NOT EXISTS design (\n`;
-  script += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
-  script += `    theme TEXT DEFAULT 'light',\n`;
-  script += `    primary_color TEXT DEFAULT '#007bff',\n`;
-  script += `    secondary_color TEXT DEFAULT '#6c757d',\n`;
-  script += `    accent_color TEXT DEFAULT '#28a745',\n`;
-  script += `    background_color TEXT DEFAULT '#ffffff',\n`;
-  script += `    text_color TEXT DEFAULT '#212529',\n`;
-  script += `    card_color TEXT DEFAULT '#f8f9fa',\n`;
-  script += `    border_color TEXT DEFAULT '#dee2e6',\n`;
-  script += `    created_at TIMESTAMP DEFAULT now(),\n`;
-  script += `    updated_at TIMESTAMP DEFAULT now()\n`;
-  script += `);\n\n`;
-
-  // System-Informationen
+  // System-Informationen (Tabellen bereits oben erstellt)
   script += `-- System-Informationen initialisieren\n`;
   script += `INSERT INTO system_info (key, value, description) VALUES\n`;
   script += `    ('schema_version', '${targetVersion}', 'Frontend-synchronisiertes Schema Version'),\n`;

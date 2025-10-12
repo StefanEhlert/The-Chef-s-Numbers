@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (Supabase)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T23:03:20.432Z
+-- Automatisch generiert am: 2025-10-12T23:06:38.943Z
 -- 
 -- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
 -- - Verwendet UUIDs als Primary Keys
@@ -17,6 +17,35 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+
+-- ========================================
+-- System-Tabellen (ZUERST erstellen!)
+-- ========================================
+
+-- System-Info Tabelle
+CREATE TABLE IF NOT EXISTS system_info (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key TEXT UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
+);
+
+-- Design-Tabelle
+CREATE TABLE IF NOT EXISTS design (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    theme TEXT DEFAULT 'light',
+    primary_color TEXT DEFAULT '#007bff',
+    secondary_color TEXT DEFAULT '#6c757d',
+    accent_color TEXT DEFAULT '#28a745',
+    background_color TEXT DEFAULT '#ffffff',
+    text_color TEXT DEFAULT '#212529',
+    card_color TEXT DEFAULT '#f8f9fa',
+    border_color TEXT DEFAULT '#dee2e6',
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
+);
 
 -- ========================================
 -- Haupt-Tabellen
@@ -232,35 +261,6 @@ CREATE TRIGGER update_design_updated_at
     BEFORE UPDATE ON design
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
--- ========================================
--- System-Tabellen
--- ========================================
-
--- System-Info Tabelle
-CREATE TABLE IF NOT EXISTS system_info (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    key TEXT UNIQUE NOT NULL,
-    value TEXT NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP DEFAULT now()
-);
-
--- Design-Tabelle
-CREATE TABLE IF NOT EXISTS design (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    theme TEXT DEFAULT 'light',
-    primary_color TEXT DEFAULT '#007bff',
-    secondary_color TEXT DEFAULT '#6c757d',
-    accent_color TEXT DEFAULT '#28a745',
-    background_color TEXT DEFAULT '#ffffff',
-    text_color TEXT DEFAULT '#212529',
-    card_color TEXT DEFAULT '#f8f9fa',
-    border_color TEXT DEFAULT '#dee2e6',
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP DEFAULT now()
-);
 
 -- System-Informationen initialisieren
 INSERT INTO system_info (key, value, description) VALUES
