@@ -1420,8 +1420,20 @@ class PrismaAdapter implements StorageAdapter {
       transformed.isNew = false;
       transformed.syncStatus = 'synced';
       
-      // Prisma gibt bereits camelCase zurück - keine Konvertierung nötig!
-      // Nur eventuelle JSON-String-Parsing für komplexe Felder
+      // WICHTIG: Konvertiere Prisma Decimal-Objekte zu JavaScript Numbers
+      // Prisma gibt Decimal als spezielle Objekte zurück, die .toFixed() nicht unterstützen
+      const decimalFields = [
+        'bundlePrice', 'content', 'pricePerUnit', 'vatRate',
+        'materialCosts', 'markupPercentage', 'sellingPrice',
+        'menge', 'preis', 'quantity'
+      ];
+      
+      for (const field of decimalFields) {
+        if (transformed[field] !== null && transformed[field] !== undefined) {
+          // Konvertiere Decimal zu Number
+          transformed[field] = Number(transformed[field]);
+        }
+      }
       
       // Parse JSON-Strings falls nötig (sollte normalerweise nicht passieren)
       if (typeof transformed.address === 'string') {
