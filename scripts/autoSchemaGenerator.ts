@@ -1951,11 +1951,27 @@ function generateSupabaseInitScript(definitions: SchemaDefinitions): string {
   script += `    value = EXCLUDED.value,\n`;
   script += `    updated_at = now();\n\n`;
 
+  // Storage Bucket für Bilder
+  script += `-- ========================================\n`;
+  script += `-- Storage Bucket für Bilder\n`;
+  script += `-- ========================================\n`;
+  script += `-- WICHTIG: Storage Buckets werden über das Supabase Dashboard erstellt\n`;
+  script += `-- Oder verwenden Sie die Supabase JS Client API\n`;
+  script += `-- \n`;
+  script += `-- Bucket-Name: chef-numbers-images\n`;
+  script += `-- Public: true (für Bildanzeige)\n`;
+  script += `-- File Size Limit: 5MB\n`;
+  script += `-- Allowed MIME types: image/jpeg, image/png, image/webp\n`;
+  script += `-- \n`;
+  script += `-- Erstellen Sie den Bucket manuell im Supabase Dashboard:\n`;
+  script += `-- Storage → Create a new bucket → Name: "chef-numbers-images"\n\n`;
+
   // RLS Policies (optional - für später)
   script += `-- ========================================\n`;
   script += `-- Row Level Security (RLS) Policies\n`;
   script += `-- ========================================\n`;
   script += `-- HINWEIS: RLS ist standardmäßig DEAKTIVIERT\n`;
+  script += `-- Für Production empfohlen: RLS aktivieren\n`;
   script += `-- Aktivieren Sie RLS nach Bedarf:\n`;
   script += `-- ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;\n`;
   script += `-- CREATE POLICY <policy_name> ON <table_name> ...\n\n`;
@@ -1971,6 +1987,12 @@ function generateSupabaseInitScript(definitions: SchemaDefinitions): string {
   script += `-- Schema-Initialisierung abgeschlossen\n`;
   script += `-- Version: ${targetVersion}\n`;
   script += `-- ========================================\n`;
+  script += `-- \n`;
+  script += `-- NÄCHSTE SCHRITTE:\n`;
+  script += `-- 1. Erstellen Sie den Storage Bucket "chef-numbers-images" im Dashboard\n`;
+  script += `-- 2. Aktivieren Sie RLS Policies wenn gewünscht\n`;
+  script += `-- 3. Testen Sie die Verbindung in Ihrer App\n`;
+  script += `-- \n`;
 
   return script;
 }

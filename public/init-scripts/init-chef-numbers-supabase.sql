@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (Supabase)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T22:53:04.643Z
+-- Automatisch generiert am: 2025-10-12T22:56:05.038Z
 -- 
 -- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
 -- - Verwendet UUIDs als Primary Keys
@@ -199,9 +199,24 @@ ON CONFLICT (key) DO UPDATE SET
     updated_at = now();
 
 -- ========================================
+-- Storage Bucket für Bilder
+-- ========================================
+-- WICHTIG: Storage Buckets werden über das Supabase Dashboard erstellt
+-- Oder verwenden Sie die Supabase JS Client API
+-- 
+-- Bucket-Name: chef-numbers-images
+-- Public: true (für Bildanzeige)
+-- File Size Limit: 5MB
+-- Allowed MIME types: image/jpeg, image/png, image/webp
+-- 
+-- Erstellen Sie den Bucket manuell im Supabase Dashboard:
+-- Storage → Create a new bucket → Name: "chef-numbers-images"
+
+-- ========================================
 -- Row Level Security (RLS) Policies
 -- ========================================
 -- HINWEIS: RLS ist standardmäßig DEAKTIVIERT
+-- Für Production empfohlen: RLS aktivieren
 -- Aktivieren Sie RLS nach Bedarf:
 -- ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;
 -- CREATE POLICY <policy_name> ON <table_name> ...
@@ -222,3 +237,9 @@ ON CONFLICT (key) DO UPDATE SET
 -- Schema-Initialisierung abgeschlossen
 -- Version: 2.2.2
 -- ========================================
+-- 
+-- NÄCHSTE SCHRITTE:
+-- 1. Erstellen Sie den Storage Bucket "chef-numbers-images" im Dashboard
+-- 2. Aktivieren Sie RLS Policies wenn gewünscht
+-- 3. Testen Sie die Verbindung in Ihrer App
+-- 
