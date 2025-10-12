@@ -1895,12 +1895,21 @@ END $$;
         defaultValue = 'DEFAULT gen_random_uuid()';
       } else if (column.name === 'created_at') {
         defaultValue = 'DEFAULT now()';
+      } else if (column.name === 'updated_at') {
+        // updated_at hat kein DEFAULT - wird über Trigger gesetzt
+        defaultValue = '';
       } else if (column.name === 'sync_status') {
         defaultValue = "DEFAULT 'pending'";
       } else if (column.name === 'is_dirty' || column.name === 'is_new') {
         defaultValue = 'DEFAULT false';
       } else if (column.defaultValue !== undefined && column.defaultValue !== null) {
-        if (typeof column.defaultValue === 'string') {
+        // Spezialbehandlung für SQL-Funktionen (nicht in Anführungszeichen)
+        if (typeof column.defaultValue === 'string' && 
+            (column.defaultValue === 'CURRENT_TIMESTAMP' || 
+             column.defaultValue === 'now()' ||
+             column.defaultValue.startsWith('gen_random_uuid'))) {
+          defaultValue = `DEFAULT ${column.defaultValue}`;
+        } else if (typeof column.defaultValue === 'string') {
           defaultValue = `DEFAULT '${column.defaultValue}'`;
         } else {
           defaultValue = `DEFAULT ${column.defaultValue}`;
@@ -1921,6 +1930,50 @@ END $$;
     script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_sync_status ON ${tableName}(sync_status);\n`;
     script += `\n`;
   }
+
+  // Trigger-Funktion für updated_at (einmalig erstellen)
+  script += `-- ========================================\n`;
+  script += `-- Trigger für automatisches updated_at\n`;
+  script += `-- ========================================\n\n`;
+  
+  script += `-- Funktion für updated_at Trigger\n`;
+  script += `CREATE OR REPLACE FUNCTION update_updated_at_column()\n`;
+  script += `RETURNS TRIGGER AS $$\n`;
+  script += `BEGIN\n`;
+  script += `    NEW.updated_at = now();\n`;
+  script += `    RETURN NEW;\n`;
+  script += `END;\n`;
+  script += `$$ language 'plpgsql';\n\n`;
+
+  // Trigger für jede Tabelle mit updated_at
+  for (const [_, definition] of Object.entries(definitions)) {
+    const tableName = definition.tableName;
+    const hasUpdatedAt = definition.columns.some(col => col.name === 'updated_at');
+    
+    if (hasUpdatedAt) {
+      script += `-- Trigger für ${tableName}\n`;
+      script += `DROP TRIGGER IF EXISTS update_${tableName}_updated_at ON ${tableName};\n`;
+      script += `CREATE TRIGGER update_${tableName}_updated_at\n`;
+      script += `    BEFORE UPDATE ON ${tableName}\n`;
+      script += `    FOR EACH ROW\n`;
+      script += `    EXECUTE FUNCTION update_updated_at_column();\n\n`;
+    }
+  }
+
+  // System-Tabellen Trigger
+  script += `-- Trigger für system_info\n`;
+  script += `DROP TRIGGER IF EXISTS update_system_info_updated_at ON system_info;\n`;
+  script += `CREATE TRIGGER update_system_info_updated_at\n`;
+  script += `    BEFORE UPDATE ON system_info\n`;
+  script += `    FOR EACH ROW\n`;
+  script += `    EXECUTE FUNCTION update_updated_at_column();\n\n`;
+
+  script += `-- Trigger für design\n`;
+  script += `DROP TRIGGER IF EXISTS update_design_updated_at ON design;\n`;
+  script += `CREATE TRIGGER update_design_updated_at\n`;
+  script += `    BEFORE UPDATE ON design\n`;
+  script += `    FOR EACH ROW\n`;
+  script += `    EXECUTE FUNCTION update_updated_at_column();\n\n`;
 
   // System-Tabellen
   script += `-- ========================================\n`;

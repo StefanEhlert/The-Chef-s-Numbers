@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (Supabase)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T23:00:52.068Z
+-- Automatisch generiert am: 2025-10-12T23:03:20.432Z
 -- 
 -- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
 -- - Verwendet UUIDs als Primary Keys
@@ -38,7 +38,7 @@ is_dirty BOOLEAN DEFAULT false NULL,
 is_new BOOLEAN DEFAULT false NULL,
 sync_status sync_status_enum DEFAULT 'pending' NULL,
 created_at TIMESTAMP DEFAULT now() NOT NULL,
-updated_at TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT NULL,
+updated_at TIMESTAMP  NOT NULL,
 created_by UUID  NULL,
 updated_by UUID  NULL,
 last_modified_by UUID  NULL
@@ -63,7 +63,7 @@ is_dirty BOOLEAN DEFAULT false NULL,
 is_new BOOLEAN DEFAULT false NULL,
 sync_status sync_status_enum DEFAULT 'pending' NULL,
 created_at TIMESTAMP DEFAULT now() NOT NULL,
-updated_at TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT NULL,
+updated_at TIMESTAMP  NOT NULL,
 created_by UUID  NULL,
 updated_by UUID  NULL,
 last_modified_by UUID  NULL
@@ -99,7 +99,7 @@ is_dirty BOOLEAN DEFAULT false NULL,
 is_new BOOLEAN DEFAULT false NULL,
 sync_status sync_status_enum DEFAULT 'pending' NULL,
 created_at TIMESTAMP DEFAULT now() NOT NULL,
-updated_at TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT NULL,
+updated_at TIMESTAMP  NOT NULL,
 created_by UUID  NULL,
 updated_by UUID  NULL,
 last_modified_by UUID  NULL
@@ -134,7 +134,7 @@ is_dirty BOOLEAN DEFAULT false NULL,
 is_new BOOLEAN DEFAULT false NULL,
 sync_status sync_status_enum DEFAULT 'pending' NULL,
 created_at TIMESTAMP DEFAULT now() NOT NULL,
-updated_at TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT NULL,
+updated_at TIMESTAMP  NOT NULL,
 created_by UUID  NULL,
 updated_by UUID  NULL,
 last_modified_by UUID  NULL
@@ -161,7 +161,7 @@ is_dirty BOOLEAN DEFAULT false NULL,
 is_new BOOLEAN DEFAULT false NULL,
 sync_status sync_status_enum DEFAULT 'pending' NULL,
 created_at TIMESTAMP DEFAULT now() NOT NULL,
-updated_at TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT NULL,
+updated_at TIMESTAMP  NOT NULL,
 created_by UUID  NULL,
 updated_by UUID  NULL,
 last_modified_by UUID  NULL
@@ -170,6 +170,68 @@ last_modified_by UUID  NULL
 -- Indizes für inventuritems
 CREATE INDEX IF NOT EXISTS idx_inventuritems_id ON inventuritems(id);
 CREATE INDEX IF NOT EXISTS idx_inventuritems_sync_status ON inventuritems(sync_status);
+
+-- ========================================
+-- Trigger für automatisches updated_at
+-- ========================================
+
+-- Funktion für updated_at Trigger
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger für einkaufsitems
+DROP TRIGGER IF EXISTS update_einkaufsitems_updated_at ON einkaufsitems;
+CREATE TRIGGER update_einkaufsitems_updated_at
+    BEFORE UPDATE ON einkaufsitems
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger für suppliers
+DROP TRIGGER IF EXISTS update_suppliers_updated_at ON suppliers;
+CREATE TRIGGER update_suppliers_updated_at
+    BEFORE UPDATE ON suppliers
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger für articles
+DROP TRIGGER IF EXISTS update_articles_updated_at ON articles;
+CREATE TRIGGER update_articles_updated_at
+    BEFORE UPDATE ON articles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger für recipes
+DROP TRIGGER IF EXISTS update_recipes_updated_at ON recipes;
+CREATE TRIGGER update_recipes_updated_at
+    BEFORE UPDATE ON recipes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger für inventuritems
+DROP TRIGGER IF EXISTS update_inventuritems_updated_at ON inventuritems;
+CREATE TRIGGER update_inventuritems_updated_at
+    BEFORE UPDATE ON inventuritems
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger für system_info
+DROP TRIGGER IF EXISTS update_system_info_updated_at ON system_info;
+CREATE TRIGGER update_system_info_updated_at
+    BEFORE UPDATE ON system_info
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger für design
+DROP TRIGGER IF EXISTS update_design_updated_at ON design;
+CREATE TRIGGER update_design_updated_at
+    BEFORE UPDATE ON design
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ========================================
 -- System-Tabellen
