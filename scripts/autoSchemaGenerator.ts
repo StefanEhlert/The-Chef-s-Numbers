@@ -1274,8 +1274,13 @@ datasource db {
     for (const column of definition.columns) {
       let prismaType = '';
       
+      // Spezielle Behandlung für bekannte Array-Felder (allergens, additives)
+      // Diese sind in MariaDB als JSON gespeichert, aber werden als Arrays verwendet
+      if (column.name === 'allergens' || column.name === 'additives') {
+        prismaType = 'Json';
+      }
       // Typ-Mapping für Prisma
-      if (column.type === 'UUID' || column.type === 'CHAR(36)') {
+      else if (column.type === 'UUID' || column.type === 'CHAR(36)') {
         prismaType = 'String';
       } else if (column.type === 'TEXT') {
         prismaType = 'String';

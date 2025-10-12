@@ -1,6 +1,6 @@
 // Chef Numbers Prisma Schema
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-10-12T18:44:35.312Z
+// Automatisch generiert am: 2025-10-12T19:17:38.274Z
 
 generator client {
   provider = "prisma-client-js"
@@ -74,8 +74,8 @@ model Article {
   contentEanCode         String? @map("content_ean_code") @db.Text
   pricePerUnit           Decimal? @map("price_per_unit") @db.Decimal(10, 4)
   vatRate                Decimal? @default(19) @map("vat_rate") @db.Decimal(10, 4)
-  allergens              String?
-  additives              String?
+  allergens              Json?
+  additives              Json?
   ingredients            String? @db.Text
   nutritionInfo          Json? @map("nutrition_info")
   openFoodFactsCode      String? @map("open_food_facts_code") @db.Text
@@ -111,7 +111,7 @@ model Recipe {
   vatRate                Decimal? @default(19) @map("vat_rate") @db.Decimal(10, 4)
   sellingPrice           Decimal? @map("selling_price") @db.Decimal(10, 4)
   totalNutritionInfo     Json? @map("total_nutrition_info")
-  allergens              String?
+  allergens              Json?
   notes                  String? @db.Text
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")

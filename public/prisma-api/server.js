@@ -1,6 +1,6 @@
 // Chef Numbers Prisma REST API Server
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-10-12T18:44:35.318Z
+// Automatisch generiert am: 2025-10-12T19:17:38.279Z
 
 const express = require('express');
 const cors = require('cors');

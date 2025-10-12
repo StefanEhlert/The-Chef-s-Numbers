@@ -1,5 +1,5 @@
 // Automatisch generierte Schema-Definitionen aus TypeScript-Interfaces
-// Generiert am: 2025-10-12T18:44:35.283Z
+// Generiert am: 2025-10-12T19:17:38.250Z
 // Automatische Schema-Generierung mit ts-morph
 
 export interface ColumnDefinition {
@@ -978,7 +978,7 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
 };
 
 export const AUTO_GENERATED_SQL: string = `-- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-12T18:44:35.261Z
+-- Generiert am: 2025-10-12T19:17:38.230Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
