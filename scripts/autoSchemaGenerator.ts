@@ -1312,8 +1312,12 @@ datasource db {
         attributes.push('@id');
       }
       
-      // Default Values
-      if (column.defaultValue !== undefined) {
+      // Updated At (hat Vorrang vor Default Values!)
+      if (column.name === 'updated_at') {
+        attributes.push('@updatedAt');
+      }
+      // Default Values (aber NICHT für updated_at!)
+      else if (column.defaultValue !== undefined) {
         if (column.defaultValue === 'gen_random_uuid()') {
           attributes.push('@default(uuid())');
         } else if (column.defaultValue === 'CURRENT_TIMESTAMP') {
@@ -1325,11 +1329,6 @@ datasource db {
         } else {
           attributes.push(`@default(${column.defaultValue})`);
         }
-      }
-      
-      // Updated At
-      if (column.name === 'updated_at') {
-        attributes.push('@updatedAt');
       }
       
       // Field Mapping (wenn camelCase zu snake_case)
@@ -1346,7 +1345,14 @@ datasource db {
       } else if (prismaType === 'Decimal') {
         attributes.push('@db.Decimal(10, 4)');
       } else if (prismaType === 'DateTime') {
-        attributes.push('@db.DateTime');
+        // WICHTIG: Für Felder mit @default(now()) oder @updatedAt verwende TIMESTAMP (nicht DATETIME)
+        // MySQL/MariaDB erlauben nur TIMESTAMP mit DEFAULT CURRENT_TIMESTAMP
+        if (column.name === 'created_at' || column.name === 'updated_at') {
+          // Verwende TIMESTAMP für created_at und updated_at
+          // Kein @db Annotation nötig, Prisma wählt automatisch TIMESTAMP
+        } else {
+          attributes.push('@db.DateTime');
+        }
       }
       
       // Baue die Zeile zusammen

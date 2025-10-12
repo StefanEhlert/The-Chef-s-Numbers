@@ -1,6 +1,6 @@
 // Chef Numbers Prisma Schema
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-10-12T19:17:38.274Z
+// Automatisch generiert am: 2025-10-12T20:38:37.479Z
 
 generator client {
   provider = "prisma-client-js"
@@ -26,8 +26,8 @@ model EinkaufsItem {
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
-  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
   createdBy              String? @map("created_by") @db.VarChar(36)
   updatedBy              String? @map("updated_by") @db.VarChar(36)
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
@@ -49,8 +49,8 @@ model Supplier {
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
-  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
   createdBy              String? @map("created_by") @db.VarChar(36)
   updatedBy              String? @map("updated_by") @db.VarChar(36)
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
@@ -83,8 +83,8 @@ model Article {
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
-  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
   createdBy              String? @map("created_by") @db.VarChar(36)
   updatedBy              String? @map("updated_by") @db.VarChar(36)
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
@@ -116,8 +116,8 @@ model Recipe {
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
-  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
   createdBy              String? @map("created_by") @db.VarChar(36)
   updatedBy              String? @map("updated_by") @db.VarChar(36)
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
@@ -141,8 +141,8 @@ model InventurItem {
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
-  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
   createdBy              String? @map("created_by") @db.VarChar(36)
   updatedBy              String? @map("updated_by") @db.VarChar(36)
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)

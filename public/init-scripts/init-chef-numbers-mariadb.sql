@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (MariaDB)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T19:17:38.262Z
+-- Automatisch generiert am: 2025-10-12T20:38:37.469Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
