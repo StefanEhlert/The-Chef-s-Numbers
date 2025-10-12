@@ -1972,7 +1972,8 @@ const StorageManagement: React.FC = () => {
         postgres: storageManagement.connections.postgres,
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
-        minio: storageManagement.connections.minio
+        minio: storageManagement.connections.minio,
+        supabase: storageManagement.connections.supabase
       };
       
       await sourceStorageLayer.initialize(sourceConfig, connectionData);
@@ -2065,7 +2066,8 @@ const StorageManagement: React.FC = () => {
         postgres: storageManagement.connections.postgres,
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
-        minio: storageManagement.connections.minio
+        minio: storageManagement.connections.minio,
+        supabase: storageManagement.connections.supabase
       };
 
       const initSuccess = await storageLayer.initialize(storageConfig, connectionData);
@@ -2836,7 +2838,8 @@ const StorageManagement: React.FC = () => {
           postgres: storageManagement.connections.postgres,
           mariadb: storageManagement.connections.mariadb,
           mysql: storageManagement.connections.mysql,
-          minio: storageManagement.connections.minio
+          minio: storageManagement.connections.minio,
+          supabase: storageManagement.connections.supabase
         };
         
         await sourceStorageLayer.initialize(sourceConfig, sourceConnectionData);
