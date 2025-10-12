@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (MySQL)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T17:55:26.432Z
+-- Automatisch generiert am: 2025-10-12T18:28:28.194Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -228,14 +228,15 @@ CREATE TABLE IF NOT EXISTS inventory (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
-INSERT INTO system_info (`key`, value, description) VALUES 
-    ('app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
-    ('version', '2.2.2', 'Aktuelle Version'),
-    ('database_created', NOW(), 'Datum der Datenbankerstellung'),
-    ('connection_tested_at', NOW(), 'Letzter Verbindungstest'),
-    ('mysql_version', '2.2.2', 'MySQL Frontend-synchronisiert Version'),
-    ('setup_completed', 'true', 'Initial Setup abgeschlossen'),
-    ('schema_version', '2.2.2', 'Frontend-synchronisiertes Schema - Version 2.2.2')
+-- MariaDB/MySQL benötigt explizite UUIDs für id-Feld
+INSERT INTO system_info (id, `key`, value, description) VALUES 
+    (UUID(), 'app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
+    (UUID(), 'version', '2.2.2', 'Aktuelle Version'),
+    (UUID(), 'database_created', NOW(), 'Datum der Datenbankerstellung'),
+    (UUID(), 'connection_tested_at', NOW(), 'Letzter Verbindungstest'),
+    (UUID(), 'mysql_version', '2.2.2', 'MySQL Frontend-synchronisiert Version'),
+    (UUID(), 'setup_completed', 'true', 'Initial Setup abgeschlossen'),
+    (UUID(), 'schema_version', '2.2.2', 'Frontend-synchronisiertes Schema - Version 2.2.2')
 ON DUPLICATE KEY UPDATE 
     value = VALUES(value),
     updated_at = CURRENT_TIMESTAMP;

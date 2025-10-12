@@ -1,6 +1,6 @@
 // Chef Numbers Prisma Schema
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-10-12T17:55:26.441Z
+// Automatisch generiert am: 2025-10-12T18:28:28.203Z
 
 generator client {
   provider = "prisma-client-js"

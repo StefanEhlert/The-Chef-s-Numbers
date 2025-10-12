@@ -1225,14 +1225,15 @@ CREATE TABLE IF NOT EXISTS inventory (
 
   // System-Informationen
   script += `-- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
-INSERT INTO system_info (\`key\`, value, description) VALUES 
-    ('app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
-    ('version', '${targetVersion}', 'Aktuelle Version'),
-    ('database_created', NOW(), 'Datum der Datenbankerstellung'),
-    ('connection_tested_at', NOW(), 'Letzter Verbindungstest'),
-    ('${dbType.toLowerCase()}_version', '${targetVersion}', '${dbName} Frontend-synchronisiert Version'),
-    ('setup_completed', 'true', 'Initial Setup abgeschlossen'),
-    ('schema_version', '${targetVersion}', 'Frontend-synchronisiertes Schema - Version ${targetVersion}')
+-- MariaDB/MySQL benötigt explizite UUIDs für id-Feld
+INSERT INTO system_info (id, \`key\`, value, description) VALUES 
+    (UUID(), 'app_name', 'The Chef''s Numbers', 'Name der Anwendung'),
+    (UUID(), 'version', '${targetVersion}', 'Aktuelle Version'),
+    (UUID(), 'database_created', NOW(), 'Datum der Datenbankerstellung'),
+    (UUID(), 'connection_tested_at', NOW(), 'Letzter Verbindungstest'),
+    (UUID(), '${dbType.toLowerCase()}_version', '${targetVersion}', '${dbName} Frontend-synchronisiert Version'),
+    (UUID(), 'setup_completed', 'true', 'Initial Setup abgeschlossen'),
+    (UUID(), 'schema_version', '${targetVersion}', 'Frontend-synchronisiertes Schema - Version ${targetVersion}')
 ON DUPLICATE KEY UPDATE 
     value = VALUES(value),
     updated_at = CURRENT_TIMESTAMP;
