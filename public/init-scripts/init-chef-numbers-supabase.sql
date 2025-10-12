@@ -1,11 +1,22 @@
 -- Chef Numbers Database Initialization Script (Supabase)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-12T22:56:05.038Z
+-- Automatisch generiert am: 2025-10-12T23:00:52.068Z
 -- 
 -- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
 -- - Verwendet UUIDs als Primary Keys
 -- - Beinhaltet RLS (Row Level Security) Policies
 -- - Storage Bucket für Bilder wird separat erstellt
+
+-- ========================================
+-- Enum-Typen
+-- ========================================
+
+-- Enum für Sync-Status
+DO $$ BEGIN
+    CREATE TYPE sync_status_enum AS ENUM ('synced', 'pending', 'error', 'conflict');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- ========================================
 -- Haupt-Tabellen

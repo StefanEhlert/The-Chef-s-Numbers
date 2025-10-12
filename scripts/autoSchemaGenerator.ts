@@ -1852,6 +1852,17 @@ function generateSupabaseInitScript(definitions: SchemaDefinitions): string {
 -- - Storage Bucket für Bilder wird separat erstellt
 
 -- ========================================
+-- Enum-Typen
+-- ========================================
+
+-- Enum für Sync-Status
+DO $$ BEGIN
+    CREATE TYPE sync_status_enum AS ENUM ('synced', 'pending', 'error', 'conflict');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- ========================================
 -- Haupt-Tabellen
 -- ========================================
 
