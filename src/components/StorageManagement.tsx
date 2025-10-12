@@ -1867,6 +1867,10 @@ const StorageManagement: React.FC = () => {
     // Starte den Verbindungstest erneut basierend auf dem Service-Type
     if (dockerModalServiceType === 'postgresql') {
       handleConnectionTest();
+    } else if (dockerModalServiceType === 'mariadb') {
+      handleMariaDBConnectionTest();
+    } else if (dockerModalServiceType === 'mysql') {
+      handleMySQLConnectionTest();
     } else if (dockerModalServiceType === 'minio') {
       handleMinIOConnectionTest();
     } else {
@@ -3197,22 +3201,21 @@ const StorageManagement: React.FC = () => {
     const usernameValid = config.username && validateMariaDBUsername(config.username).isValid;
     const passwordValid = config.password && config.password.length > 0;
 
-    // Debug-Log für Validierung
-    console.log('🔍 MariaDB Validierung (streng):', {
-      host: { value: config.host, valid: hostValid, message: config.host ? validateHostname(config.host).message : 'Leer' },
-      port: { value: config.port, valid: portValid, message: config.port ? validatePort(config.port).message : 'Leer' },
-      prismaPort: { value: config.prismaPort, valid: prismaPortValid, message: config.prismaPort ? validatePort(config.prismaPort).message : 'Leer' },
-      database: { value: config.database, valid: databaseValid, message: config.database ? validateMariaDBDatabaseName(config.database).message : 'Leer' },
-      username: { value: config.username, valid: usernameValid, message: config.username ? validateMariaDBUsername(config.username).message : 'Leer' },
-      password: { value: config.password ? '***' : '', valid: passwordValid },
-      allValid: !!(hostValid && portValid && prismaPortValid && databaseValid && usernameValid && passwordValid)
-    });
-
     return !!(hostValid && portValid && prismaPortValid && databaseValid && usernameValid && passwordValid);
   };
 
-  // Berechne MariaDB-Button-Status
-  isMariaDBButtonEnabled = validateMariaDBConfig(storageManagement.connections.mariadb);
+  // Berechne MariaDB-Button-Status (mit useMemo optimiert)
+  isMariaDBButtonEnabled = React.useMemo(
+    () => validateMariaDBConfig(storageManagement.connections.mariadb),
+    [
+      storageManagement.connections.mariadb.host,
+      storageManagement.connections.mariadb.port,
+      storageManagement.connections.mariadb.prismaPort,
+      storageManagement.connections.mariadb.database,
+      storageManagement.connections.mariadb.username,
+      storageManagement.connections.mariadb.password
+    ]
+  );
 
   // MySQL-spezifische Validierungsfunktionen
   const validateMySQLUsername = (username: string): { isValid: boolean; message: string } => {
@@ -3259,8 +3262,18 @@ const StorageManagement: React.FC = () => {
       (config.password || '').trim().length > 0;
   };
 
-  // Berechne MySQL-Button-Status
-  const isMySQLButtonEnabled = validateMySQLConfig(storageManagement.connections.mysql);
+  // Berechne MySQL-Button-Status (mit useMemo optimiert)
+  const isMySQLButtonEnabled = React.useMemo(
+    () => validateMySQLConfig(storageManagement.connections.mysql),
+    [
+      storageManagement.connections.mysql.host,
+      storageManagement.connections.mysql.port,
+      storageManagement.connections.mysql.prismaPort,
+      storageManagement.connections.mysql.database,
+      storageManagement.connections.mysql.username,
+      storageManagement.connections.mysql.password
+    ]
+  );
 
   // MySQL-Verbindungstest (ähnlich MariaDB)
   const performMySQLConnectionTest = async (): Promise<{ success: boolean; message: string; showModal?: boolean }> => {
