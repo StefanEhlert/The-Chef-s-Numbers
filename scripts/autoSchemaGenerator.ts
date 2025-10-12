@@ -1245,6 +1245,369 @@ SELECT 'Frontend-synchronisiertes Schema v${targetVersion} installiert' as schem
   return script;
 }
 
+// Generiere Prisma Schema für MariaDB/MySQL
+function generatePrismaSchema(definitions: SchemaDefinitions): string {
+  const timestamp = new Date().toISOString();
+  const targetVersion = '2.2.2';
+  
+  let schema = `// Chef Numbers Prisma Schema
+// Frontend-synchronisiertes Schema v${targetVersion}
+// Automatisch generiert am: ${timestamp}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+`;
+
+  // Generiere Models für jede Definition
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    schema += `// Model: ${definition.interfaceName}\n`;
+    schema += `model ${definition.interfaceName} {\n`;
+    
+    for (const column of definition.columns) {
+      let prismaType = '';
+      
+      // Typ-Mapping für Prisma
+      if (column.type === 'UUID' || column.type === 'CHAR(36)') {
+        prismaType = 'String';
+      } else if (column.type === 'TEXT') {
+        prismaType = 'String';
+      } else if (column.type === 'DECIMAL') {
+        prismaType = 'Decimal';
+      } else if (column.type === 'INTEGER' || column.type === 'INT') {
+        prismaType = 'Int';
+      } else if (column.type === 'BOOLEAN') {
+        prismaType = 'Boolean';
+      } else if (column.type === 'DATETIME' || column.type === 'TIMESTAMP') {
+        prismaType = 'DateTime';
+      } else if (column.type === 'JSON' || column.type === 'JSONB') {
+        prismaType = 'Json';
+      } else if (column.type.startsWith('ENUM')) {
+        // Für Enums nehmen wir String
+        prismaType = 'String';
+      } else {
+        prismaType = 'String';  // Fallback
+      }
+      
+      // Optional vs Required
+      const optional = column.nullable ? '?' : '';
+      
+      // Attribute
+      const attributes: string[] = [];
+      
+      // Primary Key
+      if (column.primary) {
+        attributes.push('@id');
+      }
+      
+      // Default Values
+      if (column.defaultValue !== undefined) {
+        if (column.defaultValue === 'gen_random_uuid()') {
+          attributes.push('@default(uuid())');
+        } else if (column.defaultValue === 'CURRENT_TIMESTAMP') {
+          attributes.push('@default(now())');
+        } else if (typeof column.defaultValue === 'string') {
+          attributes.push(`@default("${column.defaultValue}")`);
+        } else if (typeof column.defaultValue === 'boolean') {
+          attributes.push(`@default(${column.defaultValue})`);
+        } else {
+          attributes.push(`@default(${column.defaultValue})`);
+        }
+      }
+      
+      // Updated At
+      if (column.name === 'updated_at') {
+        attributes.push('@updatedAt');
+      }
+      
+      // Field Mapping (wenn camelCase zu snake_case)
+      const camelCaseName = column.name.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (camelCaseName !== column.name && column.name !== 'id' && column.name !== 'db_id') {
+        attributes.push(`@map("${column.name}")`);
+      }
+      
+      // DB Type Annotations
+      if (prismaType === 'String' && column.type === 'TEXT') {
+        attributes.push('@db.Text');
+      } else if (prismaType === 'String' && (column.type === 'UUID' || column.type === 'CHAR(36)')) {
+        attributes.push('@db.VarChar(36)');
+      } else if (prismaType === 'Decimal') {
+        attributes.push('@db.Decimal(10, 4)');
+      } else if (prismaType === 'DateTime') {
+        attributes.push('@db.DateTime');
+      }
+      
+      // Baue die Zeile zusammen
+      const fieldName = camelCaseName;
+      const attrString = attributes.length > 0 ? ' ' + attributes.join(' ') : '';
+      schema += `  ${fieldName.padEnd(22)} ${prismaType}${optional}${attrString}\n`;
+    }
+    
+    // Table Mapping
+    schema += `\n  @@map("${definition.tableName}")\n`;
+    schema += `}\n\n`;
+  }
+
+  // System-Tabellen hinzufügen
+  schema += `// System-Tabellen
+
+model SystemInfo {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  key         String   @unique @db.VarChar(100)
+  value       String   @db.Text
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime
+
+  @@map("system_info")
+}
+
+model Design {
+  id              String   @id @default(uuid()) @db.VarChar(36)
+  theme           String?  @default("light") @db.VarChar(50)
+  primaryColor    String?  @default("#007bff") @map("primary_color") @db.VarChar(7)
+  secondaryColor  String?  @default("#6c757d") @map("secondary_color") @db.VarChar(7)
+  accentColor     String?  @default("#28a745") @map("accent_color") @db.VarChar(7)
+  backgroundColor String?  @default("#ffffff") @map("background_color") @db.VarChar(7)
+  textColor       String?  @default("#212529") @map("text_color") @db.VarChar(7)
+  cardColor       String?  @default("#f8f9fa") @map("card_color") @db.VarChar(7)
+  borderColor     String?  @default("#dee2e6") @map("border_color") @db.VarChar(7)
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.DateTime
+
+  @@map("design")
+}
+
+model ShoppingList {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  name      String   @db.Text
+  items     Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime
+
+  @@map("shopping_list")
+}
+
+model Inventory {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  articleId  String?  @map("article_id") @db.VarChar(36)
+  quantity   Decimal  @default(0) @db.Decimal(10, 3)
+  unit       String?  @default("Stück") @db.VarChar(50)
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  location   String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime
+
+  @@map("inventory")
+}
+`;
+
+  return schema;
+}
+
+// Generiere Prisma REST API Server
+function generatePrismaServer(definitions: SchemaDefinitions): string {
+  const timestamp = new Date().toISOString();
+  const targetVersion = '2.2.2';
+  
+  let server = `// Chef Numbers Prisma REST API Server
+// Frontend-synchronisiertes Schema v${targetVersion}
+// Automatisch generiert am: ${timestamp}
+
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const { PrismaClient } = require('@prisma/client');
+const { v4: uuidv4 } = require('uuid');
+
+const app = express();
+const prisma = new PrismaClient();
+const PORT = process.env.PORT || 3001;
+
+// UUID Generator für MariaDB/MySQL (da keine native UUID-Unterstützung)
+const generateUUID = () => {
+  return uuidv4();
+};
+
+// Middleware
+app.use(helmet());
+app.use(compression());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Logging Middleware
+app.use((req, res, next) => {
+  console.log(\`\${new Date().toISOString()} \${req.method} \${req.path}\`);
+  next();
+});
+
+// Health Check
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    version: '${targetVersion}',
+    database: 'connected'
+  });
+});
+
+`;
+
+  // Generiere REST-Endpunkte für jede Tabelle
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    const modelName = interfaceName.charAt(0).toLowerCase() + interfaceName.slice(1);  // z.B. 'article'
+    const tableName = definition.tableName;  // z.B. 'articles'
+    
+    server += `// ========================================
+// ${interfaceName} Routes
+// ========================================
+
+// GET all ${tableName}
+app.get('/api/${tableName}', async (req, res) => {
+  try {
+    const data = await prisma.${modelName}.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von ${tableName}:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von ${tableName}', details: error.message });
+  }
+});
+
+// GET single ${interfaceName}
+app.get('/api/${tableName}/:id', async (req, res) => {
+  try {
+    const data = await prisma.${modelName}.findUnique({
+      where: { dbId: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: '${interfaceName} nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von ${interfaceName}:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von ${interfaceName}', details: error.message });
+  }
+});
+
+// POST new ${interfaceName}
+app.post('/api/${tableName}', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.dbId && !dataToInsert.db_id) {
+      dataToInsert.dbId = generateUUID();
+      console.log(\`🆕 Generiere db_id für neues ${interfaceName}: \${dataToInsert.dbId}\`);
+    }
+    
+    const data = await prisma.${modelName}.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von ${interfaceName}:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von ${interfaceName}', details: error.message });
+  }
+});
+
+// PUT update ${interfaceName}
+app.put('/api/${tableName}/:id', async (req, res) => {
+  try {
+    const data = await prisma.${modelName}.update({
+      where: { dbId: req.params.id },
+      data: req.body
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren von ${interfaceName}:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von ${interfaceName}', details: error.message });
+  }
+});
+
+// DELETE ${interfaceName} (über Frontend-ID oder db_id)
+app.delete('/api/${tableName}', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.${modelName}.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: '${interfaceName} nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von ${interfaceName}:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von ${interfaceName}', details: error.message });
+  }
+});
+
+`;
+  }
+
+  server += `// Error Handling
+app.use((err, req, res, next) => {
+  console.error('Unbehandelter Fehler:', err);
+  res.status(500).json({ error: 'Interner Serverfehler', details: err.message });
+});
+
+// 404 Handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint nicht gefunden' });
+});
+
+// Graceful Shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM empfangen, schließe Prisma Client...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT empfangen, schließe Prisma Client...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+// Start Server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(\`🚀 Prisma API Server läuft auf Port \${PORT}\`);
+  console.log(\`📊 Schema Version: ${targetVersion}\`);
+  console.log(\`🔗 Endpunkte:\`);
+`;
+
+  // Liste alle verfügbaren Endpunkte auf
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    server += `  console.log(\`   - /api/${definition.tableName}\`);\n`;
+  }
+
+  server += `});
+`;
+
+  return server;
+}
+
 // Hauptfunktion
 const main = () => {
   try {
@@ -1358,6 +1721,60 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
     console.log(`  🐘 PostgreSQL: ${postgresInitPath}`);
     console.log(`  🔧 MariaDB: ${mariadbInitPath}`);
     console.log(`  🔧 MySQL: ${mysqlInitPath}`);
+    
+    // Prisma API Dateien generieren
+    const prismaApiDir = path.join(__dirname, '../public/prisma-api');
+    if (!fs.existsSync(prismaApiDir)) {
+      fs.mkdirSync(prismaApiDir, { recursive: true });
+    }
+    
+    // Prisma Schema generieren
+    const prismaSchema = generatePrismaSchema(definitions);
+    const prismaSchemaPath = path.join(prismaApiDir, 'schema.prisma');
+    fs.writeFileSync(prismaSchemaPath, prismaSchema);
+    console.log(`\n✅ Prisma Schema geschrieben: ${prismaSchemaPath}`);
+    
+    // Prisma Server generieren
+    const prismaServer = generatePrismaServer(definitions);
+    const prismaServerPath = path.join(prismaApiDir, 'server.js');
+    fs.writeFileSync(prismaServerPath, prismaServer);
+    console.log(`✅ Prisma Server geschrieben: ${prismaServerPath}`);
+    
+    // Prisma package.json aktualisieren (füge uuid hinzu)
+    const prismaPackageJsonPath = path.join(prismaApiDir, 'package.json');
+    const prismaPackageJson = {
+      "name": "chef-numbers-prisma-api",
+      "version": "2.2.2",
+      "description": "REST API Server für MariaDB/MySQL mit Prisma - Frontend-synchronisiert",
+      "main": "server.js",
+      "scripts": {
+        "start": "node server.js",
+        "dev": "nodemon server.js",
+        "prisma:generate": "prisma generate",
+        "prisma:push": "prisma db push",
+        "prisma:studio": "prisma studio"
+      },
+      "dependencies": {
+        "@prisma/client": "^5.7.0",
+        "express": "^4.18.2",
+        "cors": "^2.8.5",
+        "helmet": "^7.1.0",
+        "compression": "^1.7.4",
+        "uuid": "^9.0.1"
+      },
+      "devDependencies": {
+        "prisma": "^5.7.0",
+        "nodemon": "^3.0.2"
+      },
+      "engines": {
+        "node": ">=18.0.0"
+      }
+    };
+    fs.writeFileSync(prismaPackageJsonPath, JSON.stringify(prismaPackageJson, null, 2));
+    console.log(`✅ Prisma package.json geschrieben: ${prismaPackageJsonPath}`);
+    
+    console.log('\n🎉 Alle Dateien erfolgreich generiert!');
+    console.log(`📦 Prisma API bereit für MariaDB/MySQL`);
     
   } catch (error) {
     console.error('❌ Fehler bei automatischer Schema-Generierung:', error);

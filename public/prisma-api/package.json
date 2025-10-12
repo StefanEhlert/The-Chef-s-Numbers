@@ -1,7 +1,7 @@
 {
   "name": "chef-numbers-prisma-api",
-  "version": "1.0.0",
-  "description": "REST API Server für MariaDB mit Prisma",
+  "version": "2.2.2",
+  "description": "REST API Server für MariaDB/MySQL mit Prisma - Frontend-synchronisiert",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -15,10 +15,8 @@
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3",
-    "express-rate-limit": "^7.1.5",
-    "compression": "^1.7.4"
+    "compression": "^1.7.4",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "prisma": "^5.7.0",

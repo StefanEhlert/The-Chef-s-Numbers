@@ -1,15 +1,22 @@
+// Chef Numbers Prisma REST API Server
+// Frontend-synchronisiertes Schema v2.2.2
+// Automatisch generiert am: 2025-10-12T17:55:26.446Z
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit');
-const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// UUID Generator für MariaDB/MySQL (da keine native UUID-Unterstützung)
+const generateUUID = () => {
+  return uuidv4();
+};
 
 // Middleware
 app.use(helmet());
@@ -21,282 +28,488 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 Minuten
-  max: 1000 // Maximal 1000 Requests pro IP
+// Logging Middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  next();
 });
-app.use(limiter);
-
-// JWT Middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // Health Check
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
+    version: '2.2.2',
     database: 'connected'
   });
 });
 
-// Test Connection Endpoint (für Verbindungstests)
-app.post('/api/test-connection', async (req, res) => {
+// ========================================
+// EinkaufsItem Routes
+// ========================================
+
+// GET all einkaufsitems
+app.get('/api/einkaufsitems', async (req, res) => {
   try {
-    const { host, port, database, username, password } = req.body;
-    
-    console.log('🔍 Teste Datenbankverbindung:', { host, port, database, username: '[HIDDEN]' });
-    
-    // Teste die Verbindung mit den übergebenen Credentials
-    const testPrisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: `mysql://${username}:${password}@${host}:${port}/${database}`
-        }
-      }
+    const data = await prisma.einkaufsItem.findMany({
+      orderBy: { createdAt: 'desc' }
     });
-    
-    // Teste die Verbindung
-    await testPrisma.$connect();
-    
-    // Teste eine einfache Abfrage
-    await testPrisma.$queryRaw`SELECT 1 as test`;
-    
-    // Schließe die Test-Verbindung
-    await testPrisma.$disconnect();
-    
-    console.log('✅ Datenbankverbindung erfolgreich getestet');
-    
-    res.json({ 
-      success: true, 
-      message: `Verbindung zur Datenbank "${database}" erfolgreich`,
-      timestamp: new Date().toISOString()
-    });
-    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Datenbankverbindung fehlgeschlagen:', error);
-    
-    res.status(400).json({ 
-      success: false, 
-      message: `Datenbankverbindung fehlgeschlagen: ${error.message}`,
-      timestamp: new Date().toISOString()
-    });
+    console.error('Fehler beim Laden von einkaufsitems:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von einkaufsitems', details: error.message });
   }
 });
 
-// API Routes
-app.get('/api/artikel', authenticateToken, async (req, res) => {
+// GET single EinkaufsItem
+app.get('/api/einkaufsitems/:id', async (req, res) => {
   try {
-    const artikel = await prisma.artikel.findMany({
-      orderBy: { name: 'asc' }
+    const data = await prisma.einkaufsItem.findUnique({
+      where: { dbId: req.params.id }
     });
-    res.json(artikel);
+    if (!data) {
+      return res.status(404).json({ error: 'EinkaufsItem nicht gefunden' });
+    }
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Laden der Artikel:', error);
-    res.status(500).json({ error: 'Fehler beim Laden der Artikel' });
+    console.error('Fehler beim Laden von EinkaufsItem:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von EinkaufsItem', details: error.message });
   }
 });
 
-app.post('/api/artikel', authenticateToken, async (req, res) => {
+// POST new EinkaufsItem
+app.post('/api/einkaufsitems', async (req, res) => {
   try {
-    const artikel = await prisma.artikel.create({
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.dbId && !dataToInsert.db_id) {
+      dataToInsert.dbId = generateUUID();
+      console.log(`🆕 Generiere db_id für neues EinkaufsItem: ${dataToInsert.dbId}`);
+    }
+    
+    const data = await prisma.einkaufsItem.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von EinkaufsItem:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von EinkaufsItem', details: error.message });
+  }
+});
+
+// PUT update EinkaufsItem
+app.put('/api/einkaufsitems/:id', async (req, res) => {
+  try {
+    const data = await prisma.einkaufsItem.update({
+      where: { dbId: req.params.id },
       data: req.body
     });
-    res.status(201).json(artikel);
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Erstellen des Artikels:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen des Artikels' });
+    console.error('Fehler beim Aktualisieren von EinkaufsItem:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von EinkaufsItem', details: error.message });
   }
 });
 
-app.put('/api/artikel/:id', authenticateToken, async (req, res) => {
+// DELETE EinkaufsItem (über Frontend-ID oder db_id)
+app.delete('/api/einkaufsitems', async (req, res) => {
   try {
-    const artikel = await prisma.artikel.update({
-      where: { id: parseInt(req.params.id) },
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.einkaufsItem.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'EinkaufsItem nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von EinkaufsItem:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von EinkaufsItem', details: error.message });
+  }
+});
+
+// ========================================
+// Supplier Routes
+// ========================================
+
+// GET all suppliers
+app.get('/api/suppliers', async (req, res) => {
+  try {
+    const data = await prisma.supplier.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von suppliers:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von suppliers', details: error.message });
+  }
+});
+
+// GET single Supplier
+app.get('/api/suppliers/:id', async (req, res) => {
+  try {
+    const data = await prisma.supplier.findUnique({
+      where: { dbId: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'Supplier nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von Supplier:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von Supplier', details: error.message });
+  }
+});
+
+// POST new Supplier
+app.post('/api/suppliers', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.dbId && !dataToInsert.db_id) {
+      dataToInsert.dbId = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Supplier: ${dataToInsert.dbId}`);
+    }
+    
+    const data = await prisma.supplier.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von Supplier:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von Supplier', details: error.message });
+  }
+});
+
+// PUT update Supplier
+app.put('/api/suppliers/:id', async (req, res) => {
+  try {
+    const data = await prisma.supplier.update({
+      where: { dbId: req.params.id },
       data: req.body
     });
-    res.json(artikel);
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Aktualisieren des Artikels:', error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren des Artikels' });
+    console.error('Fehler beim Aktualisieren von Supplier:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von Supplier', details: error.message });
   }
 });
 
-app.delete('/api/artikel/:id', authenticateToken, async (req, res) => {
+// DELETE Supplier (über Frontend-ID oder db_id)
+app.delete('/api/suppliers', async (req, res) => {
   try {
-    await prisma.artikel.delete({
-      where: { id: parseInt(req.params.id) }
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.supplier.deleteMany({
+      where: { id: id }
     });
-    res.status(204).send();
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'Supplier nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
   } catch (error) {
-    console.error('Fehler beim Löschen des Artikels:', error);
-    res.status(500).json({ error: 'Fehler beim Löschen des Artikels' });
+    console.error('Fehler beim Löschen von Supplier:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von Supplier', details: error.message });
   }
 });
 
-// Rezepte Routes
-app.get('/api/rezepte', authenticateToken, async (req, res) => {
+// ========================================
+// Article Routes
+// ========================================
+
+// GET all articles
+app.get('/api/articles', async (req, res) => {
   try {
-    const rezepte = await prisma.rezepte.findMany({
-      include: {
-        rezeptZutaten: {
-          include: {
-            artikel: true
-          }
-        }
-      },
-      orderBy: { name: 'asc' }
+    const data = await prisma.article.findMany({
+      orderBy: { createdAt: 'desc' }
     });
-    res.json(rezepte);
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Laden der Rezepte:', error);
-    res.status(500).json({ error: 'Fehler beim Laden der Rezepte' });
+    console.error('Fehler beim Laden von articles:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von articles', details: error.message });
   }
 });
 
-app.post('/api/rezepte', authenticateToken, async (req, res) => {
+// GET single Article
+app.get('/api/articles/:id', async (req, res) => {
   try {
-    const rezept = await prisma.rezepte.create({
+    const data = await prisma.article.findUnique({
+      where: { dbId: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'Article nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von Article:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von Article', details: error.message });
+  }
+});
+
+// POST new Article
+app.post('/api/articles', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.dbId && !dataToInsert.db_id) {
+      dataToInsert.dbId = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Article: ${dataToInsert.dbId}`);
+    }
+    
+    const data = await prisma.article.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von Article:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von Article', details: error.message });
+  }
+});
+
+// PUT update Article
+app.put('/api/articles/:id', async (req, res) => {
+  try {
+    const data = await prisma.article.update({
+      where: { dbId: req.params.id },
       data: req.body
     });
-    res.status(201).json(rezept);
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Erstellen des Rezepts:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen des Rezepts' });
+    console.error('Fehler beim Aktualisieren von Article:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von Article', details: error.message });
   }
 });
 
-// Lieferanten Routes
-app.get('/api/lieferanten', authenticateToken, async (req, res) => {
+// DELETE Article (über Frontend-ID oder db_id)
+app.delete('/api/articles', async (req, res) => {
   try {
-    const lieferanten = await prisma.lieferanten.findMany({
-      orderBy: { name: 'asc' }
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.article.deleteMany({
+      where: { id: id }
     });
-    res.json(lieferanten);
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'Article nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
   } catch (error) {
-    console.error('Fehler beim Laden der Lieferanten:', error);
-    res.status(500).json({ error: 'Fehler beim Laden der Lieferanten' });
+    console.error('Fehler beim Löschen von Article:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von Article', details: error.message });
   }
 });
 
-app.post('/api/lieferanten', authenticateToken, async (req, res) => {
+// ========================================
+// Recipe Routes
+// ========================================
+
+// GET all recipes
+app.get('/api/recipes', async (req, res) => {
   try {
-    const lieferant = await prisma.lieferanten.create({
+    const data = await prisma.recipe.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von recipes:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von recipes', details: error.message });
+  }
+});
+
+// GET single Recipe
+app.get('/api/recipes/:id', async (req, res) => {
+  try {
+    const data = await prisma.recipe.findUnique({
+      where: { dbId: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'Recipe nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von Recipe:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von Recipe', details: error.message });
+  }
+});
+
+// POST new Recipe
+app.post('/api/recipes', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.dbId && !dataToInsert.db_id) {
+      dataToInsert.dbId = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Recipe: ${dataToInsert.dbId}`);
+    }
+    
+    const data = await prisma.recipe.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von Recipe:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von Recipe', details: error.message });
+  }
+});
+
+// PUT update Recipe
+app.put('/api/recipes/:id', async (req, res) => {
+  try {
+    const data = await prisma.recipe.update({
+      where: { dbId: req.params.id },
       data: req.body
     });
-    res.status(201).json(lieferant);
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Erstellen des Lieferanten:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen des Lieferanten' });
+    console.error('Fehler beim Aktualisieren von Recipe:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von Recipe', details: error.message });
   }
 });
 
-// Einkauf Routes
-app.get('/api/einkauf', authenticateToken, async (req, res) => {
+// DELETE Recipe (über Frontend-ID oder db_id)
+app.delete('/api/recipes', async (req, res) => {
   try {
-    const einkauf = await prisma.einkauf.findMany({
-      include: {
-        artikel: true,
-        lieferant: true
-      },
-      orderBy: { datum: 'desc' }
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.recipe.deleteMany({
+      where: { id: id }
     });
-    res.json(einkauf);
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'Recipe nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
   } catch (error) {
-    console.error('Fehler beim Laden der Einkäufe:', error);
-    res.status(500).json({ error: 'Fehler beim Laden der Einkäufe' });
+    console.error('Fehler beim Löschen von Recipe:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von Recipe', details: error.message });
   }
 });
 
-app.post('/api/einkauf', authenticateToken, async (req, res) => {
+// ========================================
+// InventurItem Routes
+// ========================================
+
+// GET all inventuritems
+app.get('/api/inventuritems', async (req, res) => {
   try {
-    const einkauf = await prisma.einkauf.create({
+    const data = await prisma.inventurItem.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von inventuritems:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von inventuritems', details: error.message });
+  }
+});
+
+// GET single InventurItem
+app.get('/api/inventuritems/:id', async (req, res) => {
+  try {
+    const data = await prisma.inventurItem.findUnique({
+      where: { dbId: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'InventurItem nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von InventurItem:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von InventurItem', details: error.message });
+  }
+});
+
+// POST new InventurItem
+app.post('/api/inventuritems', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.dbId && !dataToInsert.db_id) {
+      dataToInsert.dbId = generateUUID();
+      console.log(`🆕 Generiere db_id für neues InventurItem: ${dataToInsert.dbId}`);
+    }
+    
+    const data = await prisma.inventurItem.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von InventurItem:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von InventurItem', details: error.message });
+  }
+});
+
+// PUT update InventurItem
+app.put('/api/inventuritems/:id', async (req, res) => {
+  try {
+    const data = await prisma.inventurItem.update({
+      where: { dbId: req.params.id },
       data: req.body
     });
-    res.status(201).json(einkauf);
+    res.json(data);
   } catch (error) {
-    console.error('Fehler beim Erstellen des Einkaufs:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen des Einkaufs' });
+    console.error('Fehler beim Aktualisieren von InventurItem:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von InventurItem', details: error.message });
   }
 });
 
-// Inventur Routes
-app.get('/api/inventur', authenticateToken, async (req, res) => {
+// DELETE InventurItem (über Frontend-ID oder db_id)
+app.delete('/api/inventuritems', async (req, res) => {
   try {
-    const inventur = await prisma.inventur.findMany({
-      include: {
-        artikel: true
-      },
-      orderBy: { datum: 'desc' }
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.inventurItem.deleteMany({
+      where: { id: id }
     });
-    res.json(inventur);
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'InventurItem nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
   } catch (error) {
-    console.error('Fehler beim Laden der Inventur:', error);
-    res.status(500).json({ error: 'Fehler beim Laden der Inventur' });
-  }
-});
-
-app.post('/api/inventur', authenticateToken, async (req, res) => {
-  try {
-    const inventur = await prisma.inventur.create({
-      data: req.body
-    });
-    res.status(201).json(inventur);
-  } catch (error) {
-    console.error('Fehler beim Erstellen der Inventur:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen der Inventur' });
-  }
-});
-
-// Kalkulation Routes
-app.get('/api/kalkulation', authenticateToken, async (req, res) => {
-  try {
-    const kalkulation = await prisma.kalkulation.findMany({
-      include: {
-        rezept: true
-      },
-      orderBy: { datum: 'desc' }
-    });
-    res.json(kalkulation);
-  } catch (error) {
-    console.error('Fehler beim Laden der Kalkulationen:', error);
-    res.status(500).json({ error: 'Fehler beim Laden der Kalkulationen' });
-  }
-});
-
-app.post('/api/kalkulation', authenticateToken, async (req, res) => {
-  try {
-    const kalkulation = await prisma.kalkulation.create({
-      data: req.body
-    });
-    res.status(201).json(kalkulation);
-  } catch (error) {
-    console.error('Fehler beim Erstellen der Kalkulation:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen der Kalkulation' });
+    console.error('Fehler beim Löschen von InventurItem:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von InventurItem', details: error.message });
   }
 });
 
 // Error Handling
 app.use((err, req, res, next) => {
   console.error('Unbehandelter Fehler:', err);
-  res.status(500).json({ error: 'Interner Serverfehler' });
+  res.status(500).json({ error: 'Interner Serverfehler', details: err.message });
 });
 
 // 404 Handler
@@ -320,6 +533,11 @@ process.on('SIGINT', async () => {
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prisma API Server läuft auf Port ${PORT}`);
-  console.log(`📊 Datenbank: MariaDB`);
-  console.log(`🔐 JWT Secret: ${JWT_SECRET ? 'Gesetzt' : 'Nicht gesetzt'}`);
+  console.log(`📊 Schema Version: 2.2.2`);
+  console.log(`🔗 Endpunkte:`);
+  console.log(`   - /api/einkaufsitems`);
+  console.log(`   - /api/suppliers`);
+  console.log(`   - /api/articles`);
+  console.log(`   - /api/recipes`);
+  console.log(`   - /api/inventuritems`);
 });
