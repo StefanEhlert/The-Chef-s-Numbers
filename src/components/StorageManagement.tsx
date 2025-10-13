@@ -10503,12 +10503,6 @@ const StorageManagement: React.FC = () => {
                           Klicken Sie auf <strong>"Create database"</strong> oder <strong>"Get started"</strong>
                         </li>
                         <li className="mb-2">
-                          Wählen Sie <strong>"Start in production mode"</strong> (wir konfigurieren die Regeln später)
-                        </li>
-                        <li className="mb-2">
-                          Klicken Sie auf <strong>"Next"</strong> oder <strong>"Weiter"</strong>
-                        </li>
-                        <li className="mb-2">
                           <strong>Version auswählen:</strong> Lassen Sie die Standard-Version (meist "Firestore Native") aktiviert
                         </li>
                         <li className="mb-2">
@@ -10526,7 +10520,13 @@ const StorageManagement: React.FC = () => {
                           </ul>
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf <strong>"Konfigurieren"</strong> / <strong>"Configure"</strong> oder <strong>"Erstellen"</strong> / <strong>"Create"</strong>
+                          Klicken Sie auf <strong>"Weiter"</strong> / <strong>"Next"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie <strong>"Start in production mode"</strong> / <strong>"Im Produktionsmodus starten"</strong> (wir konfigurieren die Regeln später)
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Erstellen"</strong> / <strong>"Create"</strong>
                         </li>
                         <li>
                           Warten Sie ca. 30-60 Sekunden, bis die Datenbank bereitgestellt ist ⏱️
