@@ -1932,8 +1932,9 @@ class FirebaseAdapter implements StorageAdapter {
 
   // Initialisiere Firebase (lazy loading)
   private async initializeFirebase() {
-    if (this.app) {
-      return; // Bereits initialisiert
+    if (this.app && this.db && this.storage) {
+      console.log('🔥 Firebase bereits initialisiert - verwende existierende Instanz');
+      return; // Bereits initialisiert und ready
     }
 
     try {
@@ -1941,12 +1942,6 @@ class FirebaseAdapter implements StorageAdapter {
       const { initializeApp, getApps, deleteApp } = await import('firebase/app');
       const { getFirestore } = await import('firebase/firestore');
       const { getStorage } = await import('firebase/storage');
-
-      // Lösche existierende App-Instanzen
-      const existingApps = getApps();
-      for (const existingApp of existingApps) {
-        await deleteApp(existingApp);
-      }
 
       // Firebase Config
       const firebaseConfig = {
@@ -1958,12 +1953,35 @@ class FirebaseAdapter implements StorageAdapter {
         appId: this.connectionData.appId
       };
 
-      // Initialisiere Firebase
+      // Prüfe ob bereits eine App mit dieser Config existiert
+      const existingApps = getApps();
+      const existingApp = existingApps.find(app => 
+        app.options.projectId === firebaseConfig.projectId &&
+        app.options.appId === firebaseConfig.appId
+      );
+
+      if (existingApp) {
+        console.log('🔥 Verwende existierende Firebase App:', firebaseConfig.projectId);
+        this.app = existingApp;
+        this.db = getFirestore(this.app);
+        this.storage = getStorage(this.app);
+        return;
+      }
+
+      // Lösche nur Apps mit ANDERER Config (für sauberes Re-Init bei Config-Wechsel)
+      for (const app of existingApps) {
+        if (app.options.projectId !== firebaseConfig.projectId) {
+          console.log('🗑️ Lösche Firebase App mit anderer Config:', app.options.projectId);
+          await deleteApp(app);
+        }
+      }
+
+      // Initialisiere neue Firebase App
       this.app = initializeApp(firebaseConfig);
       this.db = getFirestore(this.app);
       this.storage = getStorage(this.app);
 
-      console.log('✅ Firebase initialisiert:', firebaseConfig.projectId);
+      console.log('✅ Firebase NEU initialisiert:', firebaseConfig.projectId);
     } catch (error) {
       console.error('❌ Firebase Initialisierung fehlgeschlagen:', error);
       throw error;
