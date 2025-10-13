@@ -10506,13 +10506,27 @@ const StorageManagement: React.FC = () => {
                           Wählen Sie <strong>"Start in production mode"</strong> (wir konfigurieren die Regeln später)
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf <strong>"Next"</strong>
+                          Klicken Sie auf <strong>"Next"</strong> oder <strong>"Weiter"</strong>
                         </li>
                         <li className="mb-2">
-                          Wählen Sie einen <strong>Standort</strong> (z.B. "europe-west3" für Frankfurt oder "eur3" für Europa)
+                          <strong>Version auswählen:</strong> Lassen Sie die Standard-Version (meist "Firestore Native") aktiviert
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf <strong>"Enable"</strong>
+                          <strong>Datenbank-ID:</strong> Lassen Sie die Standard-ID (meist "(default)") oder geben Sie einen eigenen Namen ein
+                        </li>
+                        <li className="mb-2">
+                          <strong>Speicherort wählen:</strong> Wählen Sie eine Region in Ihrer Nähe:
+                          <ul className="mt-2">
+                            <li className="mb-1">
+                              <strong>Europa:</strong> "europe-west3" (Frankfurt), "europe-west1" (Belgien), oder "eur3" (Multi-Region Europa)
+                            </li>
+                            <li className="mb-1">
+                              <strong>USA:</strong> "us-central1", "us-east1", oder "nam5" (Multi-Region Nord-Amerika)
+                            </li>
+                          </ul>
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Konfigurieren"</strong> / <strong>"Configure"</strong> oder <strong>"Erstellen"</strong> / <strong>"Create"</strong>
                         </li>
                         <li>
                           Warten Sie ca. 30-60 Sekunden, bis die Datenbank bereitgestellt ist ⏱️
