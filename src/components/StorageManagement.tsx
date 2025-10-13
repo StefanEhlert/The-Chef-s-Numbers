@@ -10486,10 +10486,21 @@ const StorageManagement: React.FC = () => {
                           Klicken Sie in der Firebase Console auf <strong>"Continue to console"</strong> (oder navigieren Sie zur Projekt-Übersicht)
                         </li>
                         <li className="mb-2">
-                          Klicken Sie in der linken Seitenleiste auf <strong>"Build"</strong> → <strong>"Firestore Database"</strong>
+                          Suchen Sie in der linken Seitenleiste nach <strong>"Firestore Database"</strong>:
+                          <ul className="mt-2">
+                            <li className="mb-1">
+                              <strong>Variante 1:</strong> Direkt unter "Build" → "Firestore Database" (falls verfügbar)
+                            </li>
+                            <li className="mb-1">
+                              <strong>Variante 2:</strong> Klicken Sie auf "All products" / "Alle Produkte" → Suchen Sie "Firestore Database"
+                            </li>
+                            <li className="mb-1">
+                              <strong>Variante 3:</strong> Scrollen Sie in der linken Seitenleiste nach unten und suchen Sie direkt nach "Firestore Database"
+                            </li>
+                          </ul>
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf <strong>"Create database"</strong>
+                          Klicken Sie auf <strong>"Create database"</strong> oder <strong>"Get started"</strong>
                         </li>
                         <li className="mb-2">
                           Wählen Sie <strong>"Start in production mode"</strong> (wir konfigurieren die Regeln später)
@@ -10498,7 +10509,7 @@ const StorageManagement: React.FC = () => {
                           Klicken Sie auf <strong>"Next"</strong>
                         </li>
                         <li className="mb-2">
-                          Wählen Sie einen <strong>Standort</strong> (z.B. "europe-west3" für Frankfurt)
+                          Wählen Sie einen <strong>Standort</strong> (z.B. "europe-west3" für Frankfurt oder "eur3" für Europa)
                         </li>
                         <li className="mb-2">
                           Klicken Sie auf <strong>"Enable"</strong>
@@ -10517,7 +10528,18 @@ const StorageManagement: React.FC = () => {
                       </h6>
                       <ol className="mt-3" style={{ paddingLeft: '20px' }}>
                         <li className="mb-2">
-                          Klicken Sie in der linken Seitenleiste auf <strong>"Build"</strong> → <strong>"Storage"</strong>
+                          Suchen Sie in der linken Seitenleiste nach <strong>"Storage"</strong>:
+                          <ul className="mt-2">
+                            <li className="mb-1">
+                              <strong>Variante 1:</strong> Direkt unter "Build" → "Storage" (falls verfügbar)
+                            </li>
+                            <li className="mb-1">
+                              <strong>Variante 2:</strong> Über "All products" / "Alle Produkte" → "Storage"
+                            </li>
+                            <li className="mb-1">
+                              <strong>Variante 3:</strong> Direkt in der Seitenleiste scrollen und "Storage" suchen
+                            </li>
+                          </ul>
                         </li>
                         <li className="mb-2">
                           Klicken Sie auf <strong>"Get started"</strong>
