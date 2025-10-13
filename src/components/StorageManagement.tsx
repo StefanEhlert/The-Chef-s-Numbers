@@ -239,6 +239,14 @@ const StorageManagement: React.FC = () => {
     checking: boolean;
     message: string;
   }>({ exists: false, checking: false, message: '' });
+  
+  // Firebase-States
+  const [firebaseButtonState, setFirebaseButtonState] = useState<'test' | 'init' | 'update' | 'testing' | 'initializing'>('test');
+  const [firebaseBucketStatus, setFirebaseBucketStatus] = useState<{
+    exists: boolean;
+    checking: boolean;
+    message: string;
+  }>({ exists: false, checking: false, message: '' });
   const [dataTransferProgress, setDataTransferProgress] = useState<{
     current: number;
     total: number;
@@ -264,10 +272,19 @@ const StorageManagement: React.FC = () => {
   const [backupCompleted, setBackupCompleted] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [showSupabaseSetupModal, setShowSupabaseSetupModal] = useState(false);
+  const [showFirebaseSetupModal, setShowFirebaseSetupModal] = useState(false);
   const [supabaseSetupData, setSupabaseSetupData] = useState({
     url: '',
     anonKey: '',
     serviceRoleKey: ''
+  });
+  const [firebaseSetupData, setFirebaseSetupData] = useState({
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    storageBucket: '',
+    messagingSenderId: '',
+    appId: ''
   });
   const [showSupabaseSQLModal, setShowSupabaseSQLModal] = useState(false);
   const [supabaseSQLEditorUrl, setSupabaseSQLEditorUrl] = useState('');
@@ -3565,6 +3582,127 @@ const StorageManagement: React.FC = () => {
       storageManagement.connections.supabase.url,
       storageManagement.connections.supabase.anonKey,
       storageManagement.connections.supabase.serviceRoleKey
+    ]
+  );
+
+  // Firebase-spezifische Validierungsfunktionen
+  const validateFirebaseApiKey = (apiKey: string): { isValid: boolean; message: string } => {
+    if (!apiKey.trim()) {
+      return { isValid: false, message: 'Firebase API Key ist erforderlich' };
+    }
+
+    // Firebase API Keys beginnen typischerweise mit "AIza" und sind ca. 39 Zeichen lang
+    if (!apiKey.startsWith('AIza')) {
+      return { isValid: false, message: 'Ungültiger Firebase API Key. Keys beginnen mit "AIza"' };
+    }
+
+    if (apiKey.length < 30) {
+      return { isValid: false, message: 'API Key zu kurz. Firebase API Keys sind normalerweise 39 Zeichen lang' };
+    }
+
+    return { isValid: true, message: '✓ Gültiger Firebase API Key' };
+  };
+
+  const validateFirebaseAuthDomain = (authDomain: string): { isValid: boolean; message: string } => {
+    if (!authDomain.trim()) {
+      return { isValid: false, message: 'Firebase Auth Domain ist erforderlich' };
+    }
+
+    // Firebase Auth Domains haben das Format: xxxxx.firebaseapp.com
+    const authDomainRegex = /^[a-z0-9-]+\.firebaseapp\.com$/;
+    
+    if (!authDomainRegex.test(authDomain)) {
+      return { isValid: false, message: 'Ungültige Auth Domain. Format: xxxxx.firebaseapp.com' };
+    }
+
+    return { isValid: true, message: '✓ Gültige Firebase Auth Domain' };
+  };
+
+  const validateFirebaseProjectId = (projectId: string): { isValid: boolean; message: string } => {
+    if (!projectId.trim()) {
+      return { isValid: false, message: 'Firebase Project ID ist erforderlich' };
+    }
+
+    // Project IDs sind lowercase alphanumerisch mit Bindestrichen
+    const projectIdRegex = /^[a-z0-9-]+$/;
+    
+    if (!projectIdRegex.test(projectId)) {
+      return { isValid: false, message: 'Ungültige Project ID. Nur Kleinbuchstaben, Zahlen und Bindestriche erlaubt' };
+    }
+
+    if (projectId.length < 6) {
+      return { isValid: false, message: 'Project ID zu kurz (mindestens 6 Zeichen)' };
+    }
+
+    return { isValid: true, message: '✓ Gültige Firebase Project ID' };
+  };
+
+  const validateFirebaseStorageBucket = (storageBucket: string): { isValid: boolean; message: string } => {
+    if (!storageBucket.trim()) {
+      return { isValid: false, message: 'Firebase Storage Bucket ist erforderlich' };
+    }
+
+    // Storage Buckets haben das Format: xxxxx.appspot.com oder xxxxx.firebasestorage.app
+    const bucketRegex = /^[a-z0-9-]+\.(appspot\.com|firebasestorage\.app)$/;
+    
+    if (!bucketRegex.test(storageBucket)) {
+      return { isValid: false, message: 'Ungültiger Storage Bucket. Format: xxxxx.appspot.com' };
+    }
+
+    return { isValid: true, message: '✓ Gültiger Firebase Storage Bucket' };
+  };
+
+  const validateFirebaseMessagingSenderId = (senderId: string): { isValid: boolean; message: string } => {
+    if (!senderId.trim()) {
+      return { isValid: false, message: 'Firebase Messaging Sender ID ist erforderlich' };
+    }
+
+    // Messaging Sender IDs sind numerisch, typischerweise 12 Ziffern
+    const senderIdRegex = /^\d{10,15}$/;
+    
+    if (!senderIdRegex.test(senderId)) {
+      return { isValid: false, message: 'Ungültige Sender ID. Nur Zahlen (10-15 Ziffern)' };
+    }
+
+    return { isValid: true, message: '✓ Gültige Firebase Messaging Sender ID' };
+  };
+
+  const validateFirebaseAppId = (appId: string): { isValid: boolean; message: string } => {
+    if (!appId.trim()) {
+      return { isValid: false, message: 'Firebase App ID ist erforderlich' };
+    }
+
+    // Firebase App IDs haben das Format: 1:123456789:web:abcdef123456
+    const appIdRegex = /^1:\d+:web:[a-f0-9]+$/;
+    
+    if (!appIdRegex.test(appId)) {
+      return { isValid: false, message: 'Ungültige App ID. Format: 1:123456789:web:abcdef123456' };
+    }
+
+    return { isValid: true, message: '✓ Gültige Firebase App ID' };
+  };
+
+  const validateFirebaseConfig = (config: any): boolean => {
+    if (!config) return false;
+
+    return validateFirebaseApiKey(config.apiKey || '').isValid &&
+      validateFirebaseAuthDomain(config.authDomain || '').isValid &&
+      validateFirebaseProjectId(config.projectId || '').isValid &&
+      validateFirebaseStorageBucket(config.storageBucket || '').isValid &&
+      validateFirebaseMessagingSenderId(config.messagingSenderId || '').isValid &&
+      validateFirebaseAppId(config.appId || '').isValid;
+  };
+
+  // Berechne Firebase-Button-Status (mit useMemo optimiert)
+  const isFirebaseButtonEnabled = React.useMemo(
+    () => validateFirebaseConfig(storageManagement.connections.firebase),
+    [
+      storageManagement.connections.firebase.apiKey,
+      storageManagement.connections.firebase.authDomain,
+      storageManagement.connections.firebase.projectId,
+      storageManagement.connections.firebase.storageBucket,
+      storageManagement.connections.firebase.messagingSenderId,
+      storageManagement.connections.firebase.appId
     ]
   );
 
@@ -7502,6 +7640,393 @@ const StorageManagement: React.FC = () => {
             </div>
           )}
 
+          {/* Firebase-Konfiguration */}
+          {firebaseSectionVisible && (
+            <div className={`card mb-4 storage-section ${firebaseSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
+              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+                <h5 className="mb-0" style={{ color: colors.text }}>
+                  <FaCloud className="me-2" />
+                  Firebase-Konfiguration
+                </h5>
+              </div>
+              <div className="card-body" style={{ padding: '20px' }}>
+                {/* Info-Banner */}
+                <div className="alert alert-info mb-4" style={{ backgroundColor: '#FF980020', borderColor: '#FF9800' }}>
+                  <FaInfoCircle className="me-2" />
+                  <strong>Firebase Cloud:</strong> Vollständig verwaltete Firestore NoSQL-Datenbank und Cloud Storage.
+                  <br />
+                  <small>
+                    Erstellen Sie ein kostenloses Projekt auf <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#FF9800' }}>console.firebase.google.com</a>
+                    {' '} · {' '}
+                    <a 
+                      href="#" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowFirebaseSetupModal(true);
+                      }} 
+                      style={{ color: '#ff5722', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Setup-Anleitung anzeigen
+                    </a>
+                  </small>
+                </div>
+
+                <div className="row">
+                  {/* API Key */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaKey className="me-2" style={{ color: '#FF9800' }} />
+                        API Key
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type={showPasswords.firebaseApiKey ? 'text' : 'password'}
+                          className={`form-control ${storageManagement.connections.firebase.apiKey && !validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).isValid ? 'is-invalid' : ''}`}
+                          value={storageManagement.connections.firebase.apiKey}
+                          onChange={(e) => updateConnection('firebase', { apiKey: e.target.value })}
+                          placeholder="AIzaSy..."
+                          style={{
+                            backgroundColor: !storageManagement.connections.firebase.apiKey ? colors.accent + '20' : undefined,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease',
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                          }}
+                        />
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() => togglePasswordVisibility('firebaseApiKey')}
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            backgroundColor: colors.card
+                          }}
+                          title={showPasswords.firebaseApiKey ? 'Key verbergen' : 'Key anzeigen'}
+                        >
+                          {showPasswords.firebaseApiKey ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                      </div>
+                      {storageManagement.connections.firebase.apiKey && validationMessages['firebase-apiKey'] && !validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.firebase.apiKey && validationMessages['firebase-apiKey'] && validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Auth Domain */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaCloud className="me-2" style={{ color: '#FF9800' }} />
+                        Auth Domain
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${storageManagement.connections.firebase.authDomain && !validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).isValid ? 'is-invalid' : ''}`}
+                        value={storageManagement.connections.firebase.authDomain}
+                        onChange={(e) => updateConnection('firebase', { authDomain: e.target.value })}
+                        placeholder="your-app.firebaseapp.com"
+                        style={{
+                          backgroundColor: !storageManagement.connections.firebase.authDomain ? colors.accent + '20' : undefined,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          transition: 'all 0.2s ease',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.cardBorder;
+                        }}
+                      />
+                      {storageManagement.connections.firebase.authDomain && validationMessages['firebase-authDomain'] && !validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.firebase.authDomain && validationMessages['firebase-authDomain'] && validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Project ID */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaDatabase className="me-2" style={{ color: '#FF9800' }} />
+                        Project ID
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${storageManagement.connections.firebase.projectId && !validateFirebaseProjectId(storageManagement.connections.firebase.projectId).isValid ? 'is-invalid' : ''}`}
+                        value={storageManagement.connections.firebase.projectId}
+                        onChange={(e) => updateConnection('firebase', { projectId: e.target.value })}
+                        placeholder="your-project-id"
+                        style={{
+                          backgroundColor: !storageManagement.connections.firebase.projectId ? colors.accent + '20' : undefined,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          transition: 'all 0.2s ease',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.cardBorder;
+                        }}
+                      />
+                      {storageManagement.connections.firebase.projectId && validationMessages['firebase-projectId'] && !validateFirebaseProjectId(storageManagement.connections.firebase.projectId).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseProjectId(storageManagement.connections.firebase.projectId).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.firebase.projectId && validationMessages['firebase-projectId'] && validateFirebaseProjectId(storageManagement.connections.firebase.projectId).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseProjectId(storageManagement.connections.firebase.projectId).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Storage Bucket */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaFolder className="me-2" style={{ color: '#FF9800' }} />
+                        Storage Bucket
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${storageManagement.connections.firebase.storageBucket && !validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).isValid ? 'is-invalid' : ''}`}
+                        value={storageManagement.connections.firebase.storageBucket}
+                        onChange={(e) => updateConnection('firebase', { storageBucket: e.target.value })}
+                        placeholder="your-app.appspot.com"
+                        style={{
+                          backgroundColor: !storageManagement.connections.firebase.storageBucket ? colors.accent + '20' : undefined,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          transition: 'all 0.2s ease',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.cardBorder;
+                        }}
+                      />
+                      {storageManagement.connections.firebase.storageBucket && validationMessages['firebase-storageBucket'] && !validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.firebase.storageBucket && validationMessages['firebase-storageBucket'] && validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Messaging Sender ID */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaNetworkWired className="me-2" style={{ color: '#FF9800' }} />
+                        Messaging Sender ID
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${storageManagement.connections.firebase.messagingSenderId && !validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).isValid ? 'is-invalid' : ''}`}
+                        value={storageManagement.connections.firebase.messagingSenderId}
+                        onChange={(e) => updateConnection('firebase', { messagingSenderId: e.target.value })}
+                        placeholder="123456789012"
+                        style={{
+                          backgroundColor: !storageManagement.connections.firebase.messagingSenderId ? colors.accent + '20' : undefined,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          transition: 'all 0.2s ease',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.cardBorder;
+                        }}
+                      />
+                      {storageManagement.connections.firebase.messagingSenderId && validationMessages['firebase-messagingSenderId'] && !validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.firebase.messagingSenderId && validationMessages['firebase-messagingSenderId'] && validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* App ID */}
+                  <div className="col-12">
+                    <div className="mb-3">
+                      <label className="form-label">
+                        <FaKey className="me-2" style={{ color: '#FF9800' }} />
+                        App ID
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${storageManagement.connections.firebase.appId && !validateFirebaseAppId(storageManagement.connections.firebase.appId).isValid ? 'is-invalid' : ''}`}
+                        value={storageManagement.connections.firebase.appId}
+                        onChange={(e) => updateConnection('firebase', { appId: e.target.value })}
+                        placeholder="1:123456789:web:abcdef123456"
+                        style={{
+                          backgroundColor: !storageManagement.connections.firebase.appId ? colors.accent + '20' : undefined,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          transition: 'all 0.2s ease',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = colors.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = colors.cardBorder;
+                        }}
+                      />
+                      {storageManagement.connections.firebase.appId && validationMessages['firebase-appId'] && !validateFirebaseAppId(storageManagement.connections.firebase.appId).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseAppId(storageManagement.connections.firebase.appId).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.firebase.appId && validationMessages['firebase-appId'] && validateFirebaseAppId(storageManagement.connections.firebase.appId).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateFirebaseAppId(storageManagement.connections.firebase.appId).message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verbindungsstatus und Test-Button */}
+                <div className="mt-4">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div className="d-flex align-items-center">
+                      <FaWifi className="me-2" style={{ color: colors.textSecondary }} />
+                      <span style={{ color: colors.text }}>
+                        Verbindungsstatus:
+                        <span className={`ms-2 ${
+                          storageManagement.connections.firebase.connectionStatus
+                            ? 'text-success'
+                            : 'text-danger'
+                        }`}>
+                          {storageManagement.connections.firebase.connectionStatus ? 'Verbunden' : 'Nicht verbunden'}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-outline-secondary"
+                        onClick={() => window.open('https://console.firebase.google.com', '_blank')}
+                        style={{
+                          borderColor: '#FF9800',
+                          color: '#FF9800'
+                        }}
+                        title="Firebase Console öffnen"
+                      >
+                        <FaExternalLinkAlt className="me-1" />
+                        Console
+                      </button>
+                      <button
+                        className={`btn ${isFirebaseButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={() => {
+                          console.log('🔥 Firebase Verbindungstest gestartet');
+                          // TODO: handleFirebaseConnectionTest implementieren
+                        }}
+                        disabled={!isFirebaseButtonEnabled}
+                        style={{
+                          opacity: !isFirebaseButtonEnabled ? 0.6 : 1,
+                          cursor: !isFirebaseButtonEnabled ? 'not-allowed' : 'pointer'
+                        }}
+                        title={
+                          isFirebaseButtonEnabled
+                            ? 'Firebase-Verbindung testen'
+                            : 'Alle Felder müssen gültig ausgefüllt sein'
+                        }
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Testmeldungen anzeigen */}
+                  {storageManagement.connections.firebase.testMessage && (
+                    <div className="mt-3">
+                      <div
+                        className="alert alert-info"
+                        style={{
+                          backgroundColor: colors.card,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          fontSize: '0.875em',
+                          marginBottom: '0'
+                        }}
+                      >
+                        <div className="d-flex align-items-start">
+                          <FaInfoCircle className="me-2 mt-1" style={{ flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <pre style={{
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              fontFamily: 'inherit',
+                              fontSize: 'inherit'
+                            }}>
+                              {storageManagement.connections.firebase.testMessage}
+                            </pre>
+                            {storageManagement.connections.firebase.lastTested && (
+                              <div className="mt-2">
+                                <small className="text-muted">
+                                  {new Date(storageManagement.connections.firebase.lastTested).toLocaleString('de-DE')}
+                                </small>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* MinIO-Konfiguration - nur anzeigen wenn nicht lokal und nicht Browser-Speicher */}
           {minioSectionVisible && (
             <div className={`card mb-4 storage-section ${minioSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
@@ -9528,6 +10053,567 @@ const StorageManagement: React.FC = () => {
                       onClick={() => {
                         setShowSupabaseSetupModal(false);
                         setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
+                      }}
+                    >
+                      Schließen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Firebase Setup-Anleitung Modal */}
+          {showFirebaseSetupModal && (
+            <div 
+              className="modal fade show" 
+              style={{ 
+                display: 'block', 
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                zIndex: 9999 
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowFirebaseSetupModal(false);
+                  setFirebaseSetupData({ 
+                    apiKey: '', 
+                    authDomain: '', 
+                    projectId: '', 
+                    storageBucket: '', 
+                    messagingSenderId: '', 
+                    appId: '' 
+                  });
+                }
+              }}
+            >
+              <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                <div 
+                  className="modal-content" 
+                  style={{ 
+                    backgroundColor: colors.background, 
+                    color: colors.text,
+                    border: `1px solid ${colors.cardBorder}`,
+                    maxHeight: '90vh'
+                  }}
+                >
+                  <div 
+                    className="modal-header" 
+                    style={{ 
+                      backgroundColor: colors.card,
+                      borderBottom: `1px solid ${colors.cardBorder}`
+                    }}
+                  >
+                    <h5 className="modal-title">
+                      <FaInfoCircle className="me-2" style={{ color: '#FF9800' }} />
+                      Firebase Projekt einrichten - Schritt für Schritt
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => {
+                        setShowFirebaseSetupModal(false);
+                        setFirebaseSetupData({ 
+                          apiKey: '', 
+                          authDomain: '', 
+                          projectId: '', 
+                          storageBucket: '', 
+                          messagingSenderId: '', 
+                          appId: '' 
+                        });
+                      }}
+                      style={{ filter: colors.text === '#ffffff' ? 'invert(1)' : 'none' }}
+                    />
+                  </div>
+                  <div className="modal-body" style={{ padding: '30px' }}>
+                    {/* Einleitung */}
+                    <div className="alert alert-info mb-4" style={{ backgroundColor: '#FF980020', borderColor: '#FF9800' }}>
+                      <FaInfoCircle className="me-2" />
+                      <strong>Willkommen!</strong> Diese Anleitung hilft Ihnen, Ihr Firebase-Projekt einzurichten.
+                      <br />
+                      <small>Die Einrichtung dauert nur wenige Minuten und ist komplett kostenlos.</small>
+                    </div>
+
+                    {/* Schritt 1: Projekt erstellen */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
+                        <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>1</span>
+                        Firebase Projekt erstellen
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Öffnen Sie die <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#FF9800' }}>Firebase Console</a> in einem neuen Tab
+                        </li>
+                        <li className="mb-2">
+                          Melden Sie sich mit Ihrem <strong>Google-Konto</strong> an
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Add project"</strong> oder <strong>"Projekt hinzufügen"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Geben Sie einen Projektnamen ein (z.B. "chef-numbers")
+                        </li>
+                        <li className="mb-2">
+                          <strong>Schritt 1/3:</strong> Klicken Sie auf <strong>"Continue"</strong>
+                        </li>
+                        <li className="mb-2">
+                          <strong>Schritt 2/3:</strong> Google Analytics können Sie aktivieren oder deaktivieren (optional) → <strong>"Continue"</strong>
+                        </li>
+                        <li className="mb-2">
+                          <strong>Schritt 3/3:</strong> Falls Analytics aktiviert, wählen Sie ein Analytics-Konto → <strong>"Create project"</strong>
+                        </li>
+                        <li>
+                          Warten Sie ca. 30-60 Sekunden, bis das Projekt erstellt ist ⏱️
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Schritt 2: Web-App registrieren */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
+                        <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>2</span>
+                        Web-App registrieren
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Nach der Projekterstellung klicken Sie auf <strong>"Continue"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Sie befinden sich jetzt auf der Projekt-Übersichtsseite
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf das <strong>Web-Symbol</strong> (<code>&lt;/&gt;</code>) unter "Get started by adding Firebase to your app"
+                        </li>
+                        <li className="mb-2">
+                          Geben Sie einen App-Nickname ein (z.B. "Chef Numbers Web")
+                        </li>
+                        <li className="mb-2">
+                          <strong>WICHTIG:</strong> Aktivieren Sie <strong>"Also set up Firebase Hosting"</strong> NICHT (wir hosten selbst!)
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Register app"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Firebase zeigt Ihnen nun Ihre <strong>Firebase Configuration</strong> (ein JavaScript-Objekt)
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Schritt 3: Config-Daten kopieren */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
+                        <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>3</span>
+                        Configuration-Daten kopieren
+                      </h6>
+                      <p className="mb-3">
+                        Firebase zeigt Ihnen einen Code-Block mit der Firebase-Konfiguration. 
+                        Kopieren Sie die Werte aus dem <code>firebaseConfig</code>-Objekt und fügen Sie sie unten ein:
+                      </p>
+
+                      <div className="alert alert-secondary mb-3" style={{ backgroundColor: colors.card, borderColor: colors.cardBorder, fontSize: '0.85rem' }}>
+                        <strong>Beispiel:</strong>
+                        <pre style={{ marginTop: '10px', marginBottom: 0, fontSize: '0.8rem' }}>{`const firebaseConfig = {
+  apiKey: "AIzaSyA...",
+  authDomain: "your-app.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-app.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789:web:abcdef123456"
+};`}</pre>
+                      </div>
+
+                      {/* API Key */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaKey className="me-2" style={{ color: '#FF9800' }} />
+                          apiKey:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${firebaseSetupData.apiKey && !validateFirebaseApiKey(firebaseSetupData.apiKey).isValid ? 'is-invalid' : firebaseSetupData.apiKey && validateFirebaseApiKey(firebaseSetupData.apiKey).isValid ? 'is-valid' : ''}`}
+                          value={firebaseSetupData.apiKey}
+                          onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, apiKey: e.target.value })}
+                          placeholder="AIzaSy..."
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {firebaseSetupData.apiKey && (
+                          <div style={{ 
+                            color: validateFirebaseApiKey(firebaseSetupData.apiKey).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateFirebaseApiKey(firebaseSetupData.apiKey).isValid ? '✓ ' : '✗ '}
+                            {validateFirebaseApiKey(firebaseSetupData.apiKey).message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Auth Domain */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaCloud className="me-2" style={{ color: '#FF9800' }} />
+                          authDomain:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${firebaseSetupData.authDomain && !validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid ? 'is-invalid' : firebaseSetupData.authDomain && validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid ? 'is-valid' : ''}`}
+                          value={firebaseSetupData.authDomain}
+                          onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, authDomain: e.target.value })}
+                          placeholder="your-app.firebaseapp.com"
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {firebaseSetupData.authDomain && (
+                          <div style={{ 
+                            color: validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid ? '✓ ' : '✗ '}
+                            {validateFirebaseAuthDomain(firebaseSetupData.authDomain).message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Project ID */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaDatabase className="me-2" style={{ color: '#FF9800' }} />
+                          projectId:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${firebaseSetupData.projectId && !validateFirebaseProjectId(firebaseSetupData.projectId).isValid ? 'is-invalid' : firebaseSetupData.projectId && validateFirebaseProjectId(firebaseSetupData.projectId).isValid ? 'is-valid' : ''}`}
+                          value={firebaseSetupData.projectId}
+                          onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, projectId: e.target.value })}
+                          placeholder="your-project-id"
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {firebaseSetupData.projectId && (
+                          <div style={{ 
+                            color: validateFirebaseProjectId(firebaseSetupData.projectId).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateFirebaseProjectId(firebaseSetupData.projectId).isValid ? '✓ ' : '✗ '}
+                            {validateFirebaseProjectId(firebaseSetupData.projectId).message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Storage Bucket */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaFolder className="me-2" style={{ color: '#FF9800' }} />
+                          storageBucket:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${firebaseSetupData.storageBucket && !validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid ? 'is-invalid' : firebaseSetupData.storageBucket && validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid ? 'is-valid' : ''}`}
+                          value={firebaseSetupData.storageBucket}
+                          onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, storageBucket: e.target.value })}
+                          placeholder="your-app.appspot.com"
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {firebaseSetupData.storageBucket && (
+                          <div style={{ 
+                            color: validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid ? '✓ ' : '✗ '}
+                            {validateFirebaseStorageBucket(firebaseSetupData.storageBucket).message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Messaging Sender ID */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaNetworkWired className="me-2" style={{ color: '#FF9800' }} />
+                          messagingSenderId:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${firebaseSetupData.messagingSenderId && !validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid ? 'is-invalid' : firebaseSetupData.messagingSenderId && validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid ? 'is-valid' : ''}`}
+                          value={firebaseSetupData.messagingSenderId}
+                          onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, messagingSenderId: e.target.value })}
+                          placeholder="123456789012"
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {firebaseSetupData.messagingSenderId && (
+                          <div style={{ 
+                            color: validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid ? '✓ ' : '✗ '}
+                            {validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* App ID */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaKey className="me-2" style={{ color: '#FF9800' }} />
+                          appId:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${firebaseSetupData.appId && !validateFirebaseAppId(firebaseSetupData.appId).isValid ? 'is-invalid' : firebaseSetupData.appId && validateFirebaseAppId(firebaseSetupData.appId).isValid ? 'is-valid' : ''}`}
+                          value={firebaseSetupData.appId}
+                          onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, appId: e.target.value })}
+                          placeholder="1:123456789:web:abcdef123456"
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {firebaseSetupData.appId && (
+                          <div style={{ 
+                            color: validateFirebaseAppId(firebaseSetupData.appId).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateFirebaseAppId(firebaseSetupData.appId).isValid ? '✓ ' : '✗ '}
+                            {validateFirebaseAppId(firebaseSetupData.appId).message}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Schritt 4: Firestore Database aktivieren */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
+                        <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>4</span>
+                        Firestore Database aktivieren
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Klicken Sie in der Firebase Console auf <strong>"Continue to console"</strong> (oder navigieren Sie zur Projekt-Übersicht)
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie in der linken Seitenleiste auf <strong>"Build"</strong> → <strong>"Firestore Database"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Create database"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie <strong>"Start in production mode"</strong> (wir konfigurieren die Regeln später)
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Next"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie einen <strong>Standort</strong> (z.B. "europe-west3" für Frankfurt)
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Enable"</strong>
+                        </li>
+                        <li>
+                          Warten Sie ca. 30-60 Sekunden, bis die Datenbank bereitgestellt ist ⏱️
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Schritt 5: Storage aktivieren */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
+                        <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>5</span>
+                        Storage aktivieren
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Klicken Sie in der linken Seitenleiste auf <strong>"Build"</strong> → <strong>"Storage"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Get started"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Lassen Sie die Standard-Sicherheitsregeln aktiviert und klicken Sie auf <strong>"Next"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Der Standort wird automatisch von Firestore übernommen
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Done"</strong>
+                        </li>
+                        <li>
+                          Storage ist jetzt bereit! 🎉
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Schritt 6: Sicherheitsregeln konfigurieren (Optional, aber empfohlen) */}
+                    <div className="mb-4">
+                      <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
+                        <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>6</span>
+                        Sicherheitsregeln (Optional)
+                      </h6>
+                      <div className="alert alert-warning" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.9rem' }}>
+                        <FaExclamationTriangle className="me-2" />
+                        <strong>Wichtig:</strong> Standardmäßig sind Ihre Daten öffentlich zugänglich! 
+                        Für Produktionsumgebungen sollten Sie die Firestore- und Storage-Regeln anpassen.
+                      </div>
+                      <p className="mb-2">
+                        <strong>Firestore Rules (empfohlen für Tests):</strong>
+                      </p>
+                      <pre className="p-3 mb-3" style={{ 
+                        backgroundColor: colors.card, 
+                        borderRadius: '4px', 
+                        border: `1px solid ${colors.cardBorder}`,
+                        fontSize: '0.85rem',
+                        overflow: 'auto'
+                      }}>{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true; // ⚠️ Nur für Tests!
+    }
+  }
+}`}</pre>
+
+                      <p className="mb-2">
+                        <strong>Storage Rules (empfohlen für Tests):</strong>
+                      </p>
+                      <pre className="p-3" style={{ 
+                        backgroundColor: colors.card, 
+                        borderRadius: '4px', 
+                        border: `1px solid ${colors.cardBorder}`,
+                        fontSize: '0.85rem',
+                        overflow: 'auto'
+                      }}>{`rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true; // ⚠️ Nur für Tests!
+    }
+  }
+}`}</pre>
+                    </div>
+
+                    {/* Erfolgs-Banner */}
+                    {validateFirebaseApiKey(firebaseSetupData.apiKey).isValid &&
+                     validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid &&
+                     validateFirebaseProjectId(firebaseSetupData.projectId).isValid &&
+                     validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid &&
+                     validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid &&
+                     validateFirebaseAppId(firebaseSetupData.appId).isValid && (
+                      <div className="alert alert-success mt-4" style={{ backgroundColor: '#19875420', borderColor: '#198754' }}>
+                        <FaCheckCircle className="me-2" />
+                        <strong>Perfekt!</strong> Alle erforderlichen Daten sind gültig. Sie können jetzt fortfahren!
+                      </div>
+                    )}
+                  </div>
+                  <div 
+                    className="modal-footer" 
+                    style={{ 
+                      borderTop: `1px solid ${colors.cardBorder}`,
+                      backgroundColor: colors.card
+                    }}
+                  >
+                    {validateFirebaseApiKey(firebaseSetupData.apiKey).isValid &&
+                     validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid &&
+                     validateFirebaseProjectId(firebaseSetupData.projectId).isValid &&
+                     validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid &&
+                     validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid &&
+                     validateFirebaseAppId(firebaseSetupData.appId).isValid ? (
+                      <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={() => {
+                          // Daten in die Konfiguration übernehmen
+                          handleStorageManagementUpdate({
+                            connections: {
+                              ...storageManagement.connections,
+                              firebase: {
+                                ...storageManagement.connections.firebase,
+                                apiKey: firebaseSetupData.apiKey,
+                                authDomain: firebaseSetupData.authDomain,
+                                projectId: firebaseSetupData.projectId,
+                                storageBucket: firebaseSetupData.storageBucket,
+                                messagingSenderId: firebaseSetupData.messagingSenderId,
+                                appId: firebaseSetupData.appId
+                              }
+                            }
+                          });
+                          setShowFirebaseSetupModal(false);
+                          setFirebaseSetupData({ 
+                            apiKey: '', 
+                            authDomain: '', 
+                            projectId: '', 
+                            storageBucket: '', 
+                            messagingSenderId: '', 
+                            appId: '' 
+                          });
+                        }}
+                        style={{
+                          backgroundColor: '#198754',
+                          borderColor: '#198754'
+                        }}
+                      >
+                        <FaCheckCircle className="me-2" />
+                        Daten übernehmen und schließen
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled
+                        style={{
+                          opacity: 0.6,
+                          cursor: 'not-allowed'
+                        }}
+                      >
+                        <FaTimes className="me-2" />
+                        Abbrechen
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => {
+                        setShowFirebaseSetupModal(false);
+                        setFirebaseSetupData({ 
+                          apiKey: '', 
+                          authDomain: '', 
+                          projectId: '', 
+                          storageBucket: '', 
+                          messagingSenderId: '', 
+                          appId: '' 
+                        });
                       }}
                     >
                       Schließen
