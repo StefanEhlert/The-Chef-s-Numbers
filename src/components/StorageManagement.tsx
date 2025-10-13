@@ -582,6 +582,8 @@ const StorageManagement: React.FC = () => {
         dataStorageConnected = newManagement.connections.mysql.connectionStatus === true;
       } else if (selectedDataStorage === 'Supabase') {
         dataStorageConnected = newManagement.connections.supabase.connectionStatus === true;
+      } else if (selectedDataStorage === 'Firebase') {
+        dataStorageConnected = newManagement.connections.firebase.connectionStatus === true;
       } else if (selectedDataStorage === 'SQLite') {
         // SQLite-Speicher ist immer "verbunden" (lokal)
         dataStorageConnected = true;
@@ -593,6 +595,8 @@ const StorageManagement: React.FC = () => {
         pictureStorageConnected = newManagement.connections.minio.connectionStatus === true;
       } else if (selectedPictureStorage === 'Supabase') {
         pictureStorageConnected = newManagement.connections.supabase.connectionStatus === true;
+      } else if (selectedPictureStorage === 'Firebase') {
+        pictureStorageConnected = newManagement.connections.firebase.connectionStatus === true;
       } else if (selectedPictureStorage === 'LocalPath') {
         // Lokaler Pfad ist immer "verbunden"
         pictureStorageConnected = true;
@@ -657,6 +661,12 @@ const StorageManagement: React.FC = () => {
     if (connectionType === 'supabase') {
       const supabaseFields = ['url', 'anonKey', 'serviceRoleKey'];
       resetConnectionStatus('supabase', supabaseFields);
+    }
+
+    // Firebase-Verbindungsstatus zurücksetzen
+    if (connectionType === 'firebase') {
+      const firebaseFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+      resetConnectionStatus('firebase', firebaseFields);
     }
 
     handleStorageManagementUpdate({ connections: newConnections });
@@ -4627,6 +4637,9 @@ const StorageManagement: React.FC = () => {
       }
 
       // Erfolgreiche Verbindung!
+      console.log('🔍 DEBUG: Setze isTested auf TRUE für Firebase');
+      console.log('🔍 DEBUG: Vorher - selectedStorage:', storageManagement.selectedStorage);
+      
       handleStorageManagementUpdate({
         connections: {
           ...storageManagement.connections,
@@ -4646,6 +4659,12 @@ const StorageManagement: React.FC = () => {
       });
 
       console.log('✅ Firebase Verbindungstest erfolgreich abgeschlossen');
+      
+      // Debug: Prüfe nach einem Moment ob isTested gesetzt wurde
+      setTimeout(() => {
+        console.log('🔍 DEBUG NACH Update: isTested =', storageManagement.selectedStorage.isTested);
+        console.log('🔍 DEBUG: Button sollte aktiv sein?', isConfigurationDifferent());
+      }, 100);
 
     } catch (error) {
       console.error('❌ Firebase-Verbindungstest fehlgeschlagen:', error);
