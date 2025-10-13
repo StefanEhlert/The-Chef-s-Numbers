@@ -10489,13 +10489,13 @@ const StorageManagement: React.FC = () => {
                           Suchen Sie in der linken Seitenleiste nach <strong>"Firestore Database"</strong>:
                           <ul className="mt-2">
                             <li className="mb-1">
-                              <strong>Variante 1:</strong> Direkt unter "Build" → "Firestore Database" (falls verfügbar)
+                              <strong>Variante 1:</strong> Unter <strong>"Entwickeln"</strong> (deutsch) oder <strong>"Build"</strong> (englisch) → "Firestore Database"
                             </li>
                             <li className="mb-1">
-                              <strong>Variante 2:</strong> Klicken Sie auf "All products" / "Alle Produkte" → Suchen Sie "Firestore Database"
+                              <strong>Variante 2:</strong> Über "All products" / "Alle Produkte" → "Firestore Database"
                             </li>
                             <li className="mb-1">
-                              <strong>Variante 3:</strong> Scrollen Sie in der linken Seitenleiste nach unten und suchen Sie direkt nach "Firestore Database"
+                              <strong>Variante 3:</strong> Direkt in der Seitenleiste scrollen und "Firestore Database" suchen
                             </li>
                           </ul>
                         </li>
@@ -10531,7 +10531,7 @@ const StorageManagement: React.FC = () => {
                           Suchen Sie in der linken Seitenleiste nach <strong>"Storage"</strong>:
                           <ul className="mt-2">
                             <li className="mb-1">
-                              <strong>Variante 1:</strong> Direkt unter "Build" → "Storage" (falls verfügbar)
+                              <strong>Variante 1:</strong> Unter <strong>"Entwickeln"</strong> (deutsch) oder <strong>"Build"</strong> (englisch) → "Storage"
                             </li>
                             <li className="mb-1">
                               <strong>Variante 2:</strong> Über "All products" / "Alle Produkte" → "Storage"
