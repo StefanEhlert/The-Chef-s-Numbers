@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { FaDatabase, FaCloud, FaServer, FaSync, FaDownload, FaCog, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaKey, FaWifi, FaSpinner, FaEye, FaEyeSlash, FaShieldAlt, FaCheck, FaTimes, FaNetworkWired, FaExternalLinkAlt, FaTrash } from 'react-icons/fa';
+import { FaDatabase, FaCloud, FaServer, FaSync, FaDownload, FaCog, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaKey, FaWifi, FaSpinner, FaEye, FaEyeSlash, FaShieldAlt, FaCheck, FaTimes, FaNetworkWired, FaExternalLinkAlt, FaTrash, FaFolder, FaFlask } from 'react-icons/fa';
 import { StorageMode, CloudStorageType } from '../services/storageLayer';
 import { StorageConfig, StorageData, StoragePicture, DEFAULT_STORAGE_CONFIGS } from '../types/storage';
 import { StorageLayer } from '../services/storageLayer';
@@ -27,6 +27,7 @@ interface StorageManagement {
     currentDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'Supabase' | 'Firebase' | 'SQLite';
     currentPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath';
     isActive: boolean; // bestätigt funktionierende Verbindung
+    activeConnections?: any; // Snapshot der aktiven Connection-Daten (für Sicherheit!)
   };
 
   // Auswahl in der UI (noch nicht aktiv)
@@ -144,7 +145,8 @@ const StorageManagement: React.FC = () => {
         currentCloudType: 'none',
         currentDataStorage: 'SQLite',
         currentPictureStorage: 'LocalPath',
-        isActive: true  // ⬅️ Sofort aktiv beim ersten Start!
+        isActive: true,  // ⬅️ Sofort aktiv beim ersten Start!
+        activeConnections: {}  // ⬅️ Leerer Snapshot für lokalen Modus
       },
       selectedStorage: {
         selectedStorageMode: 'local',
@@ -231,6 +233,12 @@ const StorageManagement: React.FC = () => {
     message: string;
     checking: boolean;
   }>({ exists: false, message: '', checking: false });
+  const [supabaseButtonState, setSupabaseButtonState] = useState<'test' | 'init' | 'update' | 'testing' | 'initializing'>('test');
+  const [supabaseBucketStatus, setSupabaseBucketStatus] = useState<{
+    exists: boolean;
+    checking: boolean;
+    message: string;
+  }>({ exists: false, checking: false, message: '' });
   const [dataTransferProgress, setDataTransferProgress] = useState<{
     current: number;
     total: number;
@@ -255,6 +263,14 @@ const StorageManagement: React.FC = () => {
   } | null>(null);
   const [backupCompleted, setBackupCompleted] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
+  const [showSupabaseSetupModal, setShowSupabaseSetupModal] = useState(false);
+  const [supabaseSetupData, setSupabaseSetupData] = useState({
+    url: '',
+    anonKey: '',
+    serviceRoleKey: ''
+  });
+  const [showSupabaseSQLModal, setShowSupabaseSQLModal] = useState(false);
+  const [supabaseSQLEditorUrl, setSupabaseSQLEditorUrl] = useState('');
 
   // Animation-State für Ein-/Ausblend-Animationen
   const [cloudSectionAnimating, setCloudSectionAnimating] = useState(false);
@@ -1968,7 +1984,8 @@ const StorageManagement: React.FC = () => {
         picture: storageManagement.currentStorage.currentPictureStorage
       };
       
-      const connectionData = {
+      // WICHTIG: Verwende activeConnections Snapshot für QUELLE
+      const sourceConnectionData = storageManagement.currentStorage.activeConnections || {
         postgres: storageManagement.connections.postgres,
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
@@ -1976,7 +1993,16 @@ const StorageManagement: React.FC = () => {
         supabase: storageManagement.connections.supabase
       };
       
-      await sourceStorageLayer.initialize(sourceConfig, connectionData);
+      // Für ZIEL: Verwende normale connections (neue, getestete Daten)
+      const targetConnectionData = {
+        postgres: storageManagement.connections.postgres,
+        mariadb: storageManagement.connections.mariadb,
+        mysql: storageManagement.connections.mysql,
+        minio: storageManagement.connections.minio,
+        supabase: storageManagement.connections.supabase
+      };
+      
+      await sourceStorageLayer.initialize(sourceConfig, sourceConnectionData);
       console.log('✅ Quell-Storage initialisiert');
       
       // 2. Initialisiere Ziel-Storage
@@ -1988,7 +2014,7 @@ const StorageManagement: React.FC = () => {
         picture: storageManagement.selectedStorage.selectedPictureStorage
       };
       
-      await targetStorageLayer.initialize(targetConfig, connectionData);
+      await targetStorageLayer.initialize(targetConfig, targetConnectionData);
       console.log('✅ Ziel-Storage initialisiert');
       
       // 3. Übertrage Daten mit gewählter Strategie
@@ -2038,13 +2064,39 @@ const StorageManagement: React.FC = () => {
   // Finalisiert die Konfigurationsänderung (nach erfolgreicher Datenübertragung)
   const finalizeConfigurationChange = async () => {
     try {
-      // Übertrage selectedStorage in currentStorage
+      // WICHTIG: Erstelle einen Snapshot der aktiven Connection-Daten
+      // Dies verhindert, dass geänderte aber nicht übernommene Daten verwendet werden!
+      const activeConnections = {
+        postgres: storageManagement.selectedStorage.selectedDataStorage === 'PostgreSQL' 
+          ? { ...storageManagement.connections.postgres }
+          : undefined,
+        mariadb: storageManagement.selectedStorage.selectedDataStorage === 'MariaDB'
+          ? { ...storageManagement.connections.mariadb }
+          : undefined,
+        mysql: storageManagement.selectedStorage.selectedDataStorage === 'MySQL'
+          ? { ...storageManagement.connections.mysql }
+          : undefined,
+        minio: storageManagement.selectedStorage.selectedPictureStorage === 'MinIO'
+          ? { ...storageManagement.connections.minio }
+          : undefined,
+        supabase: (storageManagement.selectedStorage.selectedDataStorage === 'Supabase' || storageManagement.selectedStorage.selectedPictureStorage === 'Supabase')
+          ? { ...storageManagement.connections.supabase }
+          : undefined,
+        firebase: (storageManagement.selectedStorage.selectedDataStorage === 'Firebase' || storageManagement.selectedStorage.selectedPictureStorage === 'Firebase')
+          ? { ...storageManagement.connections.firebase }
+          : undefined
+      };
+
+      console.log('📸 Erstelle Snapshot der aktiven Connection-Daten:', activeConnections);
+
+      // Übertrage selectedStorage in currentStorage MIT Snapshot
       const newCurrentStorage = {
         currentStorageMode: storageManagement.selectedStorage.selectedStorageMode,
         currentCloudType: storageManagement.selectedStorage.selectedCloudType,
         currentDataStorage: storageManagement.selectedStorage.selectedDataStorage as any,
         currentPictureStorage: storageManagement.selectedStorage.selectedPictureStorage as any,
-        isActive: true
+        isActive: true,
+        activeConnections: activeConnections  // ⬅️ WICHTIG: Snapshot!
       };
 
       handleStorageManagementUpdate({
@@ -2062,13 +2114,10 @@ const StorageManagement: React.FC = () => {
         picture: newCurrentStorage.currentPictureStorage
       };
 
-      const connectionData = {
-        postgres: storageManagement.connections.postgres,
-        mariadb: storageManagement.connections.mariadb,
-        mysql: storageManagement.connections.mysql,
-        minio: storageManagement.connections.minio,
-        supabase: storageManagement.connections.supabase
-      };
+      // WICHTIG: Verwende den Snapshot (activeConnections) statt connections!
+      // Dies stellt sicher, dass nur die getesteten und übernommenen Daten verwendet werden
+      console.log('🔒 Verwende aktive Connection-Daten aus Snapshot');
+      const connectionData = activeConnections;
 
       const initSuccess = await storageLayer.initialize(storageConfig, connectionData);
       
@@ -2076,10 +2125,15 @@ const StorageManagement: React.FC = () => {
         console.log('✅ StorageLayer erfolgreich initialisiert');
         
         // Setze isActive auf true nach erfolgreicher Initialisierung
+        // und setze isTested auf false (Konfiguration wurde übernommen)
         handleStorageManagementUpdate({
           currentStorage: {
             ...newCurrentStorage,
             isActive: true
+          },
+          selectedStorage: {
+            ...storageManagement.selectedStorage,
+            isTested: false  // ⬅️ Reset nach Übernahme
           }
         });
         
@@ -2106,11 +2160,94 @@ const StorageManagement: React.FC = () => {
     const current = storageManagement.currentStorage;
     const selected = storageManagement.selectedStorage;
 
-    return (
+    // Prüfe ob sich die Speicher-Typen geändert haben
+    const storageTypesChanged = (
       current.currentStorageMode !== selected.selectedStorageMode ||
       current.currentDataStorage !== selected.selectedDataStorage ||
       current.currentPictureStorage !== selected.selectedPictureStorage
     );
+
+    // Fall 1: Speicher-Typen haben sich geändert → Button aktiv
+    if (storageTypesChanged) {
+      console.log('🔍 isConfigurationDifferent: Speicher-Typen geändert');
+      return true;
+    }
+
+    // Fall 2: Konfiguration wurde erfolgreich getestet
+    // → Der User will die getestete Konfiguration übernehmen
+    // (z.B. neue Supabase-Keys bei gleicher Speicherkonfiguration)
+    if (selected.isTested) {
+      console.log('🔍 isConfigurationDifferent: Konfiguration wurde erfolgreich getestet');
+      return true;
+    }
+
+    // Fall 3: Konfiguration ist nicht aktiv
+    // → Es wurde etwas geändert, aber noch nicht aktiviert
+    if (!current.isActive) {
+      console.log('🔍 isConfigurationDifferent: Konfiguration nicht aktiv');
+      return true;
+    }
+
+    console.log('🔍 isConfigurationDifferent: Keine Änderung erkannt');
+    return false;
+  };
+
+  // Hilfsfunktion: Prüft ob sich Verbindungsdaten geändert haben
+  const hasConnectionDataChanged = (): boolean => {
+    // Hole die aktuell aktive Konfiguration aus localStorage
+    const savedManagement = localStorage.getItem('storageManagement');
+    if (!savedManagement) {
+      return false;
+    }
+
+    try {
+      const saved = JSON.parse(savedManagement);
+      const currentConnections = saved.connections;
+      const newConnections = storageManagement.connections;
+
+      // Hilfsfunktion: Entfernt Status-Felder aus einem Connection-Objekt
+      const removeStatusFields = (conn: any) => {
+        const { connectionStatus, lastTested, testMessage, ...rest } = conn;
+        return rest;
+      };
+
+      // Prüfe jede Verbindungsart (mit korrektem TypeScript-Typ)
+      const connectionTypes: (keyof typeof storageManagement.connections)[] = [
+        'postgres', 
+        'mariadb', 
+        'mysql', 
+        'minio', 
+        'supabase', 
+        'firebase'
+      ];
+
+      for (const type of connectionTypes) {
+        const currentConn = currentConnections[type];
+        const newConn = newConnections[type];
+
+        if (!currentConn || !newConn) continue;
+
+        // Erstelle bereinigte Versionen ohne Status-Felder
+        const cleanCurrent = removeStatusFields(currentConn);
+        const cleanNew = removeStatusFields(newConn);
+
+        // Vergleiche die bereinigten Objekte als JSON-Strings
+        const currentJson = JSON.stringify(cleanCurrent);
+        const newJson = JSON.stringify(cleanNew);
+
+        if (currentJson !== newJson) {
+          console.log(`🔍 Verbindungsdaten geändert: ${type}`);
+          console.log('  Aktuell:', cleanCurrent);
+          console.log('  Neu:', cleanNew);
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ Fehler beim Vergleichen der Verbindungsdaten:', error);
+      return false;
+    }
   };
 
   // ========================================
@@ -2834,13 +2971,17 @@ const StorageManagement: React.FC = () => {
           picture: storageManagement.currentStorage.currentPictureStorage
         };
         
-        const sourceConnectionData = {
+        // WICHTIG: Verwende activeConnections Snapshot für QUELLE (aktive Konfiguration)
+        // und normale connections für ZIEL (neue, getestete Konfiguration)
+        const sourceConnectionData = storageManagement.currentStorage.activeConnections || {
           postgres: storageManagement.connections.postgres,
           mariadb: storageManagement.connections.mariadb,
           mysql: storageManagement.connections.mysql,
           minio: storageManagement.connections.minio,
           supabase: storageManagement.connections.supabase
         };
+        
+        console.log('🔒 Quell-ConnectionData (aus activeConnections):', Object.keys(sourceConnectionData).filter(k => (sourceConnectionData as any)[k]));
         
         await sourceStorageLayer.initialize(sourceConfig, sourceConnectionData);
         console.log('✅ Quell-Storage initialisiert');
@@ -2854,7 +2995,18 @@ const StorageManagement: React.FC = () => {
           picture: storageManagement.selectedStorage.selectedPictureStorage
         };
         
-        await targetStorageLayer.initialize(targetConfig, sourceConnectionData);
+        // ZIEL: Verwende normale connections (neue, getestete Daten)
+        const targetConnectionData = {
+          postgres: storageManagement.connections.postgres,
+          mariadb: storageManagement.connections.mariadb,
+          mysql: storageManagement.connections.mysql,
+          minio: storageManagement.connections.minio,
+          supabase: storageManagement.connections.supabase
+        };
+        
+        console.log('🔓 Ziel-ConnectionData (aus connections):', Object.keys(targetConnectionData).filter(k => (targetConnectionData as any)[k]));
+        
+        await targetStorageLayer.initialize(targetConfig, targetConnectionData);
         console.log('✅ Ziel-Storage initialisiert');
         
         // 3. Prüfe ob Ziel-Storage leer ist
@@ -2994,6 +3146,90 @@ const StorageManagement: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [storageManagement.connections.mysql.testMessage]);
+
+  // Auto-Wiederherstellung des Supabase-Status beim App-Start
+  useEffect(() => {
+    const restoreSupabaseStatus = async () => {
+      // Prüfe ob Supabase verbunden ist (connectionStatus === true)
+      if (storageManagement.connections.supabase.connectionStatus && 
+          storageManagement.connections.supabase.url &&
+          storageManagement.connections.supabase.serviceRoleKey) {
+        
+        console.log('🔄 Stelle Supabase-Status nach Reload wieder her...');
+        
+        // Prüfe Schema-Status automatisch
+        setSupabaseSchemaStatus(prev => ({ ...prev, checking: true }));
+        let schemaStatus = await checkSupabaseSchemaStatus();
+        
+        console.log('📊 Schema-Status wiederhergestellt:', schemaStatus);
+        
+        // INTELLIGENTE AUTO-INSTALLATION beim App-Start
+        if (!schemaStatus.exists || schemaStatus.needsUpdate) {
+          console.log('🔍 Schema fehlt/veraltet beim Restore - prüfe Auto-Installer...');
+          const rpcAvailable = await checkSupabaseRPCFunction();
+          
+          if (rpcAvailable) {
+            console.log('🤖 RPC Auto-Installer gefunden - installiere automatisch beim Restore...');
+            setSupabaseSchemaStatus(prev => ({ ...prev, message: 'Installiere Schema automatisch...' }));
+            
+            const installResult = await installSchemaViaRPC();
+            
+            if (installResult.success) {
+              console.log('✅ Schema automatisch installiert beim Restore!');
+              schemaStatus = {
+                exists: true,
+                version: installResult.result?.version || '2.2.2',
+                needsUpdate: false,
+                message: `🤖 ${installResult.message}`
+              };
+            }
+          }
+        }
+        
+        setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+        
+        // Prüfe auch Bucket-Status und erstelle automatisch wenn nötig
+        if (schemaStatus.exists && !schemaStatus.needsUpdate) {
+          setSupabaseBucketStatus({ exists: false, checking: true, message: 'Prüfe Bucket...' });
+          let bucketStatus = await checkSupabaseBucketStatus();
+          
+          // AUTOMATISCHE BUCKET-ERSTELLUNG wenn nicht vorhanden!
+          if (!bucketStatus.exists) {
+            console.log('🪣 Bucket fehlt beim Restore - erstelle automatisch...');
+            setSupabaseBucketStatus({ exists: false, checking: true, message: 'Erstelle Bucket automatisch...' });
+            
+            const createResult = await createSupabaseBucket();
+            
+            if (createResult.success) {
+              console.log('✅ Bucket automatisch erstellt beim Restore!');
+              bucketStatus = { exists: true, message: '✅ Bucket wurde automatisch erstellt' };
+            } else {
+              console.error('❌ Automatische Bucket-Erstellung beim Restore fehlgeschlagen:', createResult.message);
+              bucketStatus = { exists: false, message: `⚠️ Bucket-Erstellung fehlgeschlagen: ${createResult.message}` };
+            }
+          }
+          
+          setSupabaseBucketStatus({ ...bucketStatus, checking: false });
+          console.log('📊 Bucket-Status wiederhergestellt:', bucketStatus);
+        }
+        
+        // Setze Button-State basierend auf Schema-Status
+        if (!schemaStatus.exists) {
+          setSupabaseButtonState('init');
+          console.log('🆕 Kein Schema - Button: Schema initialisieren');
+        } else if (schemaStatus.needsUpdate) {
+          setSupabaseButtonState('update');
+          console.log('🔄 Veraltetes Schema - Button: Schema aktualisieren');
+        } else {
+          setSupabaseButtonState('test');
+          console.log('✅ Aktuelles Schema - Button: Verbindung testen, Status: Verbunden');
+        }
+      }
+    };
+    
+    // Führe Wiederherstellung nur beim ersten Render aus
+    restoreSupabaseStatus();
+  }, []); // Leeres Dependency-Array = nur beim Mount
 
   // Auto-Hide für Supabase-Testmeldungen nach 8 Sekunden
   useEffect(() => {
@@ -3700,6 +3936,204 @@ const StorageManagement: React.FC = () => {
     }
   };
 
+  // Prüfe Supabase Storage Bucket-Status
+  const checkSupabaseBucketStatus = async (): Promise<{ exists: boolean; message: string }> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🪣 Prüfe Supabase Storage Bucket-Status...');
+
+      // Prüfe ob Bucket "chef-numbers-images" existiert
+      const bucketName = 'chef-numbers-images';
+      const response = await fetch(`${url}/storage/v1/bucket/${bucketName}`, {
+        method: 'GET',
+        headers: {
+          'apikey': serviceRoleKey,
+          'Authorization': `Bearer ${serviceRoleKey}`
+        }
+      });
+
+      if (response.ok) {
+        console.log('✅ Bucket existiert bereits');
+        return {
+          exists: true,
+          message: `Bucket "${bucketName}" ist bereit`
+        };
+      } else if (response.status === 404) {
+        console.log('⚠️ Bucket existiert nicht');
+        return {
+          exists: false,
+          message: `Bucket "${bucketName}" muss erstellt werden`
+        };
+      } else {
+        console.warn('⚠️ Bucket-Status unbekannt:', response.status);
+        return {
+          exists: false,
+          message: `Bucket-Status unbekannt: ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error('❌ Fehler bei Bucket-Status-Prüfung:', error);
+      return {
+        exists: false,
+        message: 'Bucket-Status konnte nicht geprüft werden'
+      };
+    }
+  };
+
+  // Erstelle Supabase Storage Bucket
+  const createSupabaseBucket = async (): Promise<{ success: boolean; message: string }> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🪣 Erstelle Supabase Storage Bucket...');
+
+      const bucketName = 'chef-numbers-images';
+      const response = await fetch(`${url}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: {
+          'apikey': serviceRoleKey,
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: bucketName,
+          name: bucketName,
+          public: true,  // Öffentlicher Zugriff für Bilder
+          file_size_limit: 5242880,  // 5 MB
+          allowed_mime_types: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Bucket erfolgreich erstellt');
+        return {
+          success: true,
+          message: `Bucket "${bucketName}" wurde erfolgreich erstellt`
+        };
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Bucket-Erstellung fehlgeschlagen:', errorText);
+        return {
+          success: false,
+          message: `Bucket-Erstellung fehlgeschlagen: ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Erstellen des Buckets:', error);
+      return {
+        success: false,
+        message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      };
+    }
+  };
+
+  // Handler für manuelle Bucket-Erstellung (nur bei Fehlern)
+  const handleCreateBucket = async () => {
+    setSupabaseBucketStatus({ exists: false, checking: true, message: 'Erstelle Bucket manuell...' });
+    
+    const result = await createSupabaseBucket();
+    
+    if (result.success) {
+      setSupabaseBucketStatus({ exists: true, checking: false, message: '✅ Bucket erfolgreich erstellt' });
+      
+      // Update auch die Connection-Test-Message
+      handleStorageManagementUpdate({
+        connections: {
+          ...storageManagement.connections,
+          supabase: {
+            ...storageManagement.connections.supabase,
+            testMessage: '✅ Verbunden - Schema ist aktuell - Storage bereit'
+          }
+        }
+      });
+    } else {
+      setSupabaseBucketStatus({ exists: false, checking: false, message: `⚠️ Bucket-Erstellung fehlgeschlagen: ${result.message}` });
+    }
+  };
+
+  // Prüfe ob RPC Auto-Installer Function vorhanden ist
+  const checkSupabaseRPCFunction = async (): Promise<boolean> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🔍 Prüfe ob RPC Auto-Installer Function vorhanden ist...');
+
+      // Versuche die Function aufzurufen (ohne Parameter)
+      // Falls sie nicht existiert, bekommen wir 404
+      const response = await fetch(`${url}/rest/v1/rpc/initialize_chef_numbers_schema`, {
+        method: 'HEAD',  // HEAD-Request zum Testen ohne Ausführung
+        headers: {
+          'apikey': serviceRoleKey,
+          'Authorization': `Bearer ${serviceRoleKey}`
+        }
+      });
+
+      const exists = response.status !== 404;
+      console.log(`${exists ? '✅' : '❌'} RPC Function ${exists ? 'gefunden' : 'nicht gefunden'} (Status: ${response.status})`);
+      
+      return exists;
+    } catch (error) {
+      console.error('❌ Fehler bei RPC-Function-Prüfung:', error);
+      return false;
+    }
+  };
+
+  // Automatische Schema-Installation via RPC-Function
+  const installSchemaViaRPC = async (): Promise<{ success: boolean; message: string; result?: any }> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🤖 Starte automatische Schema-Installation via RPC...');
+
+      const response = await fetch(`${url}/rest/v1/rpc/initialize_chef_numbers_schema`, {
+        method: 'POST',
+        headers: {
+          'apikey': serviceRoleKey,
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        }
+      });
+
+      console.log('📡 RPC Response Status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ RPC-Call fehlgeschlagen:', errorText);
+        throw new Error(`RPC-Call fehlgeschlagen: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('📊 RPC-Ergebnis:', result);
+
+      if (result.success) {
+        return {
+          success: true,
+          message: result.message || 'Schema erfolgreich installiert!',
+          result: result
+        };
+      } else {
+        return {
+          success: false,
+          message: result.message || 'Schema-Installation fehlgeschlagen',
+          result: result
+        };
+      }
+
+    } catch (error) {
+      console.error('❌ Fehler bei RPC-Installation:', error);
+      return {
+        success: false,
+        message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      };
+    }
+  };
+
   // Supabase-Verbindungstest
   const performSupabaseConnectionTest = async (): Promise<{ success: boolean; message: string }> => {
     const url = storageManagement.connections.supabase.url;
@@ -3774,6 +4208,9 @@ const StorageManagement: React.FC = () => {
       return;
     }
 
+    // Setze Button-State auf "testing"
+    setSupabaseButtonState('testing');
+
     // Setze Status auf "testing"
     handleStorageManagementUpdate({
       connections: {
@@ -3791,7 +4228,7 @@ const StorageManagement: React.FC = () => {
       const result = await performSupabaseConnectionTest();
 
       if (result.success) {
-        // Erfolgreiche Verbindung - Kombiniere beide Updates in einem Call
+        // Erfolgreiche Verbindung - Status: "zum Verbinden bereit"
         handleStorageManagementUpdate({
           connections: {
             ...storageManagement.connections,
@@ -3799,24 +4236,128 @@ const StorageManagement: React.FC = () => {
               ...storageManagement.connections.supabase,
               connectionStatus: true,
               lastTested: new Date().toISOString(),
-              testMessage: result.message
+              testMessage: '✅ Verbindung erfolgreich - zum Verbinden bereit'
             }
           },
           selectedStorage: {
             ...storageManagement.selectedStorage,
             selectedDataStorage: 'Supabase',
-            selectedPictureStorage: 'Supabase'
+            selectedPictureStorage: 'Supabase',
+            isTested: true  // ⬅️ WICHTIG: Test war erfolgreich!
           }
         });
 
         // Prüfe Schema-Status automatisch nach erfolgreicher Verbindung
         console.log('🔍 Prüfe Supabase Schema-Status nach erfolgreicher Verbindung...');
         setSupabaseSchemaStatus(prev => ({ ...prev, checking: true }));
-        const schemaStatus = await checkSupabaseSchemaStatus();
-        setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+        let schemaStatus = await checkSupabaseSchemaStatus();
         console.log('📊 Schema-Status:', schemaStatus);
+
+        // INTELLIGENTE SCHEMA-INSTALLATION: Wenn RPC verfügbar ist, automatisch installieren!
+        if (!schemaStatus.exists || schemaStatus.needsUpdate) {
+          console.log('🔍 Prüfe ob automatische Installation möglich ist...');
+          const rpcAvailable = await checkSupabaseRPCFunction();
+          
+          if (rpcAvailable) {
+            // ========================================
+            // 🤖 AUTOMATISCHE SCHEMA-INSTALLATION
+            // ========================================
+            console.log('🤖 RPC Auto-Installer gefunden - installiere Schema automatisch...');
+            setSupabaseSchemaStatus(prev => ({ ...prev, checking: true, message: 'Installiere Schema automatisch...' }));
+            
+            const installResult = await installSchemaViaRPC();
+            
+            if (installResult.success) {
+              console.log('✅ Schema automatisch installiert!', installResult.result);
+              schemaStatus = {
+                exists: true,
+                version: installResult.result?.version || '2.2.2',
+                needsUpdate: false,
+                message: `🤖 ${installResult.message}`
+              };
+              setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+              
+              console.log(`✅ Schema ${!schemaStatus.exists ? 'installiert' : 'aktualisiert'} - ${installResult.result?.tables_created || 0} Tabellen`);
+            } else {
+              console.warn('⚠️ Automatische Installation fehlgeschlagen, User muss manuell installieren');
+              // Setze Status zurück, damit "Schema initialisieren"-Button erscheint
+              setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+            }
+          } else {
+            // RPC nicht verfügbar - Schema-Button wird angezeigt
+            console.log('📋 RPC Auto-Installer nicht gefunden - User muss Schema manuell installieren');
+            setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+          }
+        } else {
+          setSupabaseSchemaStatus({ ...schemaStatus, checking: false });
+        }
+
+        // Prüfe Bucket-Status (nach Schema-Installation/Check)
+        console.log('🔍 Prüfe Supabase Storage Bucket-Status...');
+        setSupabaseBucketStatus({ exists: false, checking: true, message: 'Prüfe Bucket...' });
+        let bucketStatus = await checkSupabaseBucketStatus();
+        console.log('📊 Bucket-Status:', bucketStatus);
+
+        // AUTOMATISCHE BUCKET-ERSTELLUNG wenn nicht vorhanden!
+        if (!bucketStatus.exists) {
+          console.log('🪣 Bucket fehlt - erstelle automatisch...');
+          setSupabaseBucketStatus({ exists: false, checking: true, message: 'Erstelle Bucket automatisch...' });
+          
+          const createResult = await createSupabaseBucket();
+          
+          if (createResult.success) {
+            console.log('✅ Bucket automatisch erstellt!');
+            bucketStatus = { exists: true, message: '✅ Bucket wurde automatisch erstellt' };
+          } else {
+            console.error('❌ Automatische Bucket-Erstellung fehlgeschlagen:', createResult.message);
+            bucketStatus = { exists: false, message: `⚠️ Bucket-Erstellung fehlgeschlagen: ${createResult.message}` };
+          }
+        }
+        
+        setSupabaseBucketStatus({ ...bucketStatus, checking: false });
+        console.log('📊 Finaler Bucket-Status:', bucketStatus);
+
+        // Setze Button-State UND Schema-Status basierend auf FINALEM Ergebnis
+        if (!schemaStatus.exists) {
+          // Kein Schema vorhanden (und konnte nicht automatisch installiert werden)
+          setSupabaseButtonState('init');
+          console.log('🆕 Kein Schema gefunden - Button: Schema initialisieren');
+        } else if (schemaStatus.needsUpdate) {
+          // Veraltetes Schema (und konnte nicht automatisch aktualisiert werden)
+          setSupabaseButtonState('update');
+          console.log('🔄 Veraltetes Schema gefunden - Button: Schema aktualisieren');
+        } else {
+          // Aktuelles Schema - Verbindung ist komplett
+          setSupabaseButtonState('test');
+          
+          // Erstelle intelligente Test-Nachricht
+          let statusMessage = '✅ Verbunden - Schema ist aktuell';
+          if (bucketStatus.exists) {
+            statusMessage += ' - Storage bereit';
+          } else {
+            statusMessage += ' - ⚠️ Bucket-Erstellung fehlgeschlagen';
+          }
+          
+          handleStorageManagementUpdate({
+            connections: {
+              ...storageManagement.connections,
+              supabase: {
+                ...storageManagement.connections.supabase,
+                connectionStatus: true,  // ⬅️ WICHTIG: Status muss true bleiben!
+                testMessage: statusMessage
+              }
+            },
+            selectedStorage: {
+              ...storageManagement.selectedStorage,
+              isTested: true  // ⬅️ WICHTIG: Test war erfolgreich!
+            }
+          });
+          console.log('✅ Aktuelles Schema gefunden - Button: Verbindung testen, Status: Verbunden');
+          console.log('🔍 Debug - Button State:', 'test', 'Schema exists:', schemaStatus.exists, 'Schema needsUpdate:', schemaStatus.needsUpdate);
+          console.log('🔍 Debug - Bucket exists:', bucketStatus.exists);
+        }
       } else {
-        // Fehlgeschlagene Verbindung
+        // Fehlgeschlagene Verbindung - Status: "Keine Verbindung möglich"
         handleStorageManagementUpdate({
           connections: {
             ...storageManagement.connections,
@@ -3824,10 +4365,15 @@ const StorageManagement: React.FC = () => {
               ...storageManagement.connections.supabase,
               connectionStatus: false,
               lastTested: new Date().toISOString(),
-              testMessage: result.message
+              testMessage: '❌ Keine Verbindung möglich - ' + result.message
             }
+          },
+          selectedStorage: {
+            ...storageManagement.selectedStorage,
+            isTested: false  // ⬅️ Test fehlgeschlagen
           }
         });
+        setSupabaseButtonState('test');
       }
     } catch (error) {
       console.error('Supabase-Verbindungstest fehlgeschlagen:', error);
@@ -3838,10 +4384,15 @@ const StorageManagement: React.FC = () => {
             ...storageManagement.connections.supabase,
             connectionStatus: false,
             lastTested: new Date().toISOString(),
-            testMessage: `❌ Verbindung fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+            testMessage: `❌ Keine Verbindung möglich - ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
           }
+        },
+        selectedStorage: {
+          ...storageManagement.selectedStorage,
+          isTested: false  // ⬅️ Test fehlgeschlagen
         }
       });
+      setSupabaseButtonState('test');
     }
   };
 
@@ -3884,50 +4435,107 @@ const StorageManagement: React.FC = () => {
     }
   };
 
-  // Handler für Schema-Initialisierung-Button
+  // Handler für Schema-Initialisierung-Button (INTELLIGENT: Auto oder Manuell)
   const handleSupabaseSchemaInit = async () => {
-    setSupabaseSchemaStatus(prev => ({ ...prev, checking: true, message: 'Bereite Schema vor...' }));
+    setSupabaseButtonState('initializing');
+    setSupabaseSchemaStatus(prev => ({ ...prev, checking: true, message: 'Prüfe Installations-Methode...' }));
     
     try {
-      // Lade SQL-Script
-      const scriptResponse = await fetch('/init-scripts/init-chef-numbers-supabase.sql');
+      // SCHRITT 1: Prüfe ob RPC Auto-Installer Function verfügbar ist
+      console.log('🔍 Prüfe ob automatische Installation möglich ist...');
+      const rpcAvailable = await checkSupabaseRPCFunction();
       
-      if (!scriptResponse.ok) {
-        throw new Error('SQL-Script konnte nicht geladen werden');
+      if (rpcAvailable) {
+        // ========================================
+        // AUTOMATISCHE INSTALLATION via RPC 🤖
+        // ========================================
+        console.log('🤖 RPC Auto-Installer gefunden - starte automatische Installation...');
+        setSupabaseSchemaStatus(prev => ({ ...prev, message: 'Installiere Schema automatisch...' }));
+        
+        const result = await installSchemaViaRPC();
+        
+        if (result.success) {
+          console.log('✅ Schema automatisch installiert!', result.result);
+          
+          setSupabaseSchemaStatus({
+            exists: true,
+            version: result.result?.version || '2.2.2',
+            needsUpdate: false,
+            checking: false,
+            message: `🤖 ${result.message}`
+          });
+          
+          setSupabaseButtonState('test');
+          
+          // Update Connection-Status
+          handleStorageManagementUpdate({
+            connections: {
+              ...storageManagement.connections,
+              supabase: {
+                ...storageManagement.connections.supabase,
+                testMessage: `✅ Schema automatisch installiert! ${result.result?.tables_created || 0} Tabellen erstellt.`
+              }
+            }
+          });
+          
+          // Starte Verbindungstest neu, um Bucket zu prüfen
+          await handleSupabaseConnectionTest();
+          
+        } else {
+          throw new Error(result.message);
+        }
+        
+      } else {
+        // ========================================
+        // MANUELLE INSTALLATION (Fallback) 📋
+        // ========================================
+        console.log('📋 RPC Auto-Installer nicht gefunden - verwende manuelles Verfahren...');
+        setSupabaseSchemaStatus(prev => ({ ...prev, message: 'Bereite manuelles Script vor...' }));
+        
+        // Lade SQL-Script
+        const scriptResponse = await fetch('/init-scripts/init-chef-numbers-supabase.sql');
+        
+        if (!scriptResponse.ok) {
+          throw new Error('SQL-Script konnte nicht geladen werden');
+        }
+        
+        const sqlScript = await scriptResponse.text();
+        console.log('📜 SQL-Script geladen:', sqlScript.length, 'Zeichen');
+        
+        // Kopiere SQL-Script in die Zwischenablage
+        try {
+          await navigator.clipboard.writeText(sqlScript);
+          console.log('📋 SQL-Script in Zwischenablage kopiert');
+        } catch (clipboardError) {
+          console.warn('⚠️ Zwischenablage nicht verfügbar, verwende Download als Fallback');
+          // Fallback: Download
+          const blob = new Blob([sqlScript], { type: 'text/plain' });
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = 'supabase-schema-init.sql';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(downloadUrl);
+        }
+        
+        // Erstelle SQL Editor URL
+        const projectRef = storageManagement.connections.supabase.url.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
+        if (projectRef) {
+          setSupabaseSQLEditorUrl(`https://supabase.com/dashboard/project/${projectRef}/sql/new`);
+        }
+        
+        // Zeige Anweisungs-Modal
+        setShowSupabaseSQLModal(true);
+        setSupabaseButtonState('test');
+        
+        setSupabaseSchemaStatus({
+          exists: false,
+          checking: false,
+          message: ''
+        });
       }
-      
-      const sqlScript = await scriptResponse.text();
-      console.log('📜 SQL-Script geladen:', sqlScript.length, 'Zeichen');
-      
-      // Kopiere SQL-Script in die Zwischenablage
-      try {
-        await navigator.clipboard.writeText(sqlScript);
-        console.log('📋 SQL-Script in Zwischenablage kopiert');
-      } catch (clipboardError) {
-        console.warn('⚠️ Zwischenablage nicht verfügbar, verwende Download als Fallback');
-        // Fallback: Download
-        const blob = new Blob([sqlScript], { type: 'text/plain' });
-        const downloadUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = 'supabase-schema-init.sql';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(downloadUrl);
-      }
-      
-      // Öffne Supabase SQL Editor
-      const projectRef = storageManagement.connections.supabase.url.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
-      if (projectRef) {
-        window.open(`https://supabase.com/dashboard/project/${projectRef}/sql/new`, '_blank');
-      }
-      
-      setSupabaseSchemaStatus({
-        exists: false,
-        checking: false,
-        message: '📋 SQL-Script in Zwischenablage kopiert! Drücken Sie Strg+V im Supabase SQL Editor und klicken Sie auf "Run".'
-      });
       
     } catch (error) {
       console.error('❌ Fehler beim Schema-Init:', error);
@@ -3935,6 +4543,18 @@ const StorageManagement: React.FC = () => {
         exists: false,
         checking: false,
         message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      });
+      setSupabaseButtonState('init'); // Zurück zu init bei Fehler
+      
+      // Bei RPC-Fehler: Biete manuellen Fallback an
+      handleStorageManagementUpdate({
+        connections: {
+          ...storageManagement.connections,
+          supabase: {
+            ...storageManagement.connections.supabase,
+            testMessage: `❌ Automatische Installation fehlgeschlagen. Bitte installieren Sie den RPC Auto-Installer manuell (siehe Setup-Anleitung Schritt 4).`
+          }
+        }
       });
     }
   };
@@ -6439,7 +7059,20 @@ const StorageManagement: React.FC = () => {
                   <FaInfoCircle className="me-2" />
                   <strong>Supabase Cloud:</strong> Vollständig verwaltete PostgreSQL-Datenbank und Object Storage.
                   <br />
-                  <small>Erstellen Sie ein kostenloses Projekt auf <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" style={{ color: '#3ecf8e' }}>supabase.com</a></small>
+                  <small>
+                    Erstellen Sie ein kostenloses Projekt auf <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" style={{ color: '#3ecf8e' }}>supabase.com</a>
+                    {' '} · {' '}
+                    <a 
+                      href="#" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowSupabaseSetupModal(true);
+                      }} 
+                      style={{ color: '#ff9800', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Setup-Anleitung anzeigen
+                    </a>
+                  </small>
                 </div>
 
                 <div className="row">
@@ -6610,8 +7243,32 @@ const StorageManagement: React.FC = () => {
                       <FaWifi className="me-2" style={{ color: colors.textSecondary }} />
                       <span style={{ color: colors.text }}>
                         Verbindungsstatus:
-                        <span className={`ms-2 ${storageManagement.connections.supabase.connectionStatus ? 'text-success' : 'text-danger'}`}>
-                          {storageManagement.connections.supabase.connectionStatus ? 'Verbunden' : 'Nicht verbunden'}
+                        <span className={`ms-2 ${
+                          // Verbunden: Schema ist aktuell, Button ist im 'test' State UND connectionStatus ist true
+                          (supabaseButtonState === 'test' && supabaseSchemaStatus.exists && !supabaseSchemaStatus.needsUpdate && storageManagement.connections.supabase.connectionStatus)
+                            ? 'text-success'
+                            : supabaseButtonState === 'init' || supabaseButtonState === 'update'
+                            ? 'text-warning'
+                            : supabaseButtonState === 'testing' || supabaseButtonState === 'initializing'
+                            ? 'text-info'
+                            : storageManagement.connections.supabase.connectionStatus
+                            ? 'text-warning'
+                            : 'text-danger'
+                        }`}>
+                          {
+                            // Verbunden: Schema ist aktuell, Button ist im 'test' State UND connectionStatus ist true
+                            (supabaseButtonState === 'test' && supabaseSchemaStatus.exists && !supabaseSchemaStatus.needsUpdate && storageManagement.connections.supabase.connectionStatus)
+                            ? 'Verbunden'
+                            : supabaseButtonState === 'init' || supabaseButtonState === 'update'
+                            ? 'Zum Verbinden bereit'
+                            : supabaseButtonState === 'testing'
+                            ? 'Teste...'
+                            : supabaseButtonState === 'initializing'
+                            ? 'Initialisiert...'
+                            : storageManagement.connections.supabase.connectionStatus
+                            ? 'Zum Verbinden bereit'
+                            : 'Nicht verbunden'
+                          }
                         </span>
                       </span>
                     </div>
@@ -6629,17 +7286,69 @@ const StorageManagement: React.FC = () => {
                         Dashboard
                       </button>
                       <button
-                        className={`btn ${isSupabaseButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                        onClick={handleSupabaseConnectionTest}
-                        disabled={!isSupabaseButtonEnabled}
+                        className={`btn ${
+                          supabaseButtonState === 'init'
+                            ? 'btn-warning'
+                            : supabaseButtonState === 'update'
+                            ? 'btn-info'
+                            : isSupabaseButtonEnabled
+                            ? 'btn-outline-primary'
+                            : 'btn-outline-secondary'
+                        }`}
+                        onClick={
+                          supabaseButtonState === 'init' || supabaseButtonState === 'update'
+                            ? handleSupabaseSchemaInit
+                            : handleSupabaseConnectionTest
+                        }
+                        disabled={
+                          supabaseButtonState === 'testing' ||
+                          supabaseButtonState === 'initializing' ||
+                          (!isSupabaseButtonEnabled && supabaseButtonState === 'test')
+                        }
                         style={{
-                          opacity: isSupabaseButtonEnabled ? 1 : 0.6,
-                          cursor: isSupabaseButtonEnabled ? 'pointer' : 'not-allowed'
+                          opacity: supabaseButtonState === 'testing' || supabaseButtonState === 'initializing' ? 0.6 : 1,
+                          cursor: supabaseButtonState === 'testing' || supabaseButtonState === 'initializing' ? 'not-allowed' : 'pointer'
                         }}
-                        title={isSupabaseButtonEnabled ? 'Supabase-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                        title={
+                          supabaseButtonState === 'init'
+                            ? 'Schema initialisieren (SQL-Script wird bereitgestellt)'
+                            : supabaseButtonState === 'update'
+                            ? 'Schema aktualisieren (SQL-Script wird bereitgestellt)'
+                            : supabaseButtonState === 'testing'
+                            ? 'Verbindungstest läuft...'
+                            : supabaseButtonState === 'initializing'
+                            ? 'Schema wird vorbereitet...'
+                            : isSupabaseButtonEnabled
+                            ? 'Supabase-Verbindung testen'
+                            : 'Alle Felder müssen gültig ausgefüllt sein'
+                        }
                       >
-                        <FaWifi className="me-1" />
-                        Verbindung testen
+                        {supabaseButtonState === 'testing' ? (
+                          <>
+                            <FaSpinner className="fa-spin me-1" />
+                            Teste Verbindung...
+                          </>
+                        ) : supabaseButtonState === 'initializing' ? (
+                          <>
+                            <FaSpinner className="fa-spin me-1" />
+                            Bereite vor...
+                          </>
+                        ) : supabaseButtonState === 'init' ? (
+                          <>
+                            <FaDatabase className="me-1" />
+                            Schema initialisieren
+                          </>
+                        ) : supabaseButtonState === 'update' ? (
+                          <>
+                            <FaSync className="me-1" />
+                            Schema aktualisieren
+                          </>
+                        ) : (
+                          <>
+                            <FaWifi className="me-1" />
+                            Verbindung testen
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -6681,26 +7390,9 @@ const StorageManagement: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Hilfreiche Links */}
+                  {/* Schema-Status und Initialisierung */}
                   {storageManagement.connections.supabase.connectionStatus && (
                     <>
-                      <div className="mt-3 p-3 rounded" style={{ backgroundColor: '#3ecf8e20', border: `1px solid #3ecf8e` }}>
-                        <div className="d-flex align-items-start">
-                          <FaCheckCircle className="me-2 mt-1" style={{ color: '#3ecf8e', fontSize: '1.2rem' }} />
-                          <div style={{ flex: 1 }}>
-                            <strong style={{ color: colors.text }}>Verbindung erfolgreich!</strong>
-                            <div className="mt-2" style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
-                              <div className="d-flex flex-column gap-1">
-                                <span>✅ Daten & Bilder werden über Supabase synchronisiert</span>
-                                <span>✅ Automatische Backups durch Supabase</span>
-                                <span>✅ Zugriff von überall (auch über Netlify)</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Schema-Status und Initialisierung */}
                       <div className="mt-3">
                         {supabaseSchemaStatus.checking ? (
                           <div className="alert alert-info" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
@@ -6730,69 +7422,75 @@ const StorageManagement: React.FC = () => {
                               </div>
                             )}
 
-                            {/* Schema existiert nicht - Initialisierung erforderlich */}
+                            {/* Schema existiert nicht - Hinweis */}
                             {!supabaseSchemaStatus.exists && !supabaseSchemaStatus.message && (
                               <div className="alert alert-warning" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107' }}>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <div className="d-flex align-items-start flex-grow-1">
-                                    <FaExclamationTriangle className="me-2 mt-1" style={{ color: '#ffc107' }} />
-                                    <div>
-                                      <strong>Schema nicht gefunden</strong>
-                                      <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
-                                        Das Datenbankschema muss initialisiert werden, bevor Sie Daten speichern können.
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button
-                                    className="btn btn-warning ms-3"
-                                    onClick={handleSupabaseSchemaInit}
-                                    style={{ whiteSpace: 'nowrap' }}
-                                  >
-                                    <FaDatabase className="me-2" />
-                                    Schema initialisieren
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Schema existiert, aber veraltet - Update erforderlich */}
-                            {supabaseSchemaStatus.exists && supabaseSchemaStatus.needsUpdate && (
-                              <div className="alert alert-info" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <div className="d-flex align-items-start flex-grow-1">
-                                    <FaInfoCircle className="me-2 mt-1" style={{ color: '#17a2b8' }} />
-                                    <div>
-                                      <strong>Schema-Update verfügbar</strong>
-                                      <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
-                                        Aktuelle Version: {supabaseSchemaStatus.version} → Neue Version: 2.2.2
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button
-                                    className="btn btn-info ms-3"
-                                    onClick={handleSupabaseSchemaInit}
-                                    style={{ whiteSpace: 'nowrap' }}
-                                  >
-                                    <FaSync className="me-2" />
-                                    Schema aktualisieren
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Schema aktuell - Alles OK */}
-                            {supabaseSchemaStatus.exists && !supabaseSchemaStatus.needsUpdate && (
-                              <div className="alert alert-success" style={{ backgroundColor: '#28a74520', borderColor: '#28a745' }}>
                                 <div className="d-flex align-items-start">
-                                  <FaCheckCircle className="me-2 mt-1" style={{ color: '#28a745' }} />
+                                  <FaExclamationTriangle className="me-2 mt-1" style={{ color: '#ffc107' }} />
                                   <div>
-                                    <strong>Schema aktuell (v{supabaseSchemaStatus.version})</strong>
+                                    <strong>Schema nicht gefunden</strong>
                                     <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
-                                      Ihre Datenbank ist bereit für den Einsatz!
+                                      Das Datenbankschema muss initialisiert werden. Klicken Sie auf den Button "Schema initialisieren" oben.
                                     </p>
                                   </div>
                                 </div>
                               </div>
+                            )}
+
+                            {/* Schema existiert, aber veraltet - Hinweis */}
+                            {supabaseSchemaStatus.exists && supabaseSchemaStatus.needsUpdate && (
+                              <div className="alert alert-info" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
+                                <div className="d-flex align-items-start">
+                                  <FaInfoCircle className="me-2 mt-1" style={{ color: '#17a2b8' }} />
+                                  <div>
+                                    <strong>Schema-Update verfügbar</strong>
+                                    <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
+                                      Aktuelle Version: {supabaseSchemaStatus.version} → Neue Version: 2.2.2
+                                      <br />
+                                      Klicken Sie auf den Button "Schema aktualisieren" oben.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Bucket-Status - nur anzeigen wenn Schema OK ist */}
+                            {supabaseSchemaStatus.exists && !supabaseSchemaStatus.needsUpdate && (
+                              <>
+                                {supabaseBucketStatus.checking ? (
+                                  <div className="alert alert-info" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
+                                    <FaSpinner className="fa-spin me-2" />
+                                    {supabaseBucketStatus.message || 'Prüfe Storage Bucket...'}
+                                  </div>
+                                ) : (
+                                  <>
+                                    {/* Bucket-Erstellung fehlgeschlagen - Zeige Fehler mit manuellem Button */}
+                                    {!supabaseBucketStatus.exists && supabaseBucketStatus.message.includes('fehlgeschlagen') && (
+                                      <div className="alert alert-danger" style={{ backgroundColor: '#dc354520', borderColor: '#dc3545' }}>
+                                        <div className="d-flex justify-content-between align-items-center">
+                                          <div className="d-flex align-items-start flex-grow-1">
+                                            <FaExclamationTriangle className="me-2 mt-1" style={{ color: '#dc3545' }} />
+                                            <div>
+                                              <strong>Bucket-Erstellung fehlgeschlagen</strong>
+                                              <p className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
+                                                {supabaseBucketStatus.message}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <button
+                                            className="btn btn-danger ms-3"
+                                            onClick={handleCreateBucket}
+                                            style={{ whiteSpace: 'nowrap' }}
+                                          >
+                                            <FaFolder className="me-2" />
+                                            Erneut versuchen
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </>
                             )}
                           </>
                         )}
@@ -8191,6 +8889,648 @@ const StorageManagement: React.FC = () => {
                     >
                       <FaTimes className="me-2" />
                       Zurück
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Supabase SQL-Ausführungs-Anleitung Modal */}
+          {showSupabaseSQLModal && (
+            <div 
+              className="modal fade show" 
+              style={{ 
+                display: 'block', 
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                zIndex: 10000 
+              }}
+            >
+              <div className="modal-dialog modal-lg modal-dialog-centered">
+                <div 
+                  className="modal-content" 
+                  style={{ 
+                    backgroundColor: colors.background, 
+                    color: colors.text,
+                    border: `2px solid #3ecf8e`
+                  }}
+                >
+                  <div 
+                    className="modal-header" 
+                    style={{ 
+                      backgroundColor: '#3ecf8e',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    <h5 className="modal-title" style={{ color: '#ffffff', fontWeight: 'bold' }}>
+                      <FaDatabase className="me-2" />
+                      Datenbank-Schema ausführen
+                    </h5>
+                  </div>
+                  <div className="modal-body" style={{ padding: '30px', fontSize: '1rem' }}>
+                    {/* Erfolgs-Banner */}
+                    <div className="alert alert-success mb-4" style={{ backgroundColor: '#28a74520', borderColor: '#28a745' }}>
+                      <FaCheckCircle className="me-2" style={{ color: '#28a745' }} />
+                      <strong>SQL-Befehle erfolgreich in die Zwischenablage kopiert!</strong>
+                    </div>
+
+                    {/* Schritt-für-Schritt Anleitung */}
+                    <div className="mb-4">
+                      <h6 style={{ color: '#3ecf8e', fontWeight: 'bold', marginBottom: '20px' }}>
+                        Führen Sie diese Schritte aus:
+                      </h6>
+
+                      <div className="d-flex flex-column gap-3">
+                        {/* Schritt 1 */}
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="badge bg-success me-3" 
+                            style={{ 
+                              fontSize: '1rem', 
+                              padding: '8px 12px',
+                              minWidth: '35px',
+                              borderRadius: '50%'
+                            }}
+                          >
+                            1
+                          </div>
+                          <div>
+                            <strong>SQL Editor öffnen</strong>
+                            <p className="mb-2 mt-1" style={{ color: colors.textSecondary }}>
+                              Klicken Sie auf den Button unten, um den Supabase SQL Editor zu öffnen.
+                            </p>
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => window.open(supabaseSQLEditorUrl, '_blank')}
+                              style={{
+                                backgroundColor: '#3ecf8e',
+                                borderColor: '#3ecf8e',
+                                color: '#ffffff'
+                              }}
+                            >
+                              <FaExternalLinkAlt className="me-2" />
+                              SQL Editor öffnen
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Schritt 2 */}
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="badge bg-success me-3" 
+                            style={{ 
+                              fontSize: '1rem', 
+                              padding: '8px 12px',
+                              minWidth: '35px',
+                              borderRadius: '50%'
+                            }}
+                          >
+                            2
+                          </div>
+                          <div>
+                            <strong>SQL-Befehle einfügen</strong>
+                            <p className="mb-0 mt-1" style={{ color: colors.textSecondary }}>
+                              Fügen Sie die Befehle im <strong>oberen Eingabefeld</strong> des SQL Editors ein:
+                              <br />
+                              Drücken Sie <kbd>Strg + V</kbd> (Windows) oder <kbd>Cmd + V</kbd> (Mac)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Schritt 3 */}
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="badge bg-success me-3" 
+                            style={{ 
+                              fontSize: '1rem', 
+                              padding: '8px 12px',
+                              minWidth: '35px',
+                              borderRadius: '50%'
+                            }}
+                          >
+                            3
+                          </div>
+                          <div>
+                            <strong>Script ausführen</strong>
+                            <p className="mb-0 mt-1" style={{ color: colors.textSecondary }}>
+                              Klicken Sie auf den Button <strong>"Run"</strong> (unten rechts im Editor)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Schritt 4 */}
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="badge bg-warning me-3" 
+                            style={{ 
+                              fontSize: '1rem', 
+                              padding: '8px 12px',
+                              minWidth: '35px',
+                              borderRadius: '50%',
+                              color: '#000'
+                            }}
+                          >
+                            4
+                          </div>
+                          <div>
+                            <strong>Warnung bestätigen</strong>
+                            <p className="mb-0 mt-1" style={{ color: colors.textSecondary }}>
+                              Bei der Meldung <em>"Potential issue detected with your query"</em>:
+                              <br />
+                              → Klicken Sie auf <strong>"Run this query"</strong> um fortzufahren
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Schritt 5 */}
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="badge bg-success me-3" 
+                            style={{ 
+                              fontSize: '1rem', 
+                              padding: '8px 12px',
+                              minWidth: '35px',
+                              borderRadius: '50%'
+                            }}
+                          >
+                            5
+                          </div>
+                          <div>
+                            <strong>Erfolg prüfen</strong>
+                            <p className="mb-0 mt-1" style={{ color: colors.textSecondary }}>
+                              Warten Sie auf die Meldung: <em>"Success. No rows returned"</em>
+                              <br />
+                              ✅ Das Schema wurde erfolgreich erstellt!
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Schritt 6 */}
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="badge bg-primary me-3" 
+                            style={{ 
+                              fontSize: '1rem', 
+                              padding: '8px 12px',
+                              minWidth: '35px',
+                              borderRadius: '50%'
+                            }}
+                          >
+                            6
+                          </div>
+                          <div>
+                            <strong>Verbindung abschließen</strong>
+                            <p className="mb-0 mt-1" style={{ color: colors.textSecondary }}>
+                              Schließen Sie dieses Fenster und klicken Sie unten auf <strong>"Fertig - Verbindung testen"</strong>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Info-Box */}
+                    <div className="alert alert-info mt-4 mb-0" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
+                      <FaInfoCircle className="me-2" />
+                      <small>
+                        <strong>Hinweis:</strong> Der SQL Editor muss in einem neuen Tab geöffnet werden, 
+                        damit Sie zwischen dieser Anleitung und dem Editor wechseln können.
+                      </small>
+                    </div>
+                  </div>
+                  <div 
+                    className="modal-footer" 
+                    style={{ 
+                      borderTop: `1px solid ${colors.cardBorder}`,
+                      backgroundColor: colors.card,
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => {
+                        setShowSupabaseSQLModal(false);
+                        setSupabaseSQLEditorUrl('');
+                      }}
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-success"
+                      onClick={async () => {
+                        setShowSupabaseSQLModal(false);
+                        setSupabaseSQLEditorUrl('');
+                        // Starte Verbindungstest neu
+                        await handleSupabaseConnectionTest();
+                      }}
+                      style={{
+                        backgroundColor: '#28a745',
+                        borderColor: '#28a745'
+                      }}
+                    >
+                      <FaCheckCircle className="me-2" />
+                      Fertig - Verbindung testen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Supabase Setup-Anleitung Modal */}
+          {showSupabaseSetupModal && (
+            <div 
+              className="modal fade show" 
+              style={{ 
+                display: 'block', 
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                zIndex: 9999 
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowSupabaseSetupModal(false);
+                  setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
+                }
+              }}
+            >
+              <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                <div 
+                  className="modal-content" 
+                  style={{ 
+                    backgroundColor: colors.background, 
+                    color: colors.text,
+                    border: `1px solid ${colors.cardBorder}`,
+                    maxHeight: '90vh'
+                  }}
+                >
+                  <div 
+                    className="modal-header" 
+                    style={{ 
+                      backgroundColor: colors.card,
+                      borderBottom: `1px solid ${colors.cardBorder}`
+                    }}
+                  >
+                    <h5 className="modal-title">
+                      <FaInfoCircle className="me-2" style={{ color: '#3ecf8e' }} />
+                      Supabase Projekt einrichten - Schritt für Schritt
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => {
+                        setShowSupabaseSetupModal(false);
+                        setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
+                      }}
+                      style={{ filter: colors.text === '#ffffff' ? 'invert(1)' : 'none' }}
+                    />
+                  </div>
+                  <div className="modal-body" style={{ padding: '30px' }}>
+                    {/* Einleitung */}
+                    <div className="alert alert-info mb-4" style={{ backgroundColor: '#3ecf8e20', borderColor: '#3ecf8e' }}>
+                      <FaInfoCircle className="me-2" />
+                      <strong>Willkommen!</strong> Diese Anleitung hilft Ihnen, Ihr Supabase-Projekt einzurichten.
+                      <br />
+                      <small>Die Einrichtung dauert nur wenige Minuten und ist komplett kostenlos.</small>
+                    </div>
+
+                    {/* Schritt 1: Projekt erstellen */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#3ecf8e', fontWeight: 'bold' }}>
+                        <span className="badge bg-success me-2">1</span>
+                        Projekt erstellen
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Öffnen Sie <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" style={{ color: '#3ecf8e' }}>supabase.com</a> in einem neuen Tab
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Start your project"</strong> oder <strong>"Sign In"</strong> (falls bereits registriert)
+                        </li>
+                        <li className="mb-2">
+                          Erstellen Sie ein kostenloses Konto mit GitHub, Google oder E-Mail
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"New Project"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie eine Organisation oder erstellen Sie eine neue
+                        </li>
+                        <li className="mb-2">
+                          Geben Sie einen Projektnamen ein (z.B. "chef-numbers")
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie ein <strong>sicheres Datenbank-Passwort</strong> (wird später nicht mehr angezeigt!)
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie eine Region (am besten in Ihrer Nähe, z.B. "West EU (London)" oder "Central EU (Frankfurt)")
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Create new project"</strong>
+                        </li>
+                        <li>
+                          Warten Sie ca. 1-2 Minuten, bis das Projekt bereitgestellt ist ⏱️
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Schritt 2: URL kopieren */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#3ecf8e', fontWeight: 'bold' }}>
+                        <span className="badge bg-success me-2">2</span>
+                        Project URL kopieren
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Nach der Erstellung des Projekts befinden Sie sich auf der <strong>"Project Overview"</strong> Seite
+                        </li>
+                        <li className="mb-2">
+                          Dort sehen Sie Ihre <strong>Project URL</strong> im oberen Bereich der Seite
+                        </li>
+                        <li className="mb-3">
+                          Kopieren Sie die URL (Format: <code>https://xxxxx.supabase.co</code>)
+                        </li>
+                      </ol>
+                      
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaCloud className="me-2" style={{ color: '#3ecf8e' }} />
+                          Supabase Project URL einfügen:
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control ${supabaseSetupData.url && !validateSupabaseURL(supabaseSetupData.url).isValid ? 'is-invalid' : supabaseSetupData.url && validateSupabaseURL(supabaseSetupData.url).isValid ? 'is-valid' : ''}`}
+                          value={supabaseSetupData.url}
+                          onChange={(e) => setSupabaseSetupData({ ...supabaseSetupData, url: e.target.value })}
+                          placeholder="https://xxxxx.supabase.co"
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                        {supabaseSetupData.url && (
+                          <div style={{ 
+                            color: validateSupabaseURL(supabaseSetupData.url).isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateSupabaseURL(supabaseSetupData.url).isValid ? '✓ ' : '✗ '}
+                            {validateSupabaseURL(supabaseSetupData.url).message}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Schritt 3: API Keys kopieren */}
+                    <div className="mb-4">
+                      <h6 style={{ color: '#3ecf8e', fontWeight: 'bold' }}>
+                        <span className="badge bg-success me-2">3</span>
+                        API Keys kopieren
+                      </h6>
+                      <ol className="mt-3 mb-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Klicken Sie in der linken Seitenleiste auf <strong>"Project Settings"</strong> (Zahnrad-Symbol)
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie im Menü <strong>"API Keys"</strong>
+                        </li>
+                        <li className="mb-3">
+                          Dort finden Sie zwei wichtige Keys:
+                          <ul className="mt-2">
+                            <li className="mb-2">
+                              <strong>anon / public:</strong> Dieser Key ist für öffentliche Anfragen (kann im Browser verwendet werden)
+                            </li>
+                            <li>
+                              <strong>service_role secret:</strong> Dieser Key hat vollständigen Zugriff (⚠️ <strong>Niemals</strong> öffentlich teilen!)
+                            </li>
+                          </ul>
+                        </li>
+                        <li className="mb-2">
+                          Kopieren Sie beide Keys nacheinander (Klick auf das Kopiersymbol neben dem Key)
+                        </li>
+                      </ol>
+
+                      {/* Anon Key */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaKey className="me-2" style={{ color: '#3ecf8e' }} />
+                          Anon (Public) Key einfügen:
+                        </label>
+                        <textarea
+                          className={`form-control ${supabaseSetupData.anonKey && !validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid ? 'is-invalid' : supabaseSetupData.anonKey && validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid ? 'is-valid' : ''}`}
+                          value={supabaseSetupData.anonKey}
+                          onChange={(e) => setSupabaseSetupData({ ...supabaseSetupData, anonKey: e.target.value })}
+                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          rows={3}
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem',
+                            resize: 'vertical'
+                          }}
+                        />
+                        {supabaseSetupData.anonKey && (
+                          <div style={{ 
+                            color: validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid ? '✓ ' : '✗ '}
+                            {validateSupabaseKey(supabaseSetupData.anonKey, 'anon').message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Service Role Key */}
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaShieldAlt className="me-2" style={{ color: '#3ecf8e' }} />
+                          Service Role Secret einfügen:
+                        </label>
+                        <textarea
+                          className={`form-control ${supabaseSetupData.serviceRoleKey && !validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? 'is-invalid' : supabaseSetupData.serviceRoleKey && validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? 'is-valid' : ''}`}
+                          value={supabaseSetupData.serviceRoleKey}
+                          onChange={(e) => setSupabaseSetupData({ ...supabaseSetupData, serviceRoleKey: e.target.value })}
+                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          rows={3}
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem',
+                            resize: 'vertical'
+                          }}
+                        />
+                        {supabaseSetupData.serviceRoleKey && (
+                          <div style={{ 
+                            color: validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? '#198754' : '#dc3545', 
+                            fontSize: '0.875em', 
+                            marginTop: '4px' 
+                          }}>
+                            {validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? '✓ ' : '✗ '}
+                            {validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sicherheitshinweis */}
+                      <div className="alert alert-warning mb-0" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.9rem' }}>
+                        <FaExclamationTriangle className="me-2" />
+                        <strong>Wichtig:</strong> Der Service Role Secret hat vollständigen Zugriff auf Ihre Datenbank. 
+                        Behandeln Sie ihn wie ein Passwort und teilen Sie ihn niemals öffentlich!
+                      </div>
+                    </div>
+
+                    {/* Schritt 4: RPC Auto-Installer einrichten */}
+                    <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 style={{ color: '#3ecf8e', fontWeight: 'bold' }}>
+                        <span className="badge bg-success me-2">4</span>
+                        Auto-Installer einrichten (einmalig)
+                      </h6>
+                      <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                        <li className="mb-2">
+                          Nach der Einrichtung können alle zukünftigen Schema-Updates <strong>automatisch</strong> durchgeführt werden!
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf den Button unten - das Script wird <strong>automatisch in die Zwischenablage kopiert</strong> und der <strong>SQL Editor öffnet sich</strong> in einem neuen Tab
+                        </li>
+                        <li className="mb-2">
+                          Fügen Sie das Script im SQL Editor ein: Drücken Sie <kbd>Strg + V</kbd> (Windows) oder <kbd>Cmd + V</kbd> (Mac)
+                        </li>
+                        <li className="mb-2">
+                          Klicken Sie auf <strong>"Run"</strong> (unten rechts im Editor)
+                        </li>
+                        <li className="mb-2">
+                          Bestätigen Sie bei der Meldung "Potential issue detected" mit <strong>"Run this query"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Fertig! Ab jetzt kann die App das Schema automatisch installieren/aktualisieren 🤖
+                        </li>
+                      </ol>
+
+                      <div className="mt-3">
+                        <button
+                          className="btn btn-sm"
+                          onClick={async () => {
+                            try {
+                              const scriptResponse = await fetch('/init-scripts/supabase-auto-installer.sql');
+                              const script = await scriptResponse.text();
+                              await navigator.clipboard.writeText(script);
+                              
+                              // Öffne SQL Editor
+                              if (supabaseSetupData.url) {
+                                const projectRef = supabaseSetupData.url.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
+                                if (projectRef) {
+                                  window.open(`https://supabase.com/dashboard/project/${projectRef}/sql/new`, '_blank');
+                                }
+                              }
+                            } catch (error) {
+                              console.error('❌ Fehler beim Laden des Auto-Installer-Scripts:', error);
+                            }
+                          }}
+                          disabled={!supabaseSetupData.url}
+                          style={{
+                            backgroundColor: '#3ecf8e',
+                            borderColor: '#3ecf8e',
+                            color: '#ffffff',
+                            opacity: !supabaseSetupData.url ? 0.6 : 1
+                          }}
+                        >
+                          <FaDatabase className="me-2" />
+                          Auto-Installer-Script kopieren & SQL Editor öffnen
+                        </button>
+                        
+                        {!supabaseSetupData.url && (
+                          <div className="mt-2" style={{ fontSize: '0.85rem', color: colors.textSecondary }}>
+                            <FaInfoCircle className="me-1" />
+                            Bitte geben Sie zuerst die Project URL ein
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="alert alert-info mt-3 mb-0" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8', fontSize: '0.85rem' }}>
+                        <FaInfoCircle className="me-2" />
+                        <strong>Hinweis:</strong> Dieser Schritt muss nur <strong>einmal</strong> durchgeführt werden. 
+                        Die RPC-Function bleibt dauerhaft verfügbar und wird bei Bedarf automatisch aktualisiert.
+                      </div>
+                    </div>
+
+                    {/* Erfolgs-Banner */}
+                    {validateSupabaseURL(supabaseSetupData.url).isValid &&
+                     validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid &&
+                     validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid && (
+                      <div className="alert alert-success mt-4" style={{ backgroundColor: '#19875420', borderColor: '#198754' }}>
+                        <FaCheckCircle className="me-2" />
+                        <strong>Perfekt!</strong> Alle erforderlichen Daten sind gültig. Sie können jetzt fortfahren!
+                      </div>
+                    )}
+                  </div>
+                  <div 
+                    className="modal-footer" 
+                    style={{ 
+                      borderTop: `1px solid ${colors.cardBorder}`,
+                      backgroundColor: colors.card
+                    }}
+                  >
+                    {validateSupabaseURL(supabaseSetupData.url).isValid &&
+                     validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid &&
+                     validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? (
+                      <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={() => {
+                          // Daten in die Konfiguration übernehmen
+                          handleStorageManagementUpdate({
+                            connections: {
+                              ...storageManagement.connections,
+                              supabase: {
+                                ...storageManagement.connections.supabase,
+                                url: supabaseSetupData.url,
+                                anonKey: supabaseSetupData.anonKey,
+                                serviceRoleKey: supabaseSetupData.serviceRoleKey
+                              }
+                            }
+                          });
+                          setShowSupabaseSetupModal(false);
+                          setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
+                        }}
+                        style={{
+                          backgroundColor: '#198754',
+                          borderColor: '#198754'
+                        }}
+                      >
+                        <FaCheckCircle className="me-2" />
+                        Daten übernehmen und schließen
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled
+                        style={{
+                          opacity: 0.6,
+                          cursor: 'not-allowed'
+                        }}
+                      >
+                        <FaTimes className="me-2" />
+                        Abbrechen
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => {
+                        setShowSupabaseSetupModal(false);
+                        setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
+                      }}
+                    >
+                      Schließen
                     </button>
                   </div>
                 </div>

@@ -1827,9 +1827,17 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
     fs.writeFileSync(supabaseScriptPath, supabaseScript);
     console.log(`✅ Supabase Init-Script geschrieben: ${supabaseScriptPath}`);
     
+    // Generiere Supabase RPC-Function für Auto-Install
+    console.log('\n🤖 Generiere Supabase RPC Auto-Installer...');
+    const rpcFunction = generateSupabaseRPCFunction(definitions);
+    const rpcFunctionPath = path.join(__dirname, '../public/init-scripts', 'supabase-auto-installer.sql');
+    fs.writeFileSync(rpcFunctionPath, rpcFunction);
+    console.log(`✅ Supabase RPC Auto-Installer geschrieben: ${rpcFunctionPath}`);
+    
     console.log('\n🎉 Alle Dateien erfolgreich generiert!');
     console.log(`📦 Prisma API bereit für MariaDB/MySQL`);
     console.log(`☁️  Supabase Script bereit für Cloud-Deployment`);
+    console.log(`🤖 Supabase Auto-Installer RPC-Function bereit!`);
     
   } catch (error) {
     console.error('❌ Fehler bei automatischer Schema-Generierung:', error);
@@ -2056,6 +2064,288 @@ CREATE TABLE IF NOT EXISTS design (
   script += `-- 2. Aktivieren Sie RLS Policies wenn gewünscht\n`;
   script += `-- 3. Testen Sie die Verbindung in Ihrer App\n`;
   script += `-- \n`;
+
+  return script;
+}
+
+// Generiere RPC-Function für automatische Schema-Installation
+function generateSupabaseRPCFunction(definitions: SchemaDefinitions): string {
+  const timestamp = new Date().toISOString();
+  const targetVersion = '2.2.2';
+  
+  let script = `-- ============================================
+-- SUPABASE AUTO-INSTALLER: RPC-Function
+-- ============================================
+-- Frontend-synchronisiertes Schema v${targetVersion}
+-- Automatisch generiert am: ${timestamp}
+--
+-- Diese RPC-Function ermöglicht die automatische Schema-Installation
+-- per REST API ohne manuelle Benutzerinteraktion!
+--
+-- EINMALIGE INSTALLATION:
+-- Führen Sie dieses Script EINMAL manuell im SQL Editor aus.
+-- 
+-- AUTOMATISCHE NUTZUNG:
+-- Die App kann dann per API-Call das Schema initialisieren:
+-- POST https://xxxxx.supabase.co/rest/v1/rpc/initialize_chef_numbers_schema
+--
+
+-- ========================================
+-- RPC-Function: Schema initialisieren/migrieren
+-- ========================================
+
+CREATE OR REPLACE FUNCTION initialize_chef_numbers_schema()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER  -- Führt mit Owner-Rechten aus (wichtig!)
+AS $$
+DECLARE
+  current_version TEXT := NULL;
+  target_version TEXT := '${targetVersion}';
+  tables_created INTEGER := 0;
+  tables_migrated INTEGER := 0;
+  errors_count INTEGER := 0;
+  result JSON;
+BEGIN
+  -- Prüfe ob system_info Tabelle existiert
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'system_info') THEN
+    -- ERSTE INSTALLATION - Erstelle alles von Grund auf
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'ERSTE INSTALLATION - Erstelle Schema v%', target_version;
+    RAISE NOTICE '========================================';
+    
+    -- 1. Erstelle Enum-Typen
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sync_status_enum') THEN
+        CREATE TYPE sync_status_enum AS ENUM ('synced', 'pending', 'error', 'conflict');
+        RAISE NOTICE '✅ Enum sync_status_enum erstellt';
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE '⚠️ Fehler bei sync_status_enum: %', SQLERRM;
+      errors_count := errors_count + 1;
+    END;
+    
+    -- 2. Erstelle system_info Tabelle
+    BEGIN
+      CREATE TABLE IF NOT EXISTS system_info (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        key TEXT UNIQUE NOT NULL,
+        value TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT now(),
+        updated_at TIMESTAMP DEFAULT now()
+      );
+      tables_created := tables_created + 1;
+      RAISE NOTICE '✅ Tabelle system_info erstellt';
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE '❌ Fehler bei system_info: %', SQLERRM;
+      errors_count := errors_count + 1;
+    END;
+    
+    -- 3. Erstelle design Tabelle
+    BEGIN
+      CREATE TABLE IF NOT EXISTS design (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        theme TEXT DEFAULT 'light',
+        primary_color TEXT DEFAULT '#007bff',
+        secondary_color TEXT DEFAULT '#6c757d',
+        accent_color TEXT DEFAULT '#28a745',
+        background_color TEXT DEFAULT '#ffffff',
+        text_color TEXT DEFAULT '#212529',
+        card_color TEXT DEFAULT '#f8f9fa',
+        border_color TEXT DEFAULT '#dee2e6',
+        created_at TIMESTAMP DEFAULT now(),
+        updated_at TIMESTAMP DEFAULT now()
+      );
+      tables_created := tables_created + 1;
+      RAISE NOTICE '✅ Tabelle design erstellt';
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE '❌ Fehler bei design: %', SQLERRM;
+      errors_count := errors_count + 1;
+    END;
+    
+`;
+
+  // Generiere CREATE TABLE Statements für alle Entity-Tabellen
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    const tableName = definition.tableName;
+    
+    script += `    -- 4.${Object.keys(definitions).indexOf(interfaceName) + 1} Erstelle ${tableName} Tabelle\n`;
+    script += `    BEGIN\n`;
+    script += `      CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
+    
+    for (let i = 0; i < definition.columns.length; i++) {
+      const column = definition.columns[i];
+      let pgType = column.type;
+      
+      const nullable = column.nullable ? 'NULL' : 'NOT NULL';
+      const primary = column.primary ? 'PRIMARY KEY' : '';
+      
+      let defaultValue = '';
+      if (column.name === 'db_id') {
+        defaultValue = 'DEFAULT gen_random_uuid()';
+      } else if (column.name === 'created_at') {
+        defaultValue = 'DEFAULT now()';
+      } else if (column.name === 'sync_status') {
+        defaultValue = "DEFAULT 'pending'";
+      } else if (column.name === 'is_dirty' || column.name === 'is_new') {
+        defaultValue = 'DEFAULT false';
+      } else if (column.defaultValue !== undefined && column.defaultValue !== null) {
+        if (typeof column.defaultValue === 'string' && 
+            (column.defaultValue === 'CURRENT_TIMESTAMP' || 
+             column.defaultValue === 'now()' ||
+             column.defaultValue.startsWith('gen_random_uuid'))) {
+          defaultValue = `DEFAULT ${column.defaultValue}`;
+        } else if (typeof column.defaultValue === 'string') {
+          defaultValue = `DEFAULT '${column.defaultValue}'`;
+        } else {
+          defaultValue = `DEFAULT ${column.defaultValue}`;
+        }
+      }
+      
+      const comma = i < definition.columns.length - 1 ? ',' : '';
+      script += `        ${column.name} ${pgType} ${defaultValue} ${nullable} ${primary}${comma}\n`;
+    }
+    
+    script += `      );\n`;
+    script += `      tables_created := tables_created + 1;\n`;
+    script += `      RAISE NOTICE '✅ Tabelle ${tableName} erstellt';\n`;
+    script += `    EXCEPTION WHEN OTHERS THEN\n`;
+    script += `      RAISE NOTICE '❌ Fehler bei ${tableName}: %', SQLERRM;\n`;
+    script += `      errors_count := errors_count + 1;\n`;
+    script += `    END;\n\n`;
+    
+    // Erstelle Indizes
+    script += `    -- Indizes für ${tableName}\n`;
+    script += `    BEGIN\n`;
+    script += `      CREATE INDEX IF NOT EXISTS idx_${tableName}_id ON ${tableName}(id);\n`;
+    script += `      CREATE INDEX IF NOT EXISTS idx_${tableName}_sync_status ON ${tableName}(sync_status);\n`;
+    script += `      RAISE NOTICE '✅ Indizes für ${tableName} erstellt';\n`;
+    script += `    EXCEPTION WHEN OTHERS THEN\n`;
+    script += `      RAISE NOTICE '⚠️ Fehler bei Indizes für ${tableName}: %', SQLERRM;\n`;
+    script += `    END;\n\n`;
+  }
+
+  // Trigger-Function und Trigger
+  script += `    -- 5. Erstelle Trigger-Function für updated_at\n`;
+  script += `    BEGIN\n`;
+  script += `      CREATE OR REPLACE FUNCTION update_updated_at_column()\n`;
+  script += `      RETURNS TRIGGER AS $trigger$\n`;
+  script += `      BEGIN\n`;
+  script += `        NEW.updated_at = now();\n`;
+  script += `        RETURN NEW;\n`;
+  script += `      END;\n`;
+  script += `      $trigger$ language 'plpgsql';\n`;
+  script += `      RAISE NOTICE '✅ Trigger-Function erstellt';\n`;
+  script += `    EXCEPTION WHEN OTHERS THEN\n`;
+  script += `      RAISE NOTICE '❌ Fehler bei Trigger-Function: %', SQLERRM;\n`;
+  script += `      errors_count := errors_count + 1;\n`;
+  script += `    END;\n\n`;
+
+  // Trigger für alle Tabellen
+  script += `    -- 6. Erstelle updated_at Trigger\n`;
+  for (const [_, definition] of Object.entries(definitions)) {
+    const tableName = definition.tableName;
+    script += `    BEGIN\n`;
+    script += `      DROP TRIGGER IF EXISTS update_${tableName}_updated_at ON ${tableName};\n`;
+    script += `      CREATE TRIGGER update_${tableName}_updated_at\n`;
+    script += `        BEFORE UPDATE ON ${tableName}\n`;
+    script += `        FOR EACH ROW\n`;
+    script += `        EXECUTE FUNCTION update_updated_at_column();\n`;
+    script += `    EXCEPTION WHEN OTHERS THEN null; END;\n\n`;
+  }
+  
+  // System-Tabellen Trigger
+  script += `    BEGIN\n`;
+  script += `      DROP TRIGGER IF EXISTS update_system_info_updated_at ON system_info;\n`;
+  script += `      CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
+  script += `      DROP TRIGGER IF EXISTS update_design_updated_at ON design;\n`;
+  script += `      CREATE TRIGGER update_design_updated_at BEFORE UPDATE ON design FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
+  script += `    EXCEPTION WHEN OTHERS THEN null; END;\n\n`;
+
+  // System-Info initialisieren
+  script += `    -- 7. Initialisiere system_info\n`;
+  script += `    BEGIN\n`;
+  script += `      INSERT INTO system_info (key, value, description) VALUES\n`;
+  script += `        ('schema_version', '${targetVersion}', 'Schema Version'),\n`;
+  script += `        ('installation_date', now()::text, 'Installationsdatum'),\n`;
+  script += `        ('auto_installed', 'true', 'Per RPC-Function automatisch installiert')\n`;
+  script += `      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();\n`;
+  script += `      RAISE NOTICE '✅ System-Info initialisiert';\n`;
+  script += `    EXCEPTION WHEN OTHERS THEN\n`;
+  script += `      RAISE NOTICE '❌ Fehler bei system_info INSERT: %', SQLERRM;\n`;
+  script += `      errors_count := errors_count + 1;\n`;
+  script += `    END;\n\n`;
+
+  script += `  ELSE\n`;
+  script += `    -- SCHEMA EXISTIERT BEREITS - Prüfe Migration\n`;
+  script += `    SELECT value INTO current_version FROM system_info WHERE key = 'schema_version' LIMIT 1;\n`;
+  script += `    \n`;
+  script += `    RAISE NOTICE '========================================';\n`;
+  script += `    RAISE NOTICE 'SCHEMA-MIGRATION';\n`;
+  script += `    RAISE NOTICE 'Aktuelle Version: %', COALESCE(current_version, 'unbekannt');\n`;
+  script += `    RAISE NOTICE 'Ziel-Version: %', target_version;\n`;
+  script += `    RAISE NOTICE '========================================';\n`;
+  script += `    \n`;
+  script += `    IF current_version IS NULL OR current_version::DECIMAL < target_version::DECIMAL THEN\n`;
+  script += `      RAISE NOTICE '🔄 Migration erforderlich';\n`;
+  script += `      \n`;
+  script += `      -- Hier könnten spezifische Migrationen eingefügt werden\n`;
+  script += `      -- Beispiel: ALTER TABLE ... ADD COLUMN ...\n`;
+  script += `      \n`;
+  script += `      -- Update Schema-Version\n`;
+  script += `      UPDATE system_info SET value = target_version, updated_at = now() WHERE key = 'schema_version';\n`;
+  script += `      tables_migrated := tables_migrated + 1;\n`;
+  script += `      RAISE NOTICE '✅ Schema auf v% migriert', target_version;\n`;
+  script += `    ELSE\n`;
+  script += `      RAISE NOTICE '✅ Schema ist bereits aktuell (v%)', current_version;\n`;
+  script += `    END IF;\n`;
+  script += `  END IF;\n`;
+  script += `  \n`;
+  script += `  -- Baue Ergebnis-JSON\n`;
+  script += `  result := json_build_object(\n`;
+  script += `    'success', true,\n`;
+  script += `    'version', target_version,\n`;
+  script += `    'tables_created', tables_created,\n`;
+  script += `    'tables_migrated', tables_migrated,\n`;
+  script += `    'errors_count', errors_count,\n`;
+  script += `    'message', CASE\n`;
+  script += `      WHEN tables_created > 0 THEN 'Schema v' || target_version || ' erfolgreich installiert! ' || tables_created::text || ' Tabellen erstellt.'\n`;
+  script += `      WHEN tables_migrated > 0 THEN 'Schema auf v' || target_version || ' migriert!'\n`;
+  script += `      ELSE 'Schema ist bereits aktuell (v' || target_version || ')'\n`;
+  script += `    END,\n`;
+  script += `    'timestamp', now()\n`;
+  script += `  );\n`;
+  script += `  \n`;
+  script += `  RETURN result;\n`;
+  script += `  \n`;
+  script += `EXCEPTION\n`;
+  script += `  WHEN OTHERS THEN\n`;
+  script += `    RETURN json_build_object(\n`;
+  script += `      'success', false,\n`;
+  script += `      'error', SQLERRM,\n`;
+  script += `      'message', 'Schema-Installation fehlgeschlagen: ' || SQLERRM,\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `END;\n`;
+  script += `$$;\n\n`;
+
+  script += `-- ========================================\n`;
+  script += `-- FERTIG!\n`;
+  script += `-- ========================================\n`;
+  script += `-- \n`;
+  script += `-- Die RPC-Function ist jetzt installiert!\n`;
+  script += `-- \n`;
+  script += `-- Die App kann sie nun per API aufrufen:\n`;
+  script += `-- POST /rest/v1/rpc/initialize_chef_numbers_schema\n`;
+  script += `-- \n`;
+  script += `-- Die Function:\n`;
+  script += `-- - Erkennt automatisch ob Neu-Installation oder Migration\n`;
+  script += `-- - Erstellt alle benötigten Tabellen\n`;
+  script += `-- - Führt Migrationen durch (falls nötig)\n`;
+  script += `-- - Gibt detailliertes JSON-Ergebnis zurück\n`;
+  script += `-- \n`;
+  script += `-- ========================================\n`;
 
   return script;
 }

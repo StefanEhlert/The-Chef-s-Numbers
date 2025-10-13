@@ -2436,8 +2436,18 @@ export class StorageLayer {
       }
 
       const parsed = JSON.parse(storageManagementData);
+      
+      // WICHTIG: Verwende activeConnections Snapshot statt connections!
+      // Dies verhindert, dass getestete aber nicht übernommene Daten verwendet werden
+      if (parsed.currentStorage?.activeConnections) {
+        console.log('🔒 Verwende AKTIVE Connection-Daten aus Snapshot (sicher)');
+        console.log('🔗 Aktive Verbindungen:', Object.keys(parsed.currentStorage.activeConnections).filter(k => parsed.currentStorage.activeConnections[k]));
+        return parsed.currentStorage.activeConnections;
+      }
+      
+      // Fallback: Verwende normale connections (für Abwärtskompatibilität)
       const connections = parsed.connections || {};
-
+      console.log('⚠️ Kein activeConnections Snapshot gefunden, verwende normale connections (UNSICHER!)');
       console.log('🔗 Verbindungsdaten aus LocalStorage geladen:', Object.keys(connections));
       return connections;
     } catch (error) {
