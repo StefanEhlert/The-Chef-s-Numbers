@@ -10181,7 +10181,10 @@ const StorageManagement: React.FC = () => {
                           Sie befinden sich jetzt auf der Projekt-Übersichtsseite
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf das <strong>Web-Symbol</strong> (<code>&lt;/&gt;</code>) unter "Get started by adding Firebase to your app"
+                          Klicken Sie auf den <strong>"+App"</strong>-Button (oder direkt auf ein Platform-Symbol)
+                        </li>
+                        <li className="mb-2">
+                          Wählen Sie das <strong>Web-Symbol</strong> (<code>&lt;/&gt;</code>) aus
                         </li>
                         <li className="mb-2">
                           Geben Sie einen App-Nickname ein (z.B. "Chef Numbers Web")
@@ -10206,19 +10209,77 @@ const StorageManagement: React.FC = () => {
                       </h6>
                       <p className="mb-3">
                         Firebase zeigt Ihnen einen Code-Block mit der Firebase-Konfiguration. 
-                        Kopieren Sie die Werte aus dem <code>firebaseConfig</code>-Objekt und fügen Sie sie unten ein:
+                        Sie haben <strong>zwei Möglichkeiten</strong>:
                       </p>
 
-                      <div className="alert alert-secondary mb-3" style={{ backgroundColor: colors.card, borderColor: colors.cardBorder, fontSize: '0.85rem' }}>
-                        <strong>Beispiel:</strong>
-                        <pre style={{ marginTop: '10px', marginBottom: 0, fontSize: '0.8rem' }}>{`const firebaseConfig = {
+                      {/* OPTION 1: Kompletten Block einfügen */}
+                      <div className="alert alert-success mb-3" style={{ backgroundColor: '#19875420', borderColor: '#198754' }}>
+                        <FaCheckCircle className="me-2" />
+                        <strong>Schnell-Methode:</strong> Kopieren Sie den <strong>gesamten</strong> <code>firebaseConfig</code>-Block (mit den geschweiften Klammern) und fügen Sie ihn unten ein. Die App extrahiert automatisch alle Werte! 🎯
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="form-label">
+                          <FaDatabase className="me-2" style={{ color: '#198754' }} />
+                          Kompletten firebaseConfig-Block hier einfügen:
+                        </label>
+                        <textarea
+                          className="form-control"
+                          rows={8}
+                          placeholder={`const firebaseConfig = {
   apiKey: "AIzaSyA...",
   authDomain: "your-app.firebaseapp.com",
   projectId: "your-project-id",
   storageBucket: "your-app.appspot.com",
   messagingSenderId: "123456789012",
   appId: "1:123456789:web:abcdef123456"
-};`}</pre>
+};`}
+                          onChange={(e) => {
+                            const configText = e.target.value;
+                            try {
+                              // Versuche, die Config-Werte zu extrahieren
+                              const apiKeyMatch = configText.match(/apiKey\s*:\s*["']([^"']+)["']/);
+                              const authDomainMatch = configText.match(/authDomain\s*:\s*["']([^"']+)["']/);
+                              const projectIdMatch = configText.match(/projectId\s*:\s*["']([^"']+)["']/);
+                              const storageBucketMatch = configText.match(/storageBucket\s*:\s*["']([^"']+)["']/);
+                              const messagingSenderIdMatch = configText.match(/messagingSenderId\s*:\s*["']([^"']+)["']/);
+                              const appIdMatch = configText.match(/appId\s*:\s*["']([^"']+)["']/);
+
+                              if (apiKeyMatch || authDomainMatch || projectIdMatch || storageBucketMatch || messagingSenderIdMatch || appIdMatch) {
+                                setFirebaseSetupData({
+                                  apiKey: apiKeyMatch ? apiKeyMatch[1] : firebaseSetupData.apiKey,
+                                  authDomain: authDomainMatch ? authDomainMatch[1] : firebaseSetupData.authDomain,
+                                  projectId: projectIdMatch ? projectIdMatch[1] : firebaseSetupData.projectId,
+                                  storageBucket: storageBucketMatch ? storageBucketMatch[1] : firebaseSetupData.storageBucket,
+                                  messagingSenderId: messagingSenderIdMatch ? messagingSenderIdMatch[1] : firebaseSetupData.messagingSenderId,
+                                  appId: appIdMatch ? appIdMatch[1] : firebaseSetupData.appId
+                                });
+                              }
+                            } catch (error) {
+                              console.log('Config-Parsing fehlgeschlagen, Benutzer kann manuell eingeben');
+                            }
+                          }}
+                          style={{
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem',
+                            resize: 'vertical'
+                          }}
+                        />
+                        <small className="text-muted mt-1 d-block">
+                          💡 Tipp: Kopieren Sie den kompletten Block aus der Firebase Console (inklusive <code>const firebaseConfig = &#123; ... &#125;;</code>)
+                        </small>
+                      </div>
+
+                      <div className="text-center my-3">
+                        <strong style={{ color: colors.textSecondary }}>─── ODER ───</strong>
+                      </div>
+
+                      <div className="alert alert-info mb-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8', fontSize: '0.9rem' }}>
+                        <FaInfoCircle className="me-2" />
+                        <strong>Manuelle Methode:</strong> Kopieren Sie die Werte einzeln in die Felder unten:
                       </div>
 
                       {/* API Key */}
