@@ -10540,6 +10540,16 @@ const StorageManagement: React.FC = () => {
                         <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>5</span>
                         Storage aktivieren
                       </h6>
+                      
+                      {/* Hinweis zu Blaze Plan */}
+                      <div className="alert alert-warning mb-3" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.9rem' }}>
+                        <FaExclamationTriangle className="me-2" />
+                        <strong>Wichtig:</strong> Firebase Storage benötigt den <strong>Blaze Plan</strong> (Pay-as-you-go). 
+                        <br />
+                        <strong>ABER:</strong> Der Blaze Plan ist <strong>kostenlos</strong>, solange Sie unter den Limits bleiben (5 GB Speicher, 1 GB Download/Tag sind kostenlos)! 
+                        Sie werden nur bei Überschreitung belastet. 💰✅
+                      </div>
+
                       <ol className="mt-3" style={{ paddingLeft: '20px' }}>
                         <li className="mb-2">
                           Suchen Sie in der linken Seitenleiste nach <strong>"Storage"</strong>:
@@ -10556,21 +10566,56 @@ const StorageManagement: React.FC = () => {
                           </ul>
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf <strong>"Get started"</strong>
+                          Falls Sie den Button <strong>"Upgrade für Projekt durchführen"</strong> sehen:
+                          <ul className="mt-2">
+                            <li className="mb-1">
+                              Klicken Sie auf <strong>"Upgrade"</strong>
+                            </li>
+                            <li className="mb-1">
+                              Wählen Sie den <strong>"Blaze Plan"</strong> (Pay-as-you-go)
+                            </li>
+                            <li className="mb-1">
+                              <strong>Kreditkarte erforderlich:</strong> Sie müssen eine Zahlungsmethode hinterlegen (wird nur bei Überschreitung der kostenlosen Limits belastet)
+                            </li>
+                            <li className="mb-1">
+                              Bestätigen Sie das Upgrade
+                            </li>
+                            <li className="mb-1">
+                              Kehren Sie zu <strong>"Storage"</strong> zurück
+                            </li>
+                          </ul>
                         </li>
                         <li className="mb-2">
-                          Lassen Sie die Standard-Sicherheitsregeln aktiviert und klicken Sie auf <strong>"Next"</strong>
+                          Klicken Sie auf <strong>"Get started"</strong> / <strong>"Erste Schritte"</strong>
+                        </li>
+                        <li className="mb-2">
+                          Lassen Sie die Standard-Sicherheitsregeln aktiviert und klicken Sie auf <strong>"Next"</strong> / <strong>"Weiter"</strong>
                         </li>
                         <li className="mb-2">
                           Der Standort wird automatisch von Firestore übernommen
                         </li>
                         <li className="mb-2">
-                          Klicken Sie auf <strong>"Done"</strong>
+                          Klicken Sie auf <strong>"Done"</strong> / <strong>"Fertig"</strong>
                         </li>
                         <li>
                           Storage ist jetzt bereit! 🎉
                         </li>
                       </ol>
+
+                      {/* Kostenlose Limits */}
+                      <div className="alert alert-info mt-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8', fontSize: '0.85rem' }}>
+                        <FaInfoCircle className="me-2" />
+                        <strong>Kostenlose Blaze Plan Limits für Storage:</strong>
+                        <ul className="mt-2 mb-0" style={{ paddingLeft: '20px' }}>
+                          <li>5 GB Speicherplatz</li>
+                          <li>1 GB Download pro Tag</li>
+                          <li>20.000 Downloads pro Tag</li>
+                          <li>50.000 Uploads pro Tag</li>
+                        </ul>
+                        <small className="d-block mt-2">
+                          💡 Für eine Test- und Entwicklungs-App ist das mehr als ausreichend!
+                        </small>
+                      </div>
                     </div>
 
                     {/* Schritt 6: Sicherheitsregeln konfigurieren (Optional, aber empfohlen) */}
