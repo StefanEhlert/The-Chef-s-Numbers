@@ -10625,9 +10625,17 @@ const StorageManagement: React.FC = () => {
                         Sicherheitsregeln konfigurieren (Optional, aber empfohlen)
                       </h6>
                       
+                      <div className="alert alert-info mb-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8', fontSize: '0.9rem' }}>
+                        <FaInfoCircle className="me-2" />
+                        <strong>Wichtig zu verstehen:</strong> Diese Regeln richten <strong>SIE als Projekt-Owner</strong> einmalig ein. 
+                        Ihre späteren App-Nutzer müssen NICHT zu Firebase gehen und KEINE Regeln eingeben!
+                        <br />
+                        <strong>Die Regeln gelten projekt-weit für ALLE Nutzer Ihrer App.</strong>
+                      </div>
+
                       <div className="alert alert-warning mb-4" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.9rem' }}>
                         <FaExclamationTriangle className="me-2" />
-                        <strong>Wichtig:</strong> Standardmäßig sind Ihre Daten im Production Mode <strong>NICHT öffentlich zugänglich</strong> (sehr restriktiv)! 
+                        <strong>Für Entwicklung/Tests:</strong> Standardmäßig sind Ihre Daten im Production Mode <strong>NICHT öffentlich zugänglich</strong> (sehr restriktiv)! 
                         Für Tests müssen Sie die Regeln anpassen, sonst können Sie keine Daten lesen/schreiben.
                       </div>
 
@@ -10740,11 +10748,20 @@ service firebase.storage {
                       {/* Sicherheitshinweis */}
                       <div className="alert alert-danger" style={{ backgroundColor: '#dc354520', borderColor: '#dc3545', fontSize: '0.9rem' }}>
                         <FaExclamationTriangle className="me-2" />
-                        <strong>⚠️ Sicherheitswarnung:</strong> Diese Regeln erlauben <strong>JEDEM</strong> Lese- und Schreibzugriff! 
+                        <strong>⚠️ Sicherheitswarnung:</strong> Diese Test-Regeln erlauben <strong>JEDEM im Internet</strong> Lese- und Schreibzugriff auf Ihr Firebase-Projekt! 
                         <br />
                         <strong>Verwenden Sie diese Regeln NUR für Tests und Entwicklung!</strong>
                         <br />
-                        Für eine Produktionsumgebung müssen Sie Authentifizierung implementieren und die Regeln entsprechend anpassen.
+                        <br />
+                        <strong>Für Produktion:</strong> Implementieren Sie Firebase Authentication und passen Sie die Regeln an:
+                        <pre className="mt-2 p-2" style={{ 
+                          backgroundColor: colors.background, 
+                          borderRadius: '4px',
+                          fontSize: '0.8rem',
+                          fontFamily: 'monospace',
+                          marginBottom: 0
+                        }}>{`// Nur authentifizierte Nutzer
+allow read, write: if request.auth != null;`}</pre>
                       </div>
 
                       {/* Hinweis für später */}
