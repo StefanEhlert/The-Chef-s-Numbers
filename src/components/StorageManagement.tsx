@@ -2007,7 +2007,8 @@ const StorageManagement: React.FC = () => {
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
         minio: storageManagement.connections.minio,
-        supabase: storageManagement.connections.supabase
+        supabase: storageManagement.connections.supabase,
+        firebase: storageManagement.connections.firebase
       };
       
       // Für ZIEL: Verwende normale connections (neue, getestete Daten)
@@ -2016,7 +2017,8 @@ const StorageManagement: React.FC = () => {
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
         minio: storageManagement.connections.minio,
-        supabase: storageManagement.connections.supabase
+        supabase: storageManagement.connections.supabase,
+        firebase: storageManagement.connections.firebase
       };
       
       await sourceStorageLayer.initialize(sourceConfig, sourceConnectionData);
@@ -2995,7 +2997,8 @@ const StorageManagement: React.FC = () => {
           mariadb: storageManagement.connections.mariadb,
           mysql: storageManagement.connections.mysql,
           minio: storageManagement.connections.minio,
-          supabase: storageManagement.connections.supabase
+          supabase: storageManagement.connections.supabase,
+          firebase: storageManagement.connections.firebase
         };
         
         console.log('🔒 Quell-ConnectionData (aus activeConnections):', Object.keys(sourceConnectionData).filter(k => (sourceConnectionData as any)[k]));
@@ -3018,7 +3021,8 @@ const StorageManagement: React.FC = () => {
           mariadb: storageManagement.connections.mariadb,
           mysql: storageManagement.connections.mysql,
           minio: storageManagement.connections.minio,
-          supabase: storageManagement.connections.supabase
+          supabase: storageManagement.connections.supabase,
+          firebase: storageManagement.connections.firebase
         };
         
         console.log('🔓 Ziel-ConnectionData (aus connections):', Object.keys(targetConnectionData).filter(k => (targetConnectionData as any)[k]));

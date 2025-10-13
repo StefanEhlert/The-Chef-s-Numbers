@@ -1913,6 +1913,306 @@ class SupabaseAdapter implements StorageAdapter {
   }
 }
 
+// Firebase Adapter (NoSQL - Firestore + Cloud Storage)
+class FirebaseAdapter implements StorageAdapter {
+  name = 'FirebaseAdapter';
+  type = 'firebase';
+  private app: any = null;
+  private db: any = null;
+  private storage: any = null;
+
+  constructor(private connectionData: any) {
+    console.log('🔥 FirebaseAdapter erstellt mit ConnectionData:', {
+      projectId: connectionData?.projectId,
+      hasApiKey: !!connectionData?.apiKey,
+      hasAuthDomain: !!connectionData?.authDomain,
+      hasStorageBucket: !!connectionData?.storageBucket
+    });
+  }
+
+  // Initialisiere Firebase (lazy loading)
+  private async initializeFirebase() {
+    if (this.app) {
+      return; // Bereits initialisiert
+    }
+
+    try {
+      // Dynamischer Import des Firebase SDK
+      const { initializeApp, getApps, deleteApp } = await import('firebase/app');
+      const { getFirestore } = await import('firebase/firestore');
+      const { getStorage } = await import('firebase/storage');
+
+      // Lösche existierende App-Instanzen
+      const existingApps = getApps();
+      for (const existingApp of existingApps) {
+        await deleteApp(existingApp);
+      }
+
+      // Firebase Config
+      const firebaseConfig = {
+        apiKey: this.connectionData.apiKey,
+        authDomain: this.connectionData.authDomain,
+        projectId: this.connectionData.projectId,
+        storageBucket: this.connectionData.storageBucket,
+        messagingSenderId: this.connectionData.messagingSenderId,
+        appId: this.connectionData.appId
+      };
+
+      // Initialisiere Firebase
+      this.app = initializeApp(firebaseConfig);
+      this.db = getFirestore(this.app);
+      this.storage = getStorage(this.app);
+
+      console.log('✅ Firebase initialisiert:', firebaseConfig.projectId);
+    } catch (error) {
+      console.error('❌ Firebase Initialisierung fehlgeschlagen:', error);
+      throw error;
+    }
+  }
+
+  async save<T extends StorageEntity>(
+    entityType: string,
+    data: T | T[]
+  ): Promise<boolean> {
+    try {
+      await this.initializeFirebase();
+      
+      const items = Array.isArray(data) ? data : [data];
+      console.log(`🔥 FIREBASE: Speichere ${items.length} ${entityType}`);
+
+      const { collection, doc, setDoc, getDoc } = await import('firebase/firestore');
+
+      for (const item of items) {
+        let itemData = { ...item };
+        
+        // Entferne Frontend-spezifische Felder
+        delete (itemData as any).dbId;
+        delete (itemData as any).isDirty;
+        delete (itemData as any).isNew;
+        delete (itemData as any).syncStatus;
+        delete (itemData as any).nutrition; // Veraltetes Feld
+        
+        // Setze Timestamps (Firestore erwartet ISO Strings oder Timestamp-Objekte)
+        if (!(itemData as any).createdAt) {
+          (itemData as any).createdAt = new Date().toISOString();
+        }
+        if (!(itemData as any).updatedAt) {
+          (itemData as any).updatedAt = new Date().toISOString();
+        }
+
+        // Firestore: Verwende die ID als Document-ID
+        const docRef = doc(this.db, entityType, item.id);
+        
+        // Prüfe ob Dokument existiert
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          // UPDATE
+          console.log(`🔥 UPDATE: ${entityType} mit id=${item.id}`);
+          await setDoc(docRef, itemData, { merge: true });
+        } else {
+          // INSERT
+          console.log(`🔥 INSERT: ${entityType} mit id=${item.id}`);
+          await setDoc(docRef, itemData);
+        }
+      }
+
+      console.log(`✅ FIREBASE: ${items.length} ${entityType} erfolgreich gespeichert`);
+      return true;
+    } catch (error) {
+      console.error(`❌ FIREBASE Fehler beim Speichern von ${entityType}:`, error);
+      return false;
+    }
+  }
+
+  async load<T extends StorageEntity>(entityType: string): Promise<T[]> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log(`🔥 FIREBASE: Lade ${entityType}`);
+      
+      const { collection, getDocs } = await import('firebase/firestore');
+
+      const collectionRef = collection(this.db, entityType);
+      const snapshot = await getDocs(collectionRef);
+
+      const data = snapshot.docs.map(doc => {
+        const docData = doc.data();
+        return {
+          ...docData,
+          id: doc.id // Firestore Document-ID als id verwenden
+        } as T;
+      });
+
+      console.log(`✅ FIREBASE: ${data.length} ${entityType} geladen`);
+      return data;
+    } catch (error) {
+      console.error(`❌ FIREBASE Fehler beim Laden von ${entityType}:`, error);
+      
+      // Wenn Collection nicht existiert, returniere leeres Array
+      if ((error as any)?.code === 'permission-denied') {
+        console.log(`⚠️ Firestore-Zugriff verweigert für ${entityType} - Prüfen Sie die Sicherheitsregeln`);
+      }
+      
+      return [];
+    }
+  }
+
+  async delete(entityType: string, id: string): Promise<boolean> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log(`🔥 FIREBASE: Lösche ${entityType} mit id=${id}`);
+      
+      const { doc, deleteDoc } = await import('firebase/firestore');
+
+      const docRef = doc(this.db, entityType, id);
+      await deleteDoc(docRef);
+
+      console.log(`✅ FIREBASE: ${entityType} gelöscht`);
+      return true;
+    } catch (error) {
+      console.error(`❌ FIREBASE Fehler beim Löschen von ${entityType}:`, error);
+      return false;
+    }
+  }
+
+  async deleteAll(entityType: string): Promise<boolean> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log(`🔥 FIREBASE: Lösche alle ${entityType}`);
+      
+      const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore');
+
+      const collectionRef = collection(this.db, entityType);
+      const snapshot = await getDocs(collectionRef);
+
+      // Firestore Batch Delete (max 500 pro Batch)
+      const batchSize = 500;
+      let batch = writeBatch(this.db);
+      let count = 0;
+
+      for (const document of snapshot.docs) {
+        batch.delete(doc(this.db, entityType, document.id));
+        count++;
+
+        if (count % batchSize === 0) {
+          await batch.commit();
+          batch = writeBatch(this.db);
+        }
+      }
+
+      // Commit übrige Dokumente
+      if (count % batchSize !== 0) {
+        await batch.commit();
+      }
+
+      console.log(`✅ FIREBASE: ${count} ${entityType} gelöscht`);
+      return true;
+    } catch (error) {
+      console.error(`❌ FIREBASE Fehler beim Löschen aller ${entityType}:`, error);
+      return false;
+    }
+  }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log('🔥 FIREBASE: Verbindungstest');
+      
+      const { collection, query, limit, getDocs } = await import('firebase/firestore');
+
+      // Test-Query auf system_info
+      const testQuery = query(collection(this.db, 'system_info'), limit(1));
+      await getDocs(testQuery);
+
+      console.log('✅ FIREBASE Verbindungstest erfolgreich');
+      return true;
+    } catch (error) {
+      // Permission-denied ist OK für Verbindungstest
+      if ((error as any)?.code === 'permission-denied') {
+        console.log('✅ FIREBASE Verbindung OK (Regeln sind restriktiv)');
+        return true;
+      }
+      
+      console.error('❌ FIREBASE Verbindungstest fehlgeschlagen:', error);
+      return false;
+    }
+  }
+
+  // Bild-Methoden für Firebase Storage
+  async saveImage(path: string, file: File): Promise<boolean> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log(`📷 FIREBASE Storage: Speichere Bild: ${path}`);
+      
+      const { ref, uploadBytes } = await import('firebase/storage');
+
+      const storageRef = ref(this.storage, `images/${path}`);
+      await uploadBytes(storageRef, file);
+
+      console.log(`✅ FIREBASE Storage: Bild gespeichert`);
+      return true;
+    } catch (error) {
+      console.error(`❌ FIREBASE Storage Fehler beim Speichern:`, error);
+      return false;
+    }
+  }
+
+  async loadImage(path: string): Promise<string | null> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log(`📷 FIREBASE Storage: Lade Bild: ${path}`);
+      
+      const { ref, getDownloadURL } = await import('firebase/storage');
+
+      const storageRef = ref(this.storage, `images/${path}`);
+      const url = await getDownloadURL(storageRef);
+
+      console.log(`✅ FIREBASE Storage: Bild-URL erhalten`);
+      return url;
+    } catch (error) {
+      // Bild existiert nicht
+      if ((error as any)?.code === 'storage/object-not-found') {
+        console.log(`⚠️ Bild nicht gefunden: ${path}`);
+        return null;
+      }
+      
+      console.error(`❌ FIREBASE Storage Fehler beim Laden:`, error);
+      return null;
+    }
+  }
+
+  async deleteImage(path: string): Promise<boolean> {
+    try {
+      await this.initializeFirebase();
+      
+      console.log(`📷 FIREBASE Storage: Lösche Bild: ${path}`);
+      
+      const { ref, deleteObject } = await import('firebase/storage');
+
+      const storageRef = ref(this.storage, `images/${path}`);
+      await deleteObject(storageRef);
+
+      console.log(`✅ FIREBASE Storage: Bild gelöscht`);
+      return true;
+    } catch (error) {
+      // Nicht gefunden ist kein Fehler
+      if ((error as any)?.code === 'storage/object-not-found') {
+        console.log(`⚠️ Bild existiert nicht: ${path}`);
+        return true;
+      }
+      
+      console.error(`❌ FIREBASE Storage Fehler beim Löschen:`, error);
+      return false;
+    }
+  }
+}
+
 // MinIO Adapter (für Bilder)
 class MinIOAdapter implements StorageAdapter {
   name = 'MinIOAdapter';
@@ -2543,6 +2843,10 @@ export class StorageLayer {
         console.log(`☁️ Supabase ConnectionData:`, connectionData?.supabase);
         return new SupabaseAdapter(connectionData?.supabase);
       
+      case 'Firebase':
+        console.log(`🔥 Firebase ConnectionData:`, connectionData?.firebase);
+        return new FirebaseAdapter(connectionData?.firebase);
+      
       case 'SQLite':
         console.log(`📱 SQLite - verwende LocalStorage`);
         return new LocalStorageAdapter();
@@ -2565,6 +2869,10 @@ export class StorageLayer {
       case 'Supabase':
         console.log(`☁️ Supabase Storage ConnectionData:`, connectionData?.supabase);
         return new SupabaseAdapter(connectionData?.supabase);
+      
+      case 'Firebase':
+        console.log(`🔥 Firebase Storage ConnectionData:`, connectionData?.firebase);
+        return new FirebaseAdapter(connectionData?.firebase);
       
       case 'LocalPath':
         return new LocalStorageAdapter();
