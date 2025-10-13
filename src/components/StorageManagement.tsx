@@ -10622,23 +10622,47 @@ const StorageManagement: React.FC = () => {
                     <div className="mb-4">
                       <h6 style={{ color: '#FF9800', fontWeight: 'bold' }}>
                         <span className="badge me-2" style={{ backgroundColor: '#FF9800' }}>6</span>
-                        Sicherheitsregeln (Optional)
+                        Sicherheitsregeln konfigurieren (Optional, aber empfohlen)
                       </h6>
-                      <div className="alert alert-warning" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.9rem' }}>
+                      
+                      <div className="alert alert-warning mb-4" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.9rem' }}>
                         <FaExclamationTriangle className="me-2" />
-                        <strong>Wichtig:</strong> Standardmäßig sind Ihre Daten öffentlich zugänglich! 
-                        Für Produktionsumgebungen sollten Sie die Firestore- und Storage-Regeln anpassen.
+                        <strong>Wichtig:</strong> Standardmäßig sind Ihre Daten im Production Mode <strong>NICHT öffentlich zugänglich</strong> (sehr restriktiv)! 
+                        Für Tests müssen Sie die Regeln anpassen, sonst können Sie keine Daten lesen/schreiben.
                       </div>
-                      <p className="mb-2">
-                        <strong>Firestore Rules (empfohlen für Tests):</strong>
-                      </p>
-                      <pre className="p-3 mb-3" style={{ 
-                        backgroundColor: colors.card, 
-                        borderRadius: '4px', 
-                        border: `1px solid ${colors.cardBorder}`,
-                        fontSize: '0.85rem',
-                        overflow: 'auto'
-                      }}>{`rules_version = '2';
+
+                      {/* Firestore Rules */}
+                      <div className="mb-4">
+                        <h6 style={{ color: '#17a2b8', fontWeight: 'bold', fontSize: '1rem' }}>
+                          📋 Firestore Database Rules
+                        </h6>
+                        
+                        <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                          <li className="mb-2">
+                            Gehen Sie zu <strong>"Firestore Database"</strong> in der linken Seitenleiste
+                          </li>
+                          <li className="mb-2">
+                            Klicken Sie oben auf den Tab <strong>"Rules"</strong> / <strong>"Regeln"</strong>
+                          </li>
+                          <li className="mb-2">
+                            Sie sehen einen Text-Editor mit den aktuellen Regeln
+                          </li>
+                          <li className="mb-2">
+                            <strong>LÖSCHEN</strong> Sie den gesamten Inhalt im Editor
+                          </li>
+                          <li className="mb-2">
+                            <strong>KOPIEREN</strong> Sie den folgenden Code und <strong>FÜGEN</strong> Sie ihn ein:
+                          </li>
+                        </ol>
+
+                        <pre className="p-3 mb-3" style={{ 
+                          backgroundColor: colors.card, 
+                          borderRadius: '4px', 
+                          border: `1px solid ${colors.cardBorder}`,
+                          fontSize: '0.85rem',
+                          overflow: 'auto',
+                          fontFamily: 'monospace'
+                        }}>{`rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
@@ -10647,16 +10671,51 @@ service cloud.firestore {
   }
 }`}</pre>
 
-                      <p className="mb-2">
-                        <strong>Storage Rules (empfohlen für Tests):</strong>
-                      </p>
-                      <pre className="p-3" style={{ 
-                        backgroundColor: colors.card, 
-                        borderRadius: '4px', 
-                        border: `1px solid ${colors.cardBorder}`,
-                        fontSize: '0.85rem',
-                        overflow: 'auto'
-                      }}>{`rules_version = '2';
+                        <ol start={6} className="mt-3" style={{ paddingLeft: '20px' }}>
+                          <li className="mb-2">
+                            Klicken Sie auf den Button <strong>"Publish"</strong> / <strong>"Veröffentlichen"</strong> (oben rechts im Editor)
+                          </li>
+                          <li className="mb-2">
+                            Bestätigen Sie mit <strong>"Publish"</strong> im Popup-Fenster
+                          </li>
+                          <li>
+                            ✅ Firestore Rules sind jetzt aktiv!
+                          </li>
+                        </ol>
+                      </div>
+
+                      {/* Storage Rules */}
+                      <div className="mb-4">
+                        <h6 style={{ color: '#17a2b8', fontWeight: 'bold', fontSize: '1rem' }}>
+                          🖼️ Storage Rules
+                        </h6>
+                        
+                        <ol className="mt-3" style={{ paddingLeft: '20px' }}>
+                          <li className="mb-2">
+                            Gehen Sie zu <strong>"Storage"</strong> in der linken Seitenleiste
+                          </li>
+                          <li className="mb-2">
+                            Klicken Sie oben auf den Tab <strong>"Rules"</strong> / <strong>"Regeln"</strong>
+                          </li>
+                          <li className="mb-2">
+                            Sie sehen einen Text-Editor mit den aktuellen Regeln
+                          </li>
+                          <li className="mb-2">
+                            <strong>LÖSCHEN</strong> Sie den gesamten Inhalt im Editor
+                          </li>
+                          <li className="mb-2">
+                            <strong>KOPIEREN</strong> Sie den folgenden Code und <strong>FÜGEN</strong> Sie ihn ein:
+                          </li>
+                        </ol>
+
+                        <pre className="p-3 mb-3" style={{ 
+                          backgroundColor: colors.card, 
+                          borderRadius: '4px', 
+                          border: `1px solid ${colors.cardBorder}`,
+                          fontSize: '0.85rem',
+                          overflow: 'auto',
+                          fontFamily: 'monospace'
+                        }}>{`rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /{allPaths=**} {
@@ -10664,6 +10723,36 @@ service firebase.storage {
     }
   }
 }`}</pre>
+
+                        <ol start={6} className="mt-3" style={{ paddingLeft: '20px' }}>
+                          <li className="mb-2">
+                            Klicken Sie auf den Button <strong>"Publish"</strong> / <strong>"Veröffentlichen"</strong> (oben rechts im Editor)
+                          </li>
+                          <li className="mb-2">
+                            Bestätigen Sie mit <strong>"Publish"</strong> im Popup-Fenster
+                          </li>
+                          <li>
+                            ✅ Storage Rules sind jetzt aktiv!
+                          </li>
+                        </ol>
+                      </div>
+
+                      {/* Sicherheitshinweis */}
+                      <div className="alert alert-danger" style={{ backgroundColor: '#dc354520', borderColor: '#dc3545', fontSize: '0.9rem' }}>
+                        <FaExclamationTriangle className="me-2" />
+                        <strong>⚠️ Sicherheitswarnung:</strong> Diese Regeln erlauben <strong>JEDEM</strong> Lese- und Schreibzugriff! 
+                        <br />
+                        <strong>Verwenden Sie diese Regeln NUR für Tests und Entwicklung!</strong>
+                        <br />
+                        Für eine Produktionsumgebung müssen Sie Authentifizierung implementieren und die Regeln entsprechend anpassen.
+                      </div>
+
+                      {/* Hinweis für später */}
+                      <div className="alert alert-info mt-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8', fontSize: '0.85rem' }}>
+                        <FaInfoCircle className="me-2" />
+                        <strong>Hinweis:</strong> Sie können diesen Schritt auch <strong>später</strong> durchführen. 
+                        Ohne angepasste Regeln können Sie jedoch keine Daten lesen oder schreiben.
+                      </div>
                     </div>
 
                     {/* Erfolgs-Banner */}
