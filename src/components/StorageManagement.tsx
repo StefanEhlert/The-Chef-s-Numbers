@@ -7853,6 +7853,8 @@ const StorageManagement: React.FC = () => {
                           value={storageManagement.connections.firebase.apiKey}
                           onChange={(e) => updateConnection('firebase', { apiKey: e.target.value })}
                           placeholder="AIzaSy..."
+                          autoComplete="new-password"
+                          name="firebase-api-key-unique"
                           style={{
                             backgroundColor: !storageManagement.connections.firebase.apiKey ? colors.accent + '20' : undefined,
                             borderColor: colors.cardBorder,
