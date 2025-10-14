@@ -21,7 +21,8 @@ LABEL version="2.3.0"
 COPY package*.json ./
 
 # ALLE Dependencies installieren (auch devDependencies für Build)
-RUN npm ci --silent
+# npm install statt npm ci (fehlertoleranter bei package-lock Inkonsistenzen)
+RUN npm install
 
 # Source Code kopieren
 COPY . .
