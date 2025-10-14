@@ -20,8 +20,8 @@ LABEL version="2.3.0"
 # Nutze Layer-Caching: package*.json zuerst
 COPY package*.json ./
 
-# Production Dependencies installieren
-RUN npm ci --only=production --silent
+# ALLE Dependencies installieren (auch devDependencies für Build)
+RUN npm ci --silent
 
 # Source Code kopieren
 COPY . .
