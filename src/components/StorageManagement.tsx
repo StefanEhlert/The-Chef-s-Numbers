@@ -293,7 +293,7 @@ const StorageManagement: React.FC = () => {
   const [connectionTestProgress, setConnectionTestProgress] = useState<string>('');
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
   const [showDockerSetupModal, setShowDockerSetupModal] = useState(false);
-  const [dockerModalServiceType, setDockerModalServiceType] = useState<'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio' | 'all'>('all');
+  const [dockerModalServiceType, setDockerModalServiceType] = useState<'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio' | 'frontend' | 'all'>('all');
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showDataMergeModal, setShowDataMergeModal] = useState(false);
   const [showTransferProgressModal, setShowTransferProgressModal] = useState(false);
@@ -349,7 +349,6 @@ const StorageManagement: React.FC = () => {
   const [backupError, setBackupError] = useState<string | null>(null);
   const [showSupabaseSetupModal, setShowSupabaseSetupModal] = useState(false);
   const [showFirebaseSetupModal, setShowFirebaseSetupModal] = useState(false);
-  const [showSelfhostingModal, setShowSelfhostingModal] = useState(false);
   const [supabaseSetupData, setSupabaseSetupData] = useState({
     url: '',
     anonKey: '',
@@ -6432,117 +6431,20 @@ const StorageManagement: React.FC = () => {
                               </div>
                             </div>
 
-                            <div className="d-flex gap-2">
-                              <button 
-                                className="btn btn-primary"
-                                onClick={() => {
-                                  // Frontend Docker Compose herunterladen
-                                  const dockerComposeContent = `# ============================================
-# The Chef's Numbers - Frontend Docker Compose
-# Stellt nur die React App bereit
-# ============================================
-
-version: '3.8'
-
-services:
-  frontend:
-    # Fertiges Docker Image von GitHub Container Registry
-    # KEIN Build nötig - Image wird automatisch heruntergeladen!
-    image: ghcr.io/stefanehlert/the-chef-s-numbers:latest
-    
-    # Container-Name
-    container_name: chef-numbers-frontend
-    
-    # Port-Mapping (Host:Container)
-    # Zugriff über: http://localhost:3000
-    ports:
-      - "3000:80"
-    
-    # Umgebungsvariablen (optional)
-    environment:
-      - REACT_APP_VERSION=2.3.0
-    
-    # Neustart-Policy
-    # unless-stopped = startet automatisch nach System-Reboot
-    restart: unless-stopped
-    
-    # Health Check
-    # Prüft ob Container gesund ist
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 3s
-      start_period: 5s
-      retries: 3
-    
-    # Labels für bessere Organisation
-    labels:
-      - "com.chefnumbers.component=frontend"
-      - "com.chefnumbers.version=2.3.0"
-      - "com.chefnumbers.description=The Chef's Numbers React Frontend"
-
-# ============================================
-# Hinweise zur Verwendung:
-# ============================================
-# 
-# 1. Erstmaliger Start (mit Build):
-#    docker-compose -f docker-compose-frontend.yml up -d --build
-#
-# 2. Neustart (ohne Build):
-#    docker-compose -f docker-compose-frontend.yml up -d
-#
-# 3. Stoppen:
-#    docker-compose -f docker-compose-frontend.yml down
-#
-# 4. Logs ansehen:
-#    docker-compose -f docker-compose-frontend.yml logs -f
-#
-# 5. Status prüfen:
-#    docker-compose -f docker-compose-frontend.yml ps
-#
-# ============================================
-# Nach dem Start:
-# ============================================
-# 
-# - Öffnen Sie: http://localhost:3000
-# - Gehen Sie zu: Speicherverwaltung
-# - Wählen Sie: Cloud-Speicher → Docker Container
-# - Wählen Sie: Ihre Datenbank (z.B. CouchDB)
-# - Laden Sie das entsprechende Docker Compose herunter
-# - Starten Sie die Datenbank separat
-#
-# ============================================
-`;
-
-                                // Erstelle Blob und Download-Link
-                                const blob = new Blob([dockerComposeContent], { type: 'text/yaml' });
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = 'docker-compose-frontend.yml';
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                window.URL.revokeObjectURL(url);
-                                
-                                console.log('✅ Frontend Docker Compose heruntergeladen');
+                            <button 
+                              className="btn btn-primary btn-lg"
+                              onClick={() => {
+                                setDockerModalServiceType('frontend');
+                                setShowDockerSetupModal(true);
                               }}
                               style={{
-                                marginRight: '8px'
+                                fontSize: '1.1rem',
+                                padding: '12px 24px'
                               }}
                             >
-                              <FaDownload className="me-2" />
-                              Frontend Docker Compose herunterladen
+                              <FaDocker className="me-2" />
+                              Frontend auf Docker installieren
                             </button>
-                              
-                            <button
-                              className="btn btn-outline-primary"
-                              onClick={() => setShowSelfhostingModal(true)}
-                            >
-                              <FaInfoCircle className="me-2" />
-                              Anleitung öffnen
-                            </button>
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -12111,201 +12013,6 @@ allow read, write: if request.auth != null;`}</pre>
                           appId: '' 
                         });
                       }}
-                    >
-                      Schließen
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Selfhosting Setup Modal */}
-          {showSelfhostingModal && (
-            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-              <div className="modal-dialog modal-lg modal-dialog-scrollable">
-                <div className="modal-content" style={{ backgroundColor: colors.card, color: colors.text }}>
-                  <div className="modal-header" style={{ borderColor: colors.cardBorder }}>
-                    <h5 className="modal-title">
-                      <FaDocker className="me-2" style={{ color: '#17a2b8' }} />
-                      The Chef's Numbers - Selfhosting Anleitung
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={() => setShowSelfhostingModal(false)}
-                      style={{ filter: colors.text === '#ffffff' ? 'invert(1)' : 'none' }}
-                    />
-                  </div>
-                  <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    {/* Schnellstart */}
-                    <div className="mb-4">
-                      <h5 style={{ color: colors.text, borderBottom: `2px solid ${colors.primary}`, paddingBottom: '8px' }}>
-                        🚀 Schnellstart (3 Schritte)
-                      </h5>
-                      
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text }}>Schritt 1: Docker Compose herunterladen</h6>
-                        <p style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
-                          Klicken Sie auf "Frontend Docker Compose herunterladen" im vorherigen Bereich.
-                        </p>
-                      </div>
-
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text }}>Schritt 2: Starten</h6>
-                        <div className="alert alert-dark" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                          <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>
-                            docker-compose -f docker-compose-frontend.yml up -d
-                          </code>
-                        </div>
-                        <p style={{ color: colors.textSecondary, fontSize: '0.85rem' }}>
-                          ⏱️ Dauert beim ersten Mal ~30 Sekunden (Image wird heruntergeladen)
-                        </p>
-                      </div>
-
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text }}>Schritt 3: Browser öffnen</h6>
-                        <div className="alert alert-dark" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                          <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>
-                            http://localhost:3000
-                          </code>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Datenbank hinzufügen */}
-                    <div className="mb-4">
-                      <h5 style={{ color: colors.text, borderBottom: `2px solid ${colors.primary}`, paddingBottom: '8px' }}>
-                        📦 Datenbank hinzufügen
-                      </h5>
-                      
-                      <ol style={{ color: colors.text }}>
-                        <li>In der App: <strong>Speicherverwaltung</strong> öffnen</li>
-                        <li><strong>Cloud-Speicher → Selbst-gehostet (Docker)</strong> wählen</li>
-                        <li>Gewünschte Datenbank wählen (z.B. <strong>CouchDB</strong>)</li>
-                        <li><strong>Docker Compose herunterladen</strong></li>
-                        <li>Im Terminal starten:
-                          <div className="alert alert-dark mt-2" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                            <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>
-                              docker-compose -f docker-compose-couchdb.yml up -d
-                            </code>
-                          </div>
-                        </li>
-                        <li><strong>Verbindungstest durchführen</strong> ✅</li>
-                      </ol>
-                    </div>
-
-                    {/* Alltägliche Befehle */}
-                    <div className="mb-4">
-                      <h5 style={{ color: colors.text, borderBottom: `2px solid ${colors.primary}`, paddingBottom: '8px' }}>
-                        🔧 Nützliche Befehle
-                      </h5>
-                      
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text, fontSize: '0.95rem' }}>Status prüfen:</h6>
-                        <div className="alert alert-dark" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                          <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>docker ps</code>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text, fontSize: '0.95rem' }}>Logs ansehen:</h6>
-                        <div className="alert alert-dark" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                          <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>docker logs -f chef-numbers-frontend</code>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text, fontSize: '0.95rem' }}>Stoppen:</h6>
-                        <div className="alert alert-dark" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                          <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>
-                            docker-compose -f docker-compose-frontend.yml down
-                          </code>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <h6 style={{ color: colors.text, fontSize: '0.95rem' }}>Update auf neue Version:</h6>
-                        <div className="alert alert-dark" style={{ backgroundColor: '#2b2b2b', border: 'none' }}>
-                          <code style={{ color: '#00ff00', fontFamily: 'monospace' }}>
-                            docker-compose -f docker-compose-frontend.yml pull<br />
-                            docker-compose -f docker-compose-frontend.yml up -d
-                          </code>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* System-Anforderungen */}
-                    <div className="mb-4">
-                      <h5 style={{ color: colors.text, borderBottom: `2px solid ${colors.primary}`, paddingBottom: '8px' }}>
-                        💻 Läuft auf
-                      </h5>
-                      
-                      <div className="row mt-3">
-                        <div className="col-md-6">
-                          <div className="d-flex align-items-center mb-2">
-                            <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                            <span style={{ color: colors.text }}>Raspberry Pi 4</span>
-                          </div>
-                          <div className="d-flex align-items-center mb-2">
-                            <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                            <span style={{ color: colors.text }}>Mini-PC / NUC</span>
-                          </div>
-                          <div className="d-flex align-items-center mb-2">
-                            <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                            <span style={{ color: colors.text }}>NAS (QNAP, Synology)</span>
-                          </div>
-                        </div>
-                        <div className="col-md-6">
-                          <div className="d-flex align-items-center mb-2">
-                            <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                            <span style={{ color: colors.text }}>VPS / Cloud-Server</span>
-                          </div>
-                          <div className="d-flex align-items-center mb-2">
-                            <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                            <span style={{ color: colors.text }}>Alter Laptop/PC</span>
-                          </div>
-                          <div className="d-flex align-items-center mb-2">
-                            <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                            <span style={{ color: colors.text }}>Jedes System mit Docker</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="alert alert-info mt-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
-                        <small style={{ color: colors.text }}>
-                          <strong>Ressourcen:</strong> CPU ~1-5%, RAM ~50-100 MB, Disk ~50 MB
-                        </small>
-                      </div>
-                    </div>
-
-                    {/* Weiterführende Dokumentation */}
-                    <div className="mb-3">
-                      <h5 style={{ color: colors.text, borderBottom: `2px solid ${colors.primary}`, paddingBottom: '8px' }}>
-                        📚 Vollständige Dokumentation
-                      </h5>
-                      
-                      <p style={{ color: colors.textSecondary, fontSize: '0.9rem', marginTop: '12px' }}>
-                        Für detaillierte Informationen zu Updates, Sicherheit, HTTPS-Setup und Troubleshooting, 
-                        siehe die vollständige Dokumentation im GitHub Repository.
-                      </p>
-                      
-                      <a
-                        href="https://github.com/StefanEhlert/The-Chef-s-Numbers/blob/main/SELFHOSTING.md"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-sm btn-outline-primary"
-                      >
-                        <FaExternalLinkAlt className="me-2" />
-                        SELFHOSTING.md auf GitHub öffnen
-                      </a>
-                    </div>
-                  </div>
-                  <div className="modal-footer" style={{ borderColor: colors.cardBorder }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setShowSelfhostingModal(false)}
                     >
                       Schließen
                     </button>

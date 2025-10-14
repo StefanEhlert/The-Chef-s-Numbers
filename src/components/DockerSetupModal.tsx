@@ -8,7 +8,7 @@ interface DockerSetupModalProps {
   onRestartTest: () => void;
   colors: any;
   dockerConfig: DockerComposeConfig;
-  serviceType?: 'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio' | 'all';
+  serviceType?: 'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio' | 'frontend' | 'all';
 }
 
 const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
@@ -65,6 +65,14 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
           filename: 'docker-compose-minio.yml',
           icon: '📦'
         };
+      case 'frontend':
+        return {
+          title: 'Frontend Selfhosting Setup',
+          description: 'The Chef\'s Numbers React Frontend',
+          services: ['Frontend (React + Nginx)'],
+          filename: 'docker-compose-frontend.yml',
+          icon: '🎨'
+        };
       default:
         return {
           title: 'Docker-Container Setup',
@@ -77,6 +85,76 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
   };
 
   const serviceConfig = getServiceConfig();
+
+  // Frontend Docker Compose Content Generator
+  const getFrontendDockerCompose = () => {
+    return `# ============================================
+# The Chef's Numbers - Frontend Docker Compose
+# Stellt nur die React App bereit
+# ============================================
+
+version: '3.8'
+
+services:
+  frontend:
+    # Fertiges Docker Image von GitHub Container Registry
+    # KEIN Build nötig - Image wird automatisch heruntergeladen!
+    image: ghcr.io/stefanehlert/the-chef-s-numbers:latest
+    
+    # Container-Name
+    container_name: chef-numbers-frontend
+    
+    # Port-Mapping (Host:Container)
+    # Zugriff über: http://localhost:3000
+    ports:
+      - "3000:80"
+    
+    # Umgebungsvariablen (optional)
+    environment:
+      - REACT_APP_VERSION=2.3.0
+    
+    # Neustart-Policy
+    # unless-stopped = startet automatisch nach System-Reboot
+    restart: unless-stopped
+    
+    # Health Check
+    # Prüft ob Container gesund ist
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    
+    # Labels für bessere Organisation
+    labels:
+      - "com.chefnumbers.component=frontend"
+      - "com.chefnumbers.version=2.3.0"
+      - "com.chefnumbers.description=The Chef's Numbers React Frontend"
+
+# ============================================
+# Hinweise zur Verwendung:
+# ============================================
+# 
+# 1. Erstmaliger Start:
+#    docker-compose -f docker-compose-frontend.yml up -d
+#
+# 2. Neustart:
+#    docker-compose -f docker-compose-frontend.yml restart
+#
+# 3. Stoppen:
+#    docker-compose -f docker-compose-frontend.yml down
+#
+# 4. Logs ansehen:
+#    docker-compose -f docker-compose-frontend.yml logs -f
+#
+# 5. Update (neue Version):
+#    docker-compose -f docker-compose-frontend.yml pull
+#    docker-compose -f docker-compose-frontend.yml up -d
+#
+# ============================================
+`;
+  };
 
   // Service-spezifischer Button-Text
   const getTestButtonText = () => {
@@ -91,6 +169,8 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
         return 'CouchDB-Verbindungstest erneut starten';
       case 'minio':
         return 'MinIO-Verbindungstest erneut starten';
+      case 'frontend':
+        return null; // Kein Test-Button beim Frontend
       default:
         return 'Verbindungstest erneut starten';
     }
@@ -120,6 +200,9 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
       const result = await dockerComposeGenerator.generateServiceSpecificCompose('minio', dockerConfig);
       dockerComposeContent = result.content;
       filename = result.filename;
+    } else if (serviceType === 'frontend') {
+      dockerComposeContent = getFrontendDockerCompose();
+      filename = 'docker-compose-frontend.yml';
     } else {
       // Alle Services
       dockerComposeContent = dockerComposeGenerator.generateDockerComposeContent(dockerConfig);
@@ -165,6 +248,9 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
         const result = await dockerComposeGenerator.generateServiceSpecificCompose('minio', dockerConfig);
         dockerComposeContent = result.content;
         filename = result.filename;
+      } else if (serviceType === 'frontend') {
+        dockerComposeContent = getFrontendDockerCompose();
+        filename = 'docker-compose-frontend.yml';
       } else {
         // Alle Services
         dockerComposeContent = dockerComposeGenerator.generateDockerComposeContent(dockerConfig);
@@ -190,9 +276,14 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
       } else if (serviceType === 'mysql') {
         const result = await dockerComposeGenerator.generateServiceSpecificCompose('mysql', dockerConfig);
         dockerComposeContent = result.content;
+      } else if (serviceType === 'couchdb') {
+        const result = await dockerComposeGenerator.generateServiceSpecificCompose('couchdb', dockerConfig);
+        dockerComposeContent = result.content;
       } else if (serviceType === 'minio') {
         const result = await dockerComposeGenerator.generateServiceSpecificCompose('minio', dockerConfig);
         dockerComposeContent = result.content;
+      } else if (serviceType === 'frontend') {
+        dockerComposeContent = getFrontendDockerCompose();
       } else {
         dockerComposeContent = dockerComposeGenerator.generateDockerComposeContent(dockerConfig);
       }
@@ -290,10 +381,22 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
                       <div className="card-body">
                         <ol className="mb-0" style={{ fontSize: '0.9em' }}>
                           <li>Öffnen Sie ein Terminal/Command Prompt</li>
-                          <li>Navigieren Sie zum Ordner mit der heruntergeladenen Datei</li>
-                          <li>Führen Sie aus: <code>docker-compose up -d</code></li>
+                          <li>
+                            <strong>Option A:</strong> Datei direkt herunterladen:
+                            <div className="alert alert-dark mt-2 mb-2" style={{ backgroundColor: '#2b2b2b', border: 'none', padding: '8px 12px' }}>
+                              <code style={{ color: '#00ff00', fontFamily: 'monospace', fontSize: '0.85em' }}>
+                                wget https://raw.githubusercontent.com/StefanEhlert/The-Chef-s-Numbers/main/{serviceConfig.filename}
+                              </code>
+                              <div className="mt-1">oder</div>
+                              <code style={{ color: '#00ff00', fontFamily: 'monospace', fontSize: '0.85em' }}>
+                                curl -O https://raw.githubusercontent.com/StefanEhlert/The-Chef-s-Numbers/main/{serviceConfig.filename}
+                              </code>
+                            </div>
+                            <strong>Option B:</strong> Navigieren Sie zum Ordner mit der heruntergeladenen Datei
+                          </li>
+                          <li>Führen Sie aus: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>docker-compose -f {serviceConfig.filename} up -d</code></li>
                           <li>Warten Sie bis alle Container gestartet sind</li>
-                          <li>Prüfen Sie mit: <code>docker-compose ps</code></li>
+                          <li>Prüfen Sie mit: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>docker-compose -f {serviceConfig.filename} ps</code></li>
                           {serviceType === 'postgresql' && (
                             <>
                               <li>PostgreSQL wird auf Port {dockerConfig.postgres.port} verfügbar sein</li>
@@ -312,10 +415,22 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
                               <li>Prisma API wird auf Port {dockerConfig.mysql.prismaPort} verfügbar sein</li>
                             </>
                           )}
+                          {serviceType === 'couchdb' && dockerConfig.couchdb && (
+                            <>
+                              <li>CouchDB wird auf Port {dockerConfig.couchdb.port} verfügbar sein</li>
+                              <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://localhost:{dockerConfig.couchdb.port}/_utils</code></li>
+                            </>
+                          )}
                           {serviceType === 'minio' && (
                             <>
                               <li>MinIO API wird auf Port {dockerConfig.minio.port} verfügbar sein</li>
                               <li>MinIO Web-UI wird auf Port {dockerConfig.minio.consolePort} verfügbar sein</li>
+                            </>
+                          )}
+                          {serviceType === 'frontend' && (
+                            <>
+                              <li>Frontend wird auf Port 3000 verfügbar sein</li>
+                              <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://localhost:3000</code></li>
                             </>
                           )}
                         </ol>
@@ -335,8 +450,16 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
                         <ol className="mb-0" style={{ fontSize: '0.9em' }}>
                           <li>Öffnen Sie Portainer in Ihrem Browser</li>
                           <li>Gehen Sie zu "Stacks" → "Add stack"</li>
-                          <li>Kopieren Sie den Inhalt der {serviceConfig.filename}</li>
-                          <li>Fügen Sie ihn in das Web-Editor ein</li>
+                          <li>Geben Sie einen Namen ein (z.B. <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>
+                            {serviceType === 'frontend' ? 'chef-numbers-frontend' : 
+                             serviceType === 'postgresql' ? 'chef-numbers-postgresql' :
+                             serviceType === 'mariadb' ? 'chef-numbers-mariadb' :
+                             serviceType === 'mysql' ? 'chef-numbers-mysql' :
+                             serviceType === 'couchdb' ? 'chef-numbers-couchdb' :
+                             serviceType === 'minio' ? 'chef-numbers-minio' : 'chef-numbers'}
+                          </code>)</li>
+                          <li>Kopieren Sie den Inhalt der {serviceConfig.filename} <strong>in die Zwischenablage</strong></li>
+                          <li>Fügen Sie ihn in den Web-Editor ein</li>
                           <li>Klicken Sie "Deploy the stack"</li>
                         </ol>
                       </div>
@@ -344,16 +467,25 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
                   </div>
                 </div>
 
-                <div className="alert alert-success mt-3" style={{ backgroundColor: colors.accent + '20', borderColor: colors.accent }}>
-                  <FaCheck className="me-2" />
-                  <strong>Nach der Installation:</strong> Starten Sie den Verbindungstest erneut, um die Datenbank zu konfigurieren.
-                </div>
+                {serviceType !== 'frontend' && (
+                  <div className="alert alert-success mt-3" style={{ backgroundColor: colors.accent + '20', borderColor: colors.accent }}>
+                    <FaCheck className="me-2" />
+                    <strong>Nach der Installation:</strong> Starten Sie den Verbindungstest erneut, um die Datenbank zu konfigurieren.
+                  </div>
+                )}
+                
+                {serviceType === 'frontend' && (
+                  <div className="alert alert-info mt-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
+                    <FaInfoCircle className="me-2" />
+                    <strong>Nach der Installation:</strong> Öffnen Sie <code>http://localhost:3000</code> im Browser und wählen Sie Ihre Datenbank aus.
+                  </div>
+                )}
               </div>
             )}
           </div>
           
           <div className="modal-footer" style={{ borderTopColor: colors.cardBorder }}>
-            {showInstructions && (
+            {showInstructions && getTestButtonText() && (
               <button
                 className="btn btn-outline-primary me-2"
                 onClick={onRestartTest}
