@@ -1,0 +1,77 @@
+# ============================================
+# The Chef's Numbers - Frontend Docker Compose
+# Stellt nur die React App bereit
+# ============================================
+
+version: '3.8'
+
+services:
+  frontend:
+    # Fertiges Docker Image von GitHub Container Registry
+    # KEIN Build nötig - Image wird automatisch heruntergeladen!
+    image: ghcr.io/StefanEhlert/the-chefs-numbers:latest
+    
+    # Container-Name
+    container_name: chef-numbers-frontend
+    
+    # Port-Mapping (Host:Container)
+    # Zugriff über: http://localhost:3000
+    ports:
+      - "3000:80"
+    
+    # Umgebungsvariablen (optional)
+    environment:
+      - REACT_APP_VERSION=2.3.0
+      - REACT_APP_BUILD_DATE=${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+    
+    # Neustart-Policy
+    # unless-stopped = startet automatisch nach System-Reboot
+    restart: unless-stopped
+    
+    # Health Check
+    # Prüft ob Container gesund ist
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    
+    # Labels für bessere Organisation
+    labels:
+      - "com.chefnumbers.component=frontend"
+      - "com.chefnumbers.version=2.3.0"
+      - "com.chefnumbers.description=The Chef's Numbers React Frontend"
+
+# ============================================
+# Hinweise zur Verwendung:
+# ============================================
+# 
+# 1. Erstmaliger Start (mit Build):
+#    docker-compose -f docker-compose-frontend.yml up -d --build
+#
+# 2. Neustart (ohne Build):
+#    docker-compose -f docker-compose-frontend.yml up -d
+#
+# 3. Stoppen:
+#    docker-compose -f docker-compose-frontend.yml down
+#
+# 4. Logs ansehen:
+#    docker-compose -f docker-compose-frontend.yml logs -f
+#
+# 5. Status prüfen:
+#    docker-compose -f docker-compose-frontend.yml ps
+#
+# ============================================
+# Nach dem Start:
+# ============================================
+# 
+# - Öffnen Sie: http://localhost:3000
+# - Gehen Sie zu: Speicherverwaltung
+# - Wählen Sie: Cloud-Speicher → Docker Container
+# - Wählen Sie: Ihre Datenbank (z.B. CouchDB)
+# - Laden Sie das entsprechende Docker Compose herunter
+# - Starten Sie die Datenbank separat
+#
+# ============================================
+

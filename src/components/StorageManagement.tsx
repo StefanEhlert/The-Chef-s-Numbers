@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { FaDatabase, FaCloud, FaServer, FaSync, FaDownload, FaCog, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaKey, FaWifi, FaSpinner, FaEye, FaEyeSlash, FaShieldAlt, FaCheck, FaTimes, FaNetworkWired, FaExternalLinkAlt, FaTrash, FaFolder, FaFlask } from 'react-icons/fa';
+import { FaDatabase, FaCloud, FaServer, FaSync, FaDownload, FaCog, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaKey, FaWifi, FaSpinner, FaEye, FaEyeSlash, FaShieldAlt, FaCheck, FaTimes, FaNetworkWired, FaExternalLinkAlt, FaTrash, FaFolder, FaFlask, FaDocker, FaArrowRight } from 'react-icons/fa';
 import { StorageMode, CloudStorageType } from '../services/storageLayer';
 import { StorageConfig, StorageData, StoragePicture, DEFAULT_STORAGE_CONFIGS } from '../types/storage';
 import { StorageLayer } from '../services/storageLayer';
@@ -22,9 +22,9 @@ interface CloudStorageTypeConfig {
 interface StorageManagement {
   // Aktuelle funktionierende Konfiguration
   currentStorage: {
-    currentStorageMode: 'local' | 'cloud' | 'hybrid';
+    currentStorageMode: 'local' | 'cloud';
     currentCloudType: 'docker' | 'supabase' | 'firebase' | 'none';
-    currentDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'Supabase' | 'Firebase' | 'SQLite';
+    currentDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'CouchDB' | 'Supabase' | 'Firebase' | 'SQLite';
     currentPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath';
     isActive: boolean; // bestätigt funktionierende Verbindung
     activeConnections?: any; // Snapshot der aktiven Connection-Daten (für Sicherheit!)
@@ -32,9 +32,9 @@ interface StorageManagement {
 
   // Auswahl in der UI (noch nicht aktiv)
   selectedStorage: {
-    selectedStorageMode: 'local' | 'cloud' | 'hybrid';
+    selectedStorageMode: 'local' | 'cloud';
     selectedCloudType: 'docker' | 'supabase' | 'firebase' | 'none';
-    selectedDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'Supabase' | 'Firebase' | 'SQLite' | undefined;
+    selectedDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'CouchDB' | 'Supabase' | 'Firebase' | 'SQLite' | undefined;
     selectedPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath' | undefined;
     isTested: boolean; // wurde getestet und funktioniert
   };
@@ -72,6 +72,16 @@ interface StorageManagement {
       username: string;
       password: string;
       prismaPort: string;
+      connectionStatus: boolean;
+      lastTested?: string;
+      testMessage?: string;
+    };
+    couchdb: {
+      host: string;
+      port: string;
+      database: string;
+      username: string;
+      password: string;
       connectionStatus: boolean;
       lastTested?: string;
       testMessage?: string;
@@ -127,12 +137,68 @@ const StorageManagement: React.FC = () => {
 
   const colors = getCurrentColors();
 
+  // Hosting-Erkennung: Prüfe ob App lokal oder cloud-gehostet ist
+  const detectHostingEnvironment = (): 'local' | 'cloud' => {
+    const hostname = window.location.hostname;
+    
+    // Lokal wenn:
+    // - localhost oder 127.0.0.1
+    // - Private IP-Bereiche (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    // - .local Domain
+    const isLocal = 
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+      hostname.endsWith('.local');
+    
+    return isLocal ? 'local' : 'cloud';
+  };
+
+  // State für Hosting-Environment (kann über Entwicklungsseite überschrieben werden)
+  const [hostingEnvironment, setHostingEnvironment] = useState<'local' | 'cloud'>(() => {
+    // Prüfe ob Override im LocalStorage gespeichert ist
+    const override = localStorage.getItem('hostingEnvironmentOverride');
+    if (override === 'local' || override === 'cloud') {
+      console.log(`🔧 Hosting-Environment Override aktiv: ${override}`);
+      return override;
+    }
+    
+    const detected = detectHostingEnvironment();
+    console.log(`🌐 Hosting-Environment erkannt: ${detected} (Hostname: ${window.location.hostname})`);
+    return detected;
+  });
+
   // Hauptzustand - neue StorageManagement-Struktur
   const [storageManagement, setStorageManagement] = useState<StorageManagement>(() => {
     const savedManagement = localStorage.getItem('storageManagement');
     if (savedManagement) {
       try {
-        return JSON.parse(savedManagement);
+        const parsed = JSON.parse(savedManagement);
+        
+        // Migration: Füge CouchDB-Konfiguration hinzu, falls nicht vorhanden
+        if (!parsed.connections.couchdb) {
+          console.log('🔄 Migration: Füge CouchDB-Konfiguration hinzu');
+          parsed.connections.couchdb = {
+            host: 'localhost',
+            port: '5984',
+            database: 'chef_numbers',
+            username: 'admin',
+            password: '',
+            connectionStatus: false,
+            lastTested: undefined,
+            testMessage: ''
+          };
+        }
+        
+        // Stelle sicher, dass testMessage und lastTested existieren
+        if (parsed.connections.couchdb && !parsed.connections.couchdb.hasOwnProperty('testMessage')) {
+          parsed.connections.couchdb.testMessage = '';
+          parsed.connections.couchdb.lastTested = undefined;
+        }
+        
+        return parsed;
       } catch (error) {
         console.error('Fehler beim Laden der StorageManagement:', error);
       }
@@ -183,6 +249,16 @@ const StorageManagement: React.FC = () => {
           prismaPort: '3001',
           connectionStatus: false
         },
+        couchdb: {
+          host: 'localhost',
+          port: '5984',
+          database: 'chef_numbers',
+          username: 'admin',
+          password: '',
+          connectionStatus: false,
+          lastTested: undefined,
+          testMessage: ''
+        },
         minio: {
           host: 'localhost',
           port: '9000',
@@ -217,7 +293,7 @@ const StorageManagement: React.FC = () => {
   const [connectionTestProgress, setConnectionTestProgress] = useState<string>('');
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
   const [showDockerSetupModal, setShowDockerSetupModal] = useState(false);
-  const [dockerModalServiceType, setDockerModalServiceType] = useState<'postgresql' | 'mariadb' | 'mysql' | 'minio' | 'all'>('all');
+  const [dockerModalServiceType, setDockerModalServiceType] = useState<'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio' | 'all'>('all');
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showDataMergeModal, setShowDataMergeModal] = useState(false);
   const [showTransferProgressModal, setShowTransferProgressModal] = useState(false);
@@ -302,6 +378,8 @@ const StorageManagement: React.FC = () => {
   const [mariadbSectionAnimating, setMariadbSectionAnimating] = useState(false);
   const [mysqlSectionVisible, setMysqlSectionVisible] = useState(false);
   const [mysqlSectionAnimating, setMysqlSectionAnimating] = useState(false);
+  const [couchdbSectionVisible, setCouchdbSectionVisible] = useState(false);
+  const [couchdbSectionAnimating, setCouchdbSectionAnimating] = useState(false);
   const [minioSectionVisible, setMinioSectionVisible] = useState(false);
   const [minioSectionAnimating, setMinioSectionAnimating] = useState(false);
   const [supabaseSectionVisible, setSupabaseSectionVisible] = useState(false);
@@ -317,8 +395,7 @@ const StorageManagement: React.FC = () => {
 
   // Animation-Logik für Cloud-Speicher-Typ Bereich
   useEffect(() => {
-    const shouldShowCloud = storageManagement.selectedStorage.selectedStorageMode === 'cloud' ||
-      storageManagement.selectedStorage.selectedStorageMode === 'hybrid';
+    const shouldShowCloud = storageManagement.selectedStorage.selectedStorageMode === 'cloud';
 
     if (shouldShowCloud && !cloudSectionVisible) {
       // Einblenden
@@ -401,6 +478,20 @@ const StorageManagement: React.FC = () => {
       }, 300);
     }
 
+    // CouchDB-Bereich (nur bei Docker + CouchDB)
+    if (selectedCloudType === 'docker' && selectedDataStorage === 'CouchDB' && cloudTypeValid) {
+      if (!couchdbSectionVisible) {
+        setCouchdbSectionVisible(true);
+        setCouchdbSectionAnimating(false);
+      }
+    } else if (couchdbSectionVisible) {
+      setCouchdbSectionAnimating(true);
+      setTimeout(() => {
+        setCouchdbSectionVisible(false);
+        setCouchdbSectionAnimating(false);
+      }, 300);
+    }
+
     // MinIO-Bereich (immer bei Docker)
     if (selectedCloudType === 'docker' && cloudTypeValid) {
       if (!minioSectionVisible) {
@@ -442,7 +533,7 @@ const StorageManagement: React.FC = () => {
         setFirebaseSectionAnimating(false);
       }, 300);
     }
-  }, [storageManagement.selectedStorage.selectedCloudType, storageManagement.selectedStorage.selectedDataStorage, postgresSectionVisible, mariadbSectionVisible, mysqlSectionVisible, minioSectionVisible, supabaseSectionVisible, firebaseSectionVisible]);
+  }, [storageManagement.selectedStorage.selectedCloudType, storageManagement.selectedStorage.selectedDataStorage, postgresSectionVisible, mariadbSectionVisible, mysqlSectionVisible, couchdbSectionVisible, minioSectionVisible, supabaseSectionVisible, firebaseSectionVisible]);
 
   // Prüfe beim Start, ob JWT-Token erstellt werden muss
   useEffect(() => {
@@ -487,22 +578,22 @@ const StorageManagement: React.FC = () => {
   const cloudStorageTypes: CloudStorageTypeConfig[] = [
     {
       id: 'docker',
-      name: 'Docker Container',
-      description: 'Lokale Docker-Container für PostgreSQL und MinIO',
+      name: 'Selbst-gehostet (Docker)',
+      description: 'Ihre Daten bleiben bei Ihnen - maximale Datensicherheit und Kontrolle. Verfügbarkeit im lokalen Netzwerk',
       icon: <FaServer />,
       color: '#17a2b8'
     },
     {
       id: 'supabase',
       name: 'Supabase Cloud',
-      description: 'Vollständig verwaltete Supabase-Cloud-Lösung',
+      description: 'Professionelle Cloud-Lösung - keine Server-Wartung, automatische Backups. Daten weltweit verfügbar',
       icon: <FaCloud />,
       color: '#3ecf8e'
     },
     {
       id: 'firebase',
       name: 'Firebase Cloud',
-      description: 'Google Firebase für Daten und Bilder',
+      description: 'Google\'s bewährte Cloud-Plattform - zuverlässig, schnell, weltweit verfügbar',
       icon: <FaCloud />,
       color: '#ffa726'
     }
@@ -520,6 +611,7 @@ const StorageManagement: React.FC = () => {
         postgres: updates.connections.postgres ? { ...storageManagement.connections.postgres, ...updates.connections.postgres } : storageManagement.connections.postgres,
         mariadb: updates.connections.mariadb ? { ...storageManagement.connections.mariadb, ...updates.connections.mariadb } : storageManagement.connections.mariadb,
         mysql: updates.connections.mysql ? { ...storageManagement.connections.mysql, ...updates.connections.mysql } : storageManagement.connections.mysql,
+        couchdb: updates.connections.couchdb ? { ...storageManagement.connections.couchdb, ...updates.connections.couchdb } : storageManagement.connections.couchdb,
         minio: updates.connections.minio ? { ...storageManagement.connections.minio, ...updates.connections.minio } : storageManagement.connections.minio,
         supabase: updates.connections.supabase ? { ...storageManagement.connections.supabase, ...updates.connections.supabase } : storageManagement.connections.supabase,
         firebase: updates.connections.firebase ? { ...storageManagement.connections.firebase, ...updates.connections.firebase } : storageManagement.connections.firebase
@@ -553,6 +645,13 @@ const StorageManagement: React.FC = () => {
         newManagement.selectedStorage.selectedDataStorage = 'MySQL';
       }
 
+      // Prüfe CouchDB-Verbindungsstatus - nur setzen wenn sich der Status GEÄNDERT hat und erfolgreich ist
+      if (connections.couchdb?.connectionStatus === true &&
+        connections.couchdb?.lastTested &&
+        connections.couchdb?.connectionStatus !== currentConnections.couchdb?.connectionStatus) {
+        newManagement.selectedStorage.selectedDataStorage = 'CouchDB';
+      }
+
       // Prüfe MinIO-Verbindungsstatus - nur setzen wenn sich der Status GEÄNDERT hat und erfolgreich ist
       if (connections.minio?.connectionStatus === true &&
         connections.minio?.lastTested &&
@@ -580,6 +679,8 @@ const StorageManagement: React.FC = () => {
         dataStorageConnected = newManagement.connections.mariadb.connectionStatus === true;
       } else if (selectedDataStorage === 'MySQL') {
         dataStorageConnected = newManagement.connections.mysql.connectionStatus === true;
+      } else if (selectedDataStorage === 'CouchDB') {
+        dataStorageConnected = newManagement.connections.couchdb.connectionStatus === true;
       } else if (selectedDataStorage === 'Supabase') {
         dataStorageConnected = newManagement.connections.supabase.connectionStatus === true;
       } else if (selectedDataStorage === 'Firebase') {
@@ -649,6 +750,12 @@ const StorageManagement: React.FC = () => {
     if (connectionType === 'mysql') {
       const mysqlFields = ['host', 'port', 'database', 'username', 'password', 'prismaPort'];
       resetConnectionStatus('mysql', mysqlFields);
+    }
+
+    // CouchDB-Verbindungsstatus zurücksetzen
+    if (connectionType === 'couchdb') {
+      const couchdbFields = ['host', 'port', 'database', 'username', 'password'];
+      resetConnectionStatus('couchdb', couchdbFields);
     }
 
     // MinIO-Verbindungsstatus zurücksetzen
@@ -728,6 +835,19 @@ const StorageManagement: React.FC = () => {
             isValid = validateMySQLUsername(value as string).isValid;
           } else if (field === 'database') {
             isValid = validateMySQLDatabaseName(value as string).isValid;
+          }
+        }
+
+        // CouchDB-spezifische Validierungen
+        else if (connectionType === 'couchdb') {
+          if (field === 'host') {
+            isValid = validateHostname(value as string).isValid;
+          } else if (field === 'port') {
+            isValid = validatePort(value as string).isValid;
+          } else if (field === 'username') {
+            isValid = validateCouchDBUsername(value as string).isValid;
+          } else if (field === 'database') {
+            isValid = validateCouchDBDatabaseName(value as string).isValid;
           }
         }
 
@@ -1945,6 +2065,8 @@ const StorageManagement: React.FC = () => {
       handleMariaDBConnectionTest();
     } else if (dockerModalServiceType === 'mysql') {
       handleMySQLConnectionTest();
+    } else if (dockerModalServiceType === 'couchdb') {
+      handleCouchDBConnectionTest();
     } else if (dockerModalServiceType === 'minio') {
       handleMinIOConnectionTest();
     } else {
@@ -2016,6 +2138,7 @@ const StorageManagement: React.FC = () => {
         postgres: storageManagement.connections.postgres,
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
+        couchdb: storageManagement.connections.couchdb,
         minio: storageManagement.connections.minio,
         supabase: storageManagement.connections.supabase,
         firebase: storageManagement.connections.firebase
@@ -2026,6 +2149,7 @@ const StorageManagement: React.FC = () => {
         postgres: storageManagement.connections.postgres,
         mariadb: storageManagement.connections.mariadb,
         mysql: storageManagement.connections.mysql,
+        couchdb: storageManagement.connections.couchdb,
         minio: storageManagement.connections.minio,
         supabase: storageManagement.connections.supabase,
         firebase: storageManagement.connections.firebase
@@ -2104,6 +2228,9 @@ const StorageManagement: React.FC = () => {
           : undefined,
         mysql: storageManagement.selectedStorage.selectedDataStorage === 'MySQL'
           ? { ...storageManagement.connections.mysql }
+          : undefined,
+        couchdb: storageManagement.selectedStorage.selectedDataStorage === 'CouchDB'
+          ? { ...storageManagement.connections.couchdb }
           : undefined,
         minio: storageManagement.selectedStorage.selectedPictureStorage === 'MinIO'
           ? { ...storageManagement.connections.minio }
@@ -2245,6 +2372,7 @@ const StorageManagement: React.FC = () => {
         'postgres', 
         'mariadb', 
         'mysql', 
+        'couchdb',
         'minio', 
         'supabase', 
         'firebase'
@@ -3006,6 +3134,7 @@ const StorageManagement: React.FC = () => {
           postgres: storageManagement.connections.postgres,
           mariadb: storageManagement.connections.mariadb,
           mysql: storageManagement.connections.mysql,
+          couchdb: storageManagement.connections.couchdb,
           minio: storageManagement.connections.minio,
           supabase: storageManagement.connections.supabase,
           firebase: storageManagement.connections.firebase
@@ -3030,6 +3159,7 @@ const StorageManagement: React.FC = () => {
           postgres: storageManagement.connections.postgres,
           mariadb: storageManagement.connections.mariadb,
           mysql: storageManagement.connections.mysql,
+          couchdb: storageManagement.connections.couchdb,
           minio: storageManagement.connections.minio,
           supabase: storageManagement.connections.supabase,
           firebase: storageManagement.connections.firebase
@@ -3177,6 +3307,26 @@ const StorageManagement: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [storageManagement.connections.mysql.testMessage]);
+
+  // Auto-Hide für CouchDB-Testmeldungen nach 8 Sekunden
+  useEffect(() => {
+    if (storageManagement.connections.couchdb.testMessage) {
+      const timer = setTimeout(() => {
+        setStorageManagement(prev => ({
+          ...prev,
+          connections: {
+            ...prev.connections,
+            couchdb: {
+              ...prev.connections.couchdb,
+              testMessage: undefined
+            }
+          }
+        }));
+      }, 8000); // 8 Sekunden
+
+      return () => clearTimeout(timer);
+    }
+  }, [storageManagement.connections.couchdb.testMessage]);
 
   // Auto-Wiederherstellung des Supabase-Status beim App-Start
   useEffect(() => {
@@ -3778,6 +3928,75 @@ const StorageManagement: React.FC = () => {
     ]
   );
 
+  // CouchDB-spezifische Validierungsfunktionen
+  const validateCouchDBUsername = (username: string): { isValid: boolean; message: string } => {
+    if (!username.trim()) {
+      return { isValid: false, message: 'CouchDB-Benutzername ist erforderlich' };
+    }
+
+    // CouchDB-Benutzernamen-Regeln: alphanumerisch, Unterstriche, Bindestriche, @, Punkte
+    // Keine Leerzeichen oder Sonderzeichen
+    const couchdbUsernameRegex = /^[a-zA-Z0-9_@.-]+$/;
+    if (!couchdbUsernameRegex.test(username)) {
+      return { isValid: false, message: 'Nur Buchstaben, Zahlen, _, @, . und - erlaubt' };
+    }
+
+    if (username.length > 64) {
+      return { isValid: false, message: 'Maximal 64 Zeichen erlaubt' };
+    }
+
+    return { isValid: true, message: '✓ Gültiger CouchDB-Benutzername' };
+  };
+
+  const validateCouchDBDatabaseName = (database: string): { isValid: boolean; message: string } => {
+    if (!database.trim()) {
+      return { isValid: false, message: 'CouchDB-Datenbankname ist erforderlich' };
+    }
+
+    // CouchDB-Datenbankname-Regeln:
+    // - Nur Kleinbuchstaben, Zahlen, Unterstriche, Dollar-Zeichen, Plus-Zeichen, Minus-Zeichen, Klammern und Schrägstriche
+    // - Muss mit Buchstabe beginnen
+    // - Keine Großbuchstaben
+    const couchdbDatabaseRegex = /^[a-z][a-z0-9_$()+/-]*$/;
+    
+    if (!couchdbDatabaseRegex.test(database)) {
+      return { isValid: false, message: 'Muss mit Kleinbuchstaben beginnen. Nur a-z, 0-9, _, $, (, ), +, -, / erlaubt' };
+    }
+
+    if (database.length > 255) {
+      return { isValid: false, message: 'Maximal 255 Zeichen erlaubt' };
+    }
+
+    // Reservierte Präfixe prüfen
+    if (database.startsWith('_')) {
+      return { isValid: false, message: 'Datenbankname darf nicht mit _ beginnen (reserviert für System-Datenbanken)' };
+    }
+
+    return { isValid: true, message: '✓ Gültiger CouchDB-Datenbankname' };
+  };
+
+  const validateCouchDBConfig = (config: any): boolean => {
+    if (!config) return false;
+
+    return validateHostname(config.host || '').isValid &&
+      validatePort(config.port || '').isValid &&
+      validateCouchDBUsername(config.username || '').isValid &&
+      validateCouchDBDatabaseName(config.database || '').isValid &&
+      (config.password || '').trim().length > 0;
+  };
+
+  // Berechne CouchDB-Button-Status (mit useMemo optimiert)
+  const isCouchDBButtonEnabled = React.useMemo(
+    () => validateCouchDBConfig(storageManagement.connections.couchdb),
+    [
+      storageManagement.connections.couchdb.host,
+      storageManagement.connections.couchdb.port,
+      storageManagement.connections.couchdb.database,
+      storageManagement.connections.couchdb.username,
+      storageManagement.connections.couchdb.password
+    ]
+  );
+
   // MySQL-Verbindungstest (ähnlich MariaDB)
   const performMySQLConnectionTest = async (): Promise<{ success: boolean; message: string; showModal?: boolean }> => {
     const host = storageManagement.connections.mysql.host;
@@ -3998,6 +4217,254 @@ const StorageManagement: React.FC = () => {
           ...storageManagement.connections,
           mysql: {
             ...storageManagement.connections.mysql,
+            connectionStatus: false,
+            lastTested: new Date().toISOString(),
+            testMessage: `❌ Verbindung fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+          }
+        }
+      });
+    }
+  };
+
+  // CouchDB-Verbindungstest
+  const performCouchDBConnectionTest = async (): Promise<{ success: boolean; message: string; showModal?: boolean }> => {
+    const host = storageManagement.connections.couchdb.host;
+    const couchdbPort = storageManagement.connections.couchdb.port || '5984';
+
+    if (!host) {
+      return { success: false, message: 'Keine Host-Adresse angegeben' };
+    }
+
+    try {
+      // Schritt 1: IP-Adresse prüfen
+      const ipPingResult = await pingHost(host);
+
+      if (!ipPingResult.success) {
+        return {
+          success: false,
+          message: `IP-Adresse ${host} nicht erreichbar: ${ipPingResult.message}`
+        };
+      }
+
+      // Schritt 2: CouchDB-Port prüfen
+      const couchdbPortResult = await checkPortAvailability(host, couchdbPort);
+
+      const isCouchDBAvailable = couchdbPortResult.success;
+
+      // Szenario A: IP erreichbar, aber CouchDB nicht verfügbar (keine Container)
+      if (!isCouchDBAvailable) {
+        return {
+          success: true,
+          message: `IP-Adresse ${host} erreichbar, aber keine Docker-Container gefunden`,
+          showModal: true
+        };
+      }
+
+      // Szenario B: CouchDB verfügbar - teste Verbindung mit REST API
+      if (isCouchDBAvailable) {
+        const dbConfig = {
+          host: host,
+          port: couchdbPort,
+          database: storageManagement.connections.couchdb.database,
+          username: storageManagement.connections.couchdb.username,
+          password: storageManagement.connections.couchdb.password
+        };
+
+        console.log('🔍 DEBUG: CouchDB-Verbindungstest mit Konfiguration:', {
+          host: dbConfig.host,
+          port: dbConfig.port,
+          database: dbConfig.database,
+          username: dbConfig.username,
+          password: '[HIDDEN]'
+        });
+
+        try {
+          // CouchDB REST API URL
+          const couchdbUrl = `http://${host}:${couchdbPort}`;
+          console.log('🌐 CouchDB URL:', couchdbUrl);
+
+          // Schritt 1: Teste Verbindung mit Basic Auth
+          const authString = btoa(`${dbConfig.username}:${dbConfig.password}`);
+          
+          // Teste Root-Endpoint für Verbindung
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+          const rootResponse = await fetch(`${couchdbUrl}/`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${authString}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!rootResponse.ok) {
+            if (rootResponse.status === 401) {
+              return {
+                success: false,
+                message: `❌ CouchDB-Authentifizierung fehlgeschlagen! Benutzername oder Passwort falsch.`
+              };
+            }
+            throw new Error(`CouchDB antwortet nicht korrekt (Status: ${rootResponse.status})`);
+          }
+
+          const rootData = await rootResponse.json();
+          console.log('✅ CouchDB Root-Response:', rootData);
+
+          // Schritt 2: Prüfe ob Datenbank existiert
+          const dbResponse = await fetch(`${couchdbUrl}/${dbConfig.database}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${authString}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal
+          });
+
+          let databaseExists = dbResponse.ok;
+
+          if (!databaseExists && dbResponse.status === 404) {
+            // Datenbank existiert nicht - versuche zu erstellen
+            console.log('🏗️ Datenbank existiert nicht - erstelle neue Datenbank...');
+            
+            const createDbResponse = await fetch(`${couchdbUrl}/${dbConfig.database}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Basic ${authString}`,
+                'Content-Type': 'application/json',
+              },
+              signal: controller.signal
+            });
+
+            if (!createDbResponse.ok) {
+              const errorText = await createDbResponse.text();
+              throw new Error(`Datenbank-Erstellung fehlgeschlagen: ${errorText}`);
+            }
+
+            console.log('✅ CouchDB-Datenbank erfolgreich erstellt');
+            databaseExists = true;
+          }
+
+          console.log('✅ CouchDB-Verbindungstest erfolgreich!');
+          return {
+            success: true,
+            message: `✅ CouchDB-Verbindung erfolgreich!\nHost: ${host}:${couchdbPort}\nDatenbank: ${dbConfig.database}\nVersion: ${rootData.version || 'unknown'}\n\nDatenbank ist bereit.`
+          };
+
+        } catch (dbError) {
+          console.error('❌ CouchDB-Datenbankverbindung fehlgeschlagen:', dbError);
+          return {
+            success: false,
+            message: `Datenbankverbindung fehlgeschlagen: ${dbError instanceof Error ? dbError.message : 'Unbekannter Fehler'}`
+          };
+        }
+      }
+
+      // Fallback für andere Szenarien
+      return {
+        success: false,
+        message: 'Unerwarteter Verbindungstest-Fehler'
+      };
+
+    } catch (error) {
+      console.error('❌ CouchDB-Verbindungstest fehlgeschlagen:', error);
+      return {
+        success: false,
+        message: `Verbindungstest fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      };
+    }
+  };
+
+  // Handler für CouchDB-Verbindungstest mit DockerSetupModal-Integration
+  const handleCouchDBConnectionTest = async () => {
+    if (!validateCouchDBConfig(storageManagement.connections.couchdb)) {
+      return;
+    }
+
+    // Setze Status auf "testing"
+    handleStorageManagementUpdate({
+      connections: {
+        ...storageManagement.connections,
+        couchdb: {
+          ...storageManagement.connections.couchdb,
+          connectionStatus: false,
+          lastTested: new Date().toISOString(),
+          testMessage: 'Verbindungstest läuft... Teste Verbindung zum CouchDB-Dienst...'
+        }
+      }
+    });
+
+    try {
+      const result = await performCouchDBConnectionTest();
+
+      if (result.success) {
+        if (result.showModal) {
+          // Zeige DockerSetupModal für fehlende Container
+          setDockerModalServiceType('couchdb' as any);
+          setShowDockerSetupModal(true);
+          handleStorageManagementUpdate({
+            connections: {
+              ...storageManagement.connections,
+              couchdb: {
+                ...storageManagement.connections.couchdb,
+                connectionStatus: false,
+                lastTested: new Date().toISOString(),
+                testMessage: result.message
+              }
+            }
+          });
+        } else {
+          // Erfolgreiche Verbindung
+          handleStorageManagementUpdate({
+            connections: {
+              ...storageManagement.connections,
+              couchdb: {
+                ...storageManagement.connections.couchdb,
+                connectionStatus: true,
+                lastTested: new Date().toISOString(),
+                testMessage: result.message
+              }
+            }
+          });
+
+          // Nach 8 Sekunden die Erfolgsmeldung ausblenden
+          setTimeout(() => {
+            setStorageManagement(prev => ({
+              ...prev,
+              connections: {
+                ...prev.connections,
+                couchdb: {
+                  ...prev.connections.couchdb,
+                  testMessage: undefined
+                }
+              }
+            }));
+          }, 8000);
+        }
+      } else {
+        // Fehlgeschlagene Verbindung
+        handleStorageManagementUpdate({
+          connections: {
+            ...storageManagement.connections,
+            couchdb: {
+              ...storageManagement.connections.couchdb,
+              connectionStatus: false,
+              lastTested: new Date().toISOString(),
+              testMessage: result.message
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Verbindungstest fehlgeschlagen:', error);
+      handleStorageManagementUpdate({
+        connections: {
+          ...storageManagement.connections,
+          couchdb: {
+            ...storageManagement.connections.couchdb,
             connectionStatus: false,
             lastTested: new Date().toISOString(),
             testMessage: `❌ Verbindung fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
@@ -5127,6 +5594,7 @@ const StorageManagement: React.FC = () => {
     // Standard-Datenbank-Ports
     if (portNumber === 5432) return { type: 'database', name: 'PostgreSQL', description: 'PostgreSQL-Datenbank' };
     if (portNumber === 3306) return { type: 'database', name: 'MySQL/MariaDB', description: 'MySQL/MariaDB-Datenbank' };
+    if (portNumber === 5984) return { type: 'database', name: 'CouchDB', description: 'CouchDB-Datenbank' };
     if (portNumber === 1433) return { type: 'database', name: 'SQL Server', description: 'Microsoft SQL Server' };
     if (portNumber === 1521) return { type: 'database', name: 'Oracle', description: 'Oracle-Datenbank' };
     if (portNumber === 27017) return { type: 'database', name: 'MongoDB', description: 'MongoDB-Datenbank' };
@@ -5568,7 +6036,7 @@ const StorageManagement: React.FC = () => {
                       fontWeight: '500'
                     }}>
                       {storageManagement.currentStorage.currentStorageMode === 'local' ? 'Keine Cloud' :
-                        storageManagement.currentStorage.currentCloudType === 'docker' ? 'Docker Container' :
+                        storageManagement.currentStorage.currentCloudType === 'docker' ? 'Selbst-gehostet (Docker)' :
                           storageManagement.currentStorage.currentCloudType === 'supabase' ? 'Supabase Cloud' : 'Firebase Cloud'}
                     </span>
                   </div>
@@ -5655,7 +6123,7 @@ const StorageManagement: React.FC = () => {
             </div>
             <div className="card-body" style={{ padding: '20px' }}>
               <div className="row">
-                <div className="col-md-4">
+                <div className="col-md-6">
                   <div className="form-check storage-mode-option" style={{
                     padding: '16px',
                     border: `1px solid ${colors.cardBorder}`,
@@ -5688,15 +6156,15 @@ const StorageManagement: React.FC = () => {
                       <div className="d-flex align-items-center">
                         <FaDatabase className="me-2" style={{ color: '#28a745', fontSize: '20px' }} />
                         <div>
-                          <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Nur Lokal (LocalStorage)</strong>
+                          <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Lokaler Speicher</strong>
                           <br />
-                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>Daten werden nur im Browser gespeichert</small>
+                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>Daten bleiben in Ihrem Browser - ideal für Einzelbenutzer. Wichtig: Regelmäßige Backups anlegen!</small>
                         </div>
                       </div>
                     </label>
                   </div>
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-6">
                   <div className="form-check storage-mode-option" style={{
                     padding: '16px',
                     border: `1px solid ${colors.cardBorder}`,
@@ -5728,45 +6196,7 @@ const StorageManagement: React.FC = () => {
                         <div>
                           <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Cloud-Speicher</strong>
                           <br />
-                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>Daten werden nur in der Cloud gespeichert</small>
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="form-check storage-mode-option" style={{
-                    padding: '16px',
-                    border: `1px solid ${colors.cardBorder}`,
-                    borderRadius: '6px',
-                    marginBottom: '16px',
-                    transition: 'all 0.3s ease',
-                    backgroundColor: storageManagement.selectedStorage.selectedStorageMode === 'hybrid'
-                      ? colors.secondary
-                      : colors.card,
-                    cursor: 'pointer'
-                  }}>
-                    <input
-                      className="form-check-input"
-                      type="radio"
-                      name="storageMode"
-                      id="hybrid"
-                      checked={storageManagement.selectedStorage.selectedStorageMode === 'hybrid'}
-                      onChange={() => handleStorageManagementUpdate({
-                        selectedStorage: {
-                          ...storageManagement.selectedStorage,
-                          selectedStorageMode: 'hybrid'
-                        }
-                      })}
-                      style={{ marginTop: '4px' }}
-                    />
-                    <label className="form-check-label" htmlFor="hybrid" style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
-                      <div className="d-flex align-items-center">
-                        <FaSync className="me-2" style={{ color: '#ffc107', fontSize: '20px' }} />
-                        <div>
-                          <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Hybrid-Speicher</strong>
-                          <br />
-                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>Lokal & Cloud mit Synchronisation</small>
+                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>Ihre Daten in Ihrer Cloud - volle Kontrolle, Zugriff von allen Geräten, Team-fähig</small>
                         </div>
                       </div>
                     </label>
@@ -5852,8 +6282,8 @@ const StorageManagement: React.FC = () => {
             </div>
           )}
 
-          {/* Datenbank-Konfiguration - nur anzeigen wenn nicht lokal */}
-          {databaseSectionVisible && (
+          {/* Datenbank-Konfiguration - nur anzeigen wenn lokal gehostet */}
+          {hostingEnvironment === 'local' && databaseSectionVisible && (
             <div className={`card mb-4 storage-section ${databaseSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{
               backgroundColor: colors.card,
               border: `1px solid ${colors.cardBorder}`,
@@ -5869,8 +6299,8 @@ const StorageManagement: React.FC = () => {
               <div className="card-body" style={{ padding: '20px' }}>
                 <div className="row">
                   {/* Cloud-Datenbank-Optionen */}
-                  {['PostgreSQL', 'MariaDB', 'MySQL'].map((dbType) => (
-                    <div key={dbType} className="col-md-4">
+                  {['PostgreSQL', 'MariaDB', 'MySQL', 'CouchDB'].map((dbType) => (
+                    <div key={dbType} className="col-md-3">
                       <div className="form-check database-option" style={{
                         padding: '16px',
                         border: `1px solid ${colors.cardBorder}`,
@@ -5899,14 +6329,15 @@ const StorageManagement: React.FC = () => {
                         />
                         <label className="form-check-label" htmlFor={dbType} style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
                           <div className="d-flex align-items-center">
-                            <FaDatabase className="me-2" style={{ color: '#336791', fontSize: '20px' }} />
+                            <FaDatabase className="me-2" style={{ color: dbType === 'CouchDB' ? '#e42528' : '#336791', fontSize: '20px' }} />
                             <div>
                               <strong style={{ color: colors.text, fontSize: '1.1rem' }}>{dbType}</strong>
                               <br />
                               <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
                                 {dbType === 'PostgreSQL' ? 'Erweiterte SQL-Datenbank' :
                                   dbType === 'MariaDB' ? 'MySQL-kompatible Datenbank' :
-                                    dbType === 'MySQL' ? 'Beliebte Web-Datenbank' : ''}
+                                    dbType === 'MySQL' ? 'Beliebte Web-Datenbank' :
+                                      dbType === 'CouchDB' ? 'NoSQL-Dokumentendatenbank' : ''}
                               </small>
                             </div>
                           </div>
@@ -5919,8 +6350,256 @@ const StorageManagement: React.FC = () => {
             </div>
           )}
 
-          {/* PostgreSQL-Konfiguration */}
-          {postgresSectionVisible && (
+          {/* Selfhosting-Bereich - nur anzeigen wenn cloud-gehostet */}
+          {hostingEnvironment === 'cloud' && databaseSectionVisible && (
+            <div className={`card mb-4 storage-section ${databaseSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{
+              backgroundColor: colors.card,
+              border: `1px solid ${colors.cardBorder}`,
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}>
+              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+                <h5 className="mb-0" style={{ color: colors.text }}>
+                  <FaServer className="me-2" />
+                  The Chef's Numbers - Selfhosting
+                </h5>
+              </div>
+              <div className="card-body" style={{ padding: '20px' }}>
+                {/* Info-Banner */}
+                <div className="alert alert-info mb-4" style={{ 
+                  backgroundColor: '#17a2b820', 
+                  borderColor: '#17a2b8',
+                  borderLeft: `4px solid #17a2b8` 
+                }}>
+                  <div className="d-flex align-items-start">
+                    <FaInfoCircle className="me-3 mt-1" style={{ color: '#17a2b8', fontSize: '20px', flexShrink: 0 }} />
+                    <div>
+                      <strong style={{ color: colors.text }}>Docker-Datenbanken sind aus der Cloud nicht erreichbar</strong>
+                      <p className="mb-2 mt-2" style={{ color: colors.text }}>
+                        Ihre App läuft aktuell <strong>cloud-gehostet</strong> (z.B. auf Netlify). 
+                        Docker-Container auf localhost oder im lokalen Netzwerk sind aus Sicherheitsgründen nicht erreichbar.
+                      </p>
+                      <p className="mb-0" style={{ color: colors.text }}>
+                        <strong>Lösung:</strong> Nutzen Sie vollständiges Selfhosting - Frontend und Backend zusammen in Docker.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selfhosting-Optionen */}
+                <div className="row">
+                  <div className="col-12">
+                    <div className="card" style={{ 
+                      backgroundColor: colors.card,
+                      border: `2px solid ${colors.primary}`,
+                      borderRadius: '8px'
+                    }}>
+                      <div className="card-body" style={{ padding: '24px' }}>
+                        <div className="d-flex align-items-start">
+                          <div className="me-3" style={{ 
+                            backgroundColor: colors.primary,
+                            borderRadius: '50%',
+                            width: '60px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <FaDocker style={{ color: '#ffffff', fontSize: '30px' }} />
+                          </div>
+                          <div className="flex-grow-1">
+                            <h5 style={{ color: colors.text, marginBottom: '12px' }}>
+                              Vollständig selbst-gehostete Lösung
+                            </h5>
+                            <p style={{ color: colors.textSecondary, marginBottom: '16px' }}>
+                              Stellen Sie The Chef's Numbers komplett auf Ihrem eigenen Server bereit - 
+                              Frontend, Datenbank und Bildspeicher in einem Docker-Netzwerk.
+                            </p>
+                            <div className="row mb-3">
+                              <div className="col-md-6 mb-2">
+                                <div className="d-flex align-items-center">
+                                  <FaCheck className="me-2" style={{ color: '#28a745' }} />
+                                  <span style={{ color: colors.text }}>Volle Datenhoheit</span>
+                                </div>
+                              </div>
+                              <div className="col-md-6 mb-2">
+                                <div className="d-flex align-items-center">
+                                  <FaCheck className="me-2" style={{ color: '#28a745' }} />
+                                  <span style={{ color: colors.text }}>Keine CORS-Probleme</span>
+                                </div>
+                              </div>
+                              <div className="col-md-6 mb-2">
+                                <div className="d-flex align-items-center">
+                                  <FaCheck className="me-2" style={{ color: '#28a745' }} />
+                                  <span style={{ color: colors.text }}>Ein Befehl startet alles</span>
+                                </div>
+                              </div>
+                              <div className="col-md-6 mb-2">
+                                <div className="d-flex align-items-center">
+                                  <FaCheck className="me-2" style={{ color: '#28a745' }} />
+                                  <span style={{ color: colors.text }}>Professionelle Lösung</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="alert alert-success mb-3" style={{
+                              backgroundColor: '#d1e7dd',
+                              borderColor: '#28a745',
+                              fontSize: '0.9rem'
+                            }}>
+                              <FaCheckCircle className="me-2" style={{ color: '#0f5132' }} />
+                              <strong>Jetzt verfügbar:</strong> Laden Sie das Frontend Docker Compose Paket herunter und starten Sie Ihre selbst-gehostete Instanz!
+                            </div>
+
+                            <button 
+                              className="btn btn-primary"
+                              onClick={() => {
+                                // Frontend Docker Compose herunterladen
+                                const dockerComposeContent = `# ============================================
+# The Chef's Numbers - Frontend Docker Compose
+# Stellt nur die React App bereit
+# ============================================
+
+version: '3.8'
+
+services:
+  frontend:
+    # Fertiges Docker Image von GitHub Container Registry
+    # KEIN Build nötig - Image wird automatisch heruntergeladen!
+    image: ghcr.io/StefanEhlert/the-chefs-numbers:latest
+    
+    # Container-Name
+    container_name: chef-numbers-frontend
+    
+    # Port-Mapping (Host:Container)
+    # Zugriff über: http://localhost:3000
+    ports:
+      - "3000:80"
+    
+    # Umgebungsvariablen (optional)
+    environment:
+      - REACT_APP_VERSION=2.3.0
+    
+    # Neustart-Policy
+    # unless-stopped = startet automatisch nach System-Reboot
+    restart: unless-stopped
+    
+    # Health Check
+    # Prüft ob Container gesund ist
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    
+    # Labels für bessere Organisation
+    labels:
+      - "com.chefnumbers.component=frontend"
+      - "com.chefnumbers.version=2.3.0"
+      - "com.chefnumbers.description=The Chef's Numbers React Frontend"
+
+# ============================================
+# Hinweise zur Verwendung:
+# ============================================
+# 
+# 1. Erstmaliger Start (mit Build):
+#    docker-compose -f docker-compose-frontend.yml up -d --build
+#
+# 2. Neustart (ohne Build):
+#    docker-compose -f docker-compose-frontend.yml up -d
+#
+# 3. Stoppen:
+#    docker-compose -f docker-compose-frontend.yml down
+#
+# 4. Logs ansehen:
+#    docker-compose -f docker-compose-frontend.yml logs -f
+#
+# 5. Status prüfen:
+#    docker-compose -f docker-compose-frontend.yml ps
+#
+# ============================================
+# Nach dem Start:
+# ============================================
+# 
+# - Öffnen Sie: http://localhost:3000
+# - Gehen Sie zu: Speicherverwaltung
+# - Wählen Sie: Cloud-Speicher → Docker Container
+# - Wählen Sie: Ihre Datenbank (z.B. CouchDB)
+# - Laden Sie das entsprechende Docker Compose herunter
+# - Starten Sie die Datenbank separat
+#
+# ============================================
+`;
+
+                                // Erstelle Blob und Download-Link
+                                const blob = new Blob([dockerComposeContent], { type: 'text/yaml' });
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'docker-compose-frontend.yml';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                                
+                                console.log('✅ Frontend Docker Compose heruntergeladen');
+                              }}
+                              style={{
+                                marginRight: '8px'
+                              }}
+                            >
+                              <FaDownload className="me-2" />
+                              Frontend Docker Compose herunterladen
+                            </button>
+                            
+                            <a 
+                              href="https://github.com/YOUR_USERNAME/the-chefs-numbers/blob/main/SELFHOSTING.md"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-outline-primary"
+                            >
+                              <FaInfoCircle className="me-2" />
+                              Anleitung öffnen
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alternative: Cloud-Dienste */}
+                <div className="mt-4">
+                  <h6 style={{ color: colors.text, marginBottom: '16px' }}>
+                    <FaCloud className="me-2" />
+                    Alternative: Verwaltete Cloud-Dienste
+                  </h6>
+                  <p style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
+                    Wenn Sie kein Selfhosting betreiben möchten, nutzen Sie stattdessen:
+                  </p>
+                  <div className="row">
+                    <div className="col-md-6 mb-2">
+                      <div className="d-flex align-items-center">
+                        <FaArrowRight className="me-2" style={{ color: '#3ecf8e' }} />
+                        <span style={{ color: colors.text }}>Supabase Cloud (PostgreSQL)</span>
+                      </div>
+                    </div>
+                    <div className="col-md-6 mb-2">
+                      <div className="d-flex align-items-center">
+                        <FaArrowRight className="me-2" style={{ color: '#ffa726' }} />
+                        <span style={{ color: colors.text }}>Firebase Cloud (NoSQL)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PostgreSQL-Konfiguration - nur anzeigen wenn lokal gehostet */}
+          {hostingEnvironment === 'local' && postgresSectionVisible && (
             <div className={`card mb-4 storage-section ${postgresSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
               <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
@@ -6394,8 +7073,8 @@ const StorageManagement: React.FC = () => {
             </div>
           )}
 
-          {/* MariaDB-Konfiguration */}
-          {mariadbSectionVisible && (
+          {/* MariaDB-Konfiguration - nur anzeigen wenn lokal gehostet */}
+          {hostingEnvironment === 'local' && mariadbSectionVisible && (
             <div className={`card mb-4 storage-section ${mariadbSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
               <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
@@ -6873,8 +7552,8 @@ const StorageManagement: React.FC = () => {
             </div>
           )}
 
-          {/* MySQL-Konfiguration */}
-          {mysqlSectionVisible && (
+          {/* MySQL-Konfiguration - nur anzeigen wenn lokal gehostet */}
+          {hostingEnvironment === 'local' && mysqlSectionVisible && (
             <div className={`card mb-4 storage-section ${mysqlSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
               <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
@@ -7347,6 +8026,447 @@ const StorageManagement: React.FC = () => {
 
             </div>
 
+          )}
+
+          {/* CouchDB-Konfiguration - nur anzeigen wenn lokal gehostet */}
+          {hostingEnvironment === 'local' && couchdbSectionVisible && (
+            <div className={`card mb-4 storage-section ${couchdbSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
+              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+                <h5 className="mb-0" style={{ color: colors.text }}>
+                  <FaDatabase className="me-2" />
+                  CouchDB-Konfiguration
+                </h5>
+              </div>
+              <div className="card-body" style={{ padding: '20px' }}>
+                <div className="row">
+                  {/* Gruppe 1: Netzwerk/Verbindung */}
+                  <div className="col-lg-6 col-md-12">
+                    <div className="mb-3">
+                      <label className="form-label">Host/IP-Adresse</label>
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className={`form-control ${storageManagement.connections.couchdb.host && !validateHostname(storageManagement.connections.couchdb.host).isValid ? 'is-invalid' : ''}`}
+                          value={storageManagement.connections.couchdb.host}
+                          onChange={(e) => updateConnection('couchdb', { host: e.target.value })}
+                          placeholder="localhost"
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            backgroundColor: !storageManagement.connections.couchdb.host ? colors.accent + '20' : undefined,
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary"
+                          onClick={() => handlePingHost(storageManagement.connections.couchdb.host, 'couchdb-host')}
+                          disabled={!storageManagement.connections.couchdb.host || pingingHosts['couchdb-host']}
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                            e.currentTarget.style.backgroundColor = colors.accent + '20';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                          title="Ping testen"
+                        >
+                          {pingingHosts['couchdb-host'] ? (
+                            <FaSpinner className="fa-spin" />
+                          ) : (
+                            <FaWifi />
+                          )}
+                        </button>
+                      </div>
+                      {/* Hostname-Validierung */}
+                      {storageManagement.connections.couchdb.host && validationMessages['couchdb-host'] && !validateHostname(storageManagement.connections.couchdb.host).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateHostname(storageManagement.connections.couchdb.host).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.couchdb.host && validationMessages['couchdb-host'] && validateHostname(storageManagement.connections.couchdb.host).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateHostname(storageManagement.connections.couchdb.host).message}
+                        </div>
+                      )}
+
+                      {/* Ping-Ergebnis anzeigen */}
+                      {pingResults['couchdb-host'] && (
+                        <div style={{
+                          color: pingResults['couchdb-host'].success ? '#198754' : '#dc3545',
+                          fontSize: '0.875em',
+                          fontWeight: '500',
+                          marginTop: '2px'
+                        }}>
+                          {pingResults['couchdb-host'].message}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CouchDB Port */}
+                    <div className="mb-3">
+                      <label className="form-label">CouchDB Port</label>
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className={`form-control ${storageManagement.connections.couchdb.port && !validatePort(storageManagement.connections.couchdb.port).isValid ? 'is-invalid' : ''}`}
+                          value={storageManagement.connections.couchdb.port}
+                          onChange={(e) => updateConnection('couchdb', { port: e.target.value })}
+                          placeholder="5984"
+                          style={{
+                            backgroundColor: !storageManagement.connections.couchdb.port ? colors.accent + '20' : undefined,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                          }}
+                        />
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() => handleCheckPort(
+                            storageManagement.connections.couchdb.host,
+                            storageManagement.connections.couchdb.port,
+                            'couchdb-port'
+                          )}
+                          disabled={checkingPorts['couchdb-port'] || !storageManagement.connections.couchdb.host || !storageManagement.connections.couchdb.port}
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            backgroundColor: colors.card
+                          }}
+                        >
+                          {checkingPorts['couchdb-port'] ? (
+                            <FaSpinner className="fa-spin" />
+                          ) : (
+                            <FaWifi />
+                          )}
+                        </button>
+                      </div>
+                      {/* Port-Validierung */}
+                      {storageManagement.connections.couchdb.port && validationMessages['couchdb-port'] && !validatePort(storageManagement.connections.couchdb.port).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validatePort(storageManagement.connections.couchdb.port).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.couchdb.port && validationMessages['couchdb-port'] && validatePort(storageManagement.connections.couchdb.port).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validatePort(storageManagement.connections.couchdb.port).message}
+                        </div>
+                      )}
+                      {/* Port-Ergebnis */}
+                      {portResults['couchdb-port'] && (
+                        <div style={{
+                          color: portResults['couchdb-port'].success ? '#198754' : '#dc3545',
+                          fontSize: '0.875em',
+                          fontWeight: '500',
+                          marginTop: '2px'
+                        }}>
+                          {portResults['couchdb-port'].message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Gruppe 2: Authentifizierung */}
+                  <div className="col-lg-6 col-md-12">
+                    <div className="mb-3">
+                      <label className="form-label">Datenbank</label>
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className={`form-control ${storageManagement.connections.couchdb.database && !validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).isValid ? 'is-invalid' : ''}`}
+                          value={storageManagement.connections.couchdb.database}
+                          onChange={(e) => updateConnection('couchdb', { database: e.target.value })}
+                          placeholder="chef_numbers"
+                          style={{
+                            backgroundColor: !storageManagement.connections.couchdb.database ? colors.accent + '20' : undefined,
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary"
+                          onClick={() => {
+                            const host = storageManagement.connections.couchdb.host;
+                            const port = storageManagement.connections.couchdb.port || '5984';
+                            const username = storageManagement.connections.couchdb.username;
+                            const password = storageManagement.connections.couchdb.password;
+
+                            if (host && port && username && password) {
+                              // CouchDB Fauxton Web-Interface URL
+                              const fauxtonUrl = `http://${host}:${port}/_utils`;
+                              window.open(fauxtonUrl, '_blank');
+                            }
+                          }}
+                          disabled={!storageManagement.connections.couchdb.connectionStatus}
+                          style={{
+                            borderColor: colors.cardBorder,
+                            color: colors.text,
+                            transition: 'all 0.2s ease',
+                            opacity: storageManagement.connections.couchdb.connectionStatus ? 1 : 0.6,
+                            cursor: storageManagement.connections.couchdb.connectionStatus ? 'pointer' : 'not-allowed'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (storageManagement.connections.couchdb.connectionStatus) {
+                              e.currentTarget.style.borderColor = colors.accent;
+                              e.currentTarget.style.backgroundColor = colors.accent + '20';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = colors.cardBorder;
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                          title={storageManagement.connections.couchdb.connectionStatus ? 'CouchDB Fauxton Web-Interface öffnen' : 'Verbindungstest muss erfolgreich sein'}
+                        >
+                          <FaExternalLinkAlt />
+                        </button>
+                      </div>
+
+                      {/* Datenbank-Validierung */}
+                      {storageManagement.connections.couchdb.database && validationMessages['couchdb-database'] && !validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).isValid && (
+                        <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).message}
+                        </div>
+                      )}
+                      {storageManagement.connections.couchdb.database && validationMessages['couchdb-database'] && validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).isValid && (
+                        <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                          {validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).message}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Benutzername und Passwort nebeneinander */}
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Benutzername</label>
+                          <input
+                            type="text"
+                            className={`form-control ${storageManagement.connections.couchdb.username && !validateCouchDBUsername(storageManagement.connections.couchdb.username).isValid ? 'is-invalid' : ''}`}
+                            value={storageManagement.connections.couchdb.username}
+                            onChange={(e) => updateConnection('couchdb', { username: e.target.value })}
+                            placeholder="admin"
+                            style={{
+                              backgroundColor: !storageManagement.connections.couchdb.username ? colors.accent + '20' : undefined,
+                              borderColor: colors.cardBorder,
+                              color: colors.text,
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = colors.accent;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = colors.cardBorder;
+                            }}
+                          />
+
+                          {/* Benutzername-Validierung */}
+                          {storageManagement.connections.couchdb.username && validationMessages['couchdb-username'] && !validateCouchDBUsername(storageManagement.connections.couchdb.username).isValid && (
+                            <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
+                              {validateCouchDBUsername(storageManagement.connections.couchdb.username).message}
+                            </div>
+                          )}
+                          {storageManagement.connections.couchdb.username && validationMessages['couchdb-username'] && validateCouchDBUsername(storageManagement.connections.couchdb.username).isValid && (
+                            <div style={{ color: '#198754', fontSize: '0.875em', marginTop: '2px' }}>
+                              {validateCouchDBUsername(storageManagement.connections.couchdb.username).message}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Passwort</label>
+                          <div className="input-group">
+                            <input
+                              type={showPasswords.couchdb ? 'text' : 'password'}
+                              className="form-control"
+                              value={storageManagement.connections.couchdb.password}
+                              onChange={(e) => updateConnection('couchdb', { password: e.target.value })}
+                              placeholder="Passwort"
+                              style={{
+                                backgroundColor: !storageManagement.connections.couchdb.password ? colors.accent + '20' : undefined,
+                                borderColor: colors.cardBorder,
+                                color: colors.text,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = colors.accent;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = colors.cardBorder;
+                              }}
+                            />
+                            <button
+                              className="btn btn-outline-secondary"
+                              type="button"
+                              onClick={() => {
+                                const newPassword = generateSecurePassword();
+                                updateConnection('couchdb', { password: newPassword });
+                              }}
+                              style={{
+                                borderColor: colors.cardBorder,
+                                color: colors.text,
+                                backgroundColor: colors.card
+                              }}
+                              title="Sicheres Passwort generieren"
+                            >
+                              <FaKey />
+                            </button>
+                            <button
+                              className="btn btn-outline-secondary"
+                              type="button"
+                              onClick={() => togglePasswordVisibility('couchdb')}
+                              style={{
+                                borderColor: colors.cardBorder,
+                                color: colors.text,
+                                backgroundColor: colors.card
+                              }}
+                              title={showPasswords.couchdb ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                            >
+                              {showPasswords.couchdb ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                          </div>
+                          {/* Passwortstärke-Anzeige */}
+                          {storageManagement.connections.couchdb.password && showPasswordStrength && (
+                            <div className="mt-2">
+                              {(() => {
+                                const validation = validatePasswordStrength(storageManagement.connections.couchdb.password);
+                                const strengthColor = validation.strength === 'weak' ? '#dc3545' :
+                                  validation.strength === 'medium' ? '#ffc107' : '#198754';
+                                const strengthIcon = validation.strength === 'weak' ? '⚠️' :
+                                  validation.strength === 'medium' ? '🔒' : '🛡️';
+
+                                return (
+                                  <div
+                                    className="d-flex align-items-center"
+                                    style={{
+                                      color: strengthColor,
+                                      fontSize: '0.875em',
+                                      fontWeight: '500'
+                                    }}
+                                  >
+                                    <FaShieldAlt className="me-2" />
+                                    <span className="me-2">{strengthIcon}</span>
+                                    <span className="me-2" style={{ fontWeight: 'bold' }}>
+                                      {validation.strength === 'weak' ? 'Schwach' :
+                                        validation.strength === 'medium' ? 'Mittel' : 'Stark'}
+                                    </span>
+                                    <span style={{ fontSize: '0.8em', opacity: 0.8 }}>
+                                      ({validation.score}/8 Punkte)
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                              <div
+                                className="mt-1"
+                                style={{
+                                  color: validatePasswordStrength(storageManagement.connections.couchdb.password).strength === 'weak' ? '#dc3545' :
+                                    validatePasswordStrength(storageManagement.connections.couchdb.password).strength === 'medium' ? '#ffc107' : '#198754',
+                                  fontSize: '0.8em'
+                                }}
+                              >
+                                {validatePasswordStrength(storageManagement.connections.couchdb.password).message}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verbindungsstatus und Test-Button */}
+                <div className="mt-4">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div className="d-flex align-items-center">
+                      <FaWifi className="me-2" style={{ color: colors.textSecondary }} />
+                      <span style={{ color: colors.text }}>
+                        Verbindungsstatus:
+                        <span className={`ms-2 ${storageManagement.connections.couchdb.connectionStatus ? 'text-success' : 'text-danger'}`}>
+                          {storageManagement.connections.couchdb.connectionStatus ? 'Verbunden' : 'Nicht verbunden'}
+                        </span>
+                      </span>
+                    </div>
+                    <button
+                      className={`btn ${isCouchDBButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                      onClick={handleCouchDBConnectionTest}
+                      disabled={!isCouchDBButtonEnabled}
+                      style={{
+                        opacity: isCouchDBButtonEnabled ? 1 : 0.6,
+                        cursor: isCouchDBButtonEnabled ? 'pointer' : 'not-allowed'
+                      }}
+                      title={isCouchDBButtonEnabled ? 'CouchDB-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                    >
+                      <FaWifi className="me-1" />
+                      Verbindung testen
+                    </button>
+                  </div>
+
+                  {/* Testmeldungen anzeigen */}
+                  {storageManagement.connections.couchdb.testMessage && (
+                    <div className="mt-3">
+                      <div
+                        className="alert alert-info"
+                        style={{
+                          backgroundColor: colors.card,
+                          borderColor: colors.cardBorder,
+                          color: colors.text,
+                          fontSize: '0.875em',
+                          marginBottom: '0'
+                        }}
+                      >
+                        <div className="d-flex align-items-start">
+                          <FaInfoCircle className="me-2 mt-1" style={{ flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <pre style={{
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              fontFamily: 'inherit',
+                              fontSize: 'inherit'
+                            }}>
+                              {storageManagement.connections.couchdb.testMessage}
+                            </pre>
+                            {storageManagement.connections.couchdb.lastTested && (
+                              <div className="mt-2">
+                                <small className="text-muted">
+                                  {new Date(storageManagement.connections.couchdb.lastTested).toLocaleString('de-DE')}
+                                </small>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Supabase-Konfiguration */}
@@ -8193,8 +9313,8 @@ const StorageManagement: React.FC = () => {
             </div>
           )}
 
-          {/* MinIO-Konfiguration - nur anzeigen wenn nicht lokal und nicht Browser-Speicher */}
-          {minioSectionVisible && (
+          {/* MinIO-Konfiguration - nur anzeigen wenn lokal gehostet */}
+          {hostingEnvironment === 'local' && minioSectionVisible && (
             <div className={`card mb-4 storage-section ${minioSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
               <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
@@ -8861,6 +9981,13 @@ const StorageManagement: React.FC = () => {
                 username: storageManagement.connections.mysql?.username || 'chef_user',
                 password: storageManagement.connections.mysql?.password || 'chef123',
                 prismaPort: storageManagement.connections.mysql?.prismaPort || '3002'
+              },
+              couchdb: {
+                host: storageManagement.connections.couchdb?.host || 'localhost',
+                port: storageManagement.connections.couchdb?.port || '5984',
+                database: storageManagement.connections.couchdb?.database || 'chef_numbers',
+                username: storageManagement.connections.couchdb?.username || 'admin',
+                password: storageManagement.connections.couchdb?.password || 'couchdb123'
               },
               prisma: {
                 port: storageManagement.connections.mariadb?.prismaPort || '3001' // Legacy für Rückwärtskompatibilität

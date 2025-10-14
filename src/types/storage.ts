@@ -1,13 +1,14 @@
 // Storage-Konfiguration Types
 
 // Storage-Modi
-export type StorageMode = 'local' | 'cloud' | 'hybrid';
+export type StorageMode = 'local' | 'cloud';
 
 // Datenbank-Services
 export type StorageData = 
   | 'PostgreSQL' 
   | 'MariaDB' 
   | 'MySQL' 
+  | 'CouchDB'
   | 'Supabase' 
   | 'Firebase' 
   | 'SQLite';
@@ -87,6 +88,7 @@ export const convertNewToLegacy = (config: StorageConfig): { mode: LegacyStorage
     case 'PostgreSQL':
     case 'MariaDB':
     case 'MySQL':
+    case 'CouchDB':
     case 'SQLite':
     default:
       return {
@@ -102,8 +104,8 @@ export const isValidStorageConfig = (config: Partial<StorageConfig>): config is 
     config.mode !== undefined &&
     config.data !== undefined &&
     config.picture !== undefined &&
-    ['local', 'cloud', 'hybrid'].includes(config.mode) &&
-    ['PostgreSQL', 'MariaDB', 'MySQL', 'Supabase', 'Firebase', 'SQLite'].includes(config.data) &&
+    ['local', 'cloud'].includes(config.mode) &&
+    ['PostgreSQL', 'MariaDB', 'MySQL', 'CouchDB', 'Supabase', 'Firebase', 'SQLite'].includes(config.data) &&
     ['LocalPath', 'MinIO', 'Supabase', 'Firebase'].includes(config.picture)
   );
 };
@@ -119,11 +121,6 @@ export const DEFAULT_STORAGE_CONFIGS: Record<StorageMode, StorageConfig> = {
     mode: 'cloud',
     data: 'PostgreSQL',
     picture: 'MinIO'
-  },
-  hybrid: {
-    mode: 'hybrid',
-    data: 'PostgreSQL',
-    picture: 'MinIO'
   }
 };
 
@@ -137,13 +134,8 @@ export const getCompatibleServices = (mode: StorageMode): { data: StorageData[];
       };
     case 'cloud':
       return {
-        data: ['PostgreSQL', 'MariaDB', 'MySQL', 'Supabase', 'Firebase'],
+        data: ['PostgreSQL', 'MariaDB', 'MySQL', 'CouchDB', 'Supabase', 'Firebase'],
         picture: ['MinIO', 'Supabase', 'Firebase']
-      };
-    case 'hybrid':
-      return {
-        data: ['PostgreSQL', 'MariaDB', 'MySQL', 'Supabase', 'Firebase', 'SQLite'],
-        picture: ['LocalPath', 'MinIO', 'Supabase', 'Firebase']
       };
     default:
       return {

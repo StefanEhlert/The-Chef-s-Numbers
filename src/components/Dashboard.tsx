@@ -271,7 +271,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       } else if (mode === 'cloud') {
                         return `Cloud (${dataStorage} + ${pictureStorage})`;
                       } else {
-                        return `Hybrid (${dataStorage} + ${pictureStorage})`;
+                        return `Cloud (${dataStorage} + ${pictureStorage})`;
                       }
                     } catch (e) {
                       return 'Lokal (Browser)';

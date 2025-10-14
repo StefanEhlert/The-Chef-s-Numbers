@@ -7,7 +7,7 @@
 import { DatabaseConfig, MinIOConfig } from '../components/ConnectionTester';
 
 export interface StorageSchema {
-  selectedStorageMode: 'local' | 'cloud' | 'hybrid';
+  selectedStorageMode: 'local' | 'cloud';
   selectedCloudType: 'docker' | 'supabase' | 'firebase' | 'none';
   selectedDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'Supabase' | 'Firebase' | undefined;
   selectedPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath' | undefined;

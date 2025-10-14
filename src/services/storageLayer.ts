@@ -21,7 +21,7 @@ export interface StorageEntity {
 }
 
 // Storage Mode Types
-export type StorageMode = 'local' | 'cloud' | 'hybrid';
+export type StorageMode = 'local' | 'cloud';
 export type CloudStorageType = 'docker' | 'supabase' | 'firebase' | 'postgres';
 
 // Adapter Interface
@@ -2231,6 +2231,290 @@ class FirebaseAdapter implements StorageAdapter {
   }
 }
 
+// CouchDB Adapter (NoSQL)
+class CouchDBAdapter implements StorageAdapter {
+  name = 'CouchDBAdapter';
+  type = 'couchdb';
+
+  constructor(private connectionData: any) {
+    console.log('🛋️ CouchDBAdapter erstellt mit ConnectionData:', {
+      host: connectionData?.host,
+      port: connectionData?.port,
+      database: connectionData?.database,
+      hasUsername: !!connectionData?.username,
+      hasPassword: !!connectionData?.password
+    });
+  }
+
+  private getBaseUrl(): string {
+    const host = this.connectionData.host || 'localhost';
+    const port = this.connectionData.port || '5984';
+    const baseUrl = `http://${host}:${port}`;
+    console.log(`🛋️ CouchDB BaseUrl: ${baseUrl}`);
+    return baseUrl;
+  }
+
+  private getAuthHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+
+    // CouchDB verwendet Basic Auth
+    if (this.connectionData.username && this.connectionData.password) {
+      const credentials = btoa(`${this.connectionData.username}:${this.connectionData.password}`);
+      headers['Authorization'] = `Basic ${credentials}`;
+      console.log(`🛋️ CouchDB: Verwende Basic Auth für ${this.connectionData.username}`);
+    } else {
+      console.warn('⚠️ CouchDB: Keine Authentifizierungsdaten verfügbar');
+    }
+
+    return headers;
+  }
+
+  // Map key to CouchDB database name
+  private mapKeyToDatabase(key: string): string {
+    const keyMap: { [key: string]: string } = {
+      'articles': 'articles',
+      'suppliers': 'suppliers',
+      'recipes': 'recipes',
+      'einkaufsListe': 'einkaufsitems',
+      'inventurListe': 'inventuritems',
+    };
+    return keyMap[key] || key;
+  }
+
+  // Transformiere Daten für CouchDB
+  private transformDataForCouchDB<T extends StorageEntity>(data: T[]): any[] {
+    return data.map(item => {
+      const transformed: any = { ...item };
+
+      // CouchDB verwendet _id als Document-ID (nicht id)
+      transformed._id = item.id;
+      
+      // dbId nicht benötigt (CouchDB verwendet _id und _rev automatisch)
+      delete transformed.dbId;
+
+      // Entferne Frontend-spezifische Felder
+      delete transformed.isDirty;
+      delete transformed.isNew;
+      delete transformed.syncStatus;
+      delete transformed.supplier; // Nur supplierId verwenden
+
+      // CouchDB speichert alles als JSON, keine Feldnamen-Transformation nötig
+      // Behalte camelCase für Konsistenz mit Frontend
+
+      console.log(`🛋️ CouchDB Transform: Document mit _id: ${transformed._id}`);
+      return transformed;
+    });
+  }
+
+  // Transformiere Daten von CouchDB zurück zu Frontend-Format
+  private transformDataFromCouchDB(data: any[]): any[] {
+    return data.map(item => {
+      const transformed: any = { ...item };
+
+      // CouchDB _id wird zu Frontend id
+      if (transformed._id) {
+        transformed.id = transformed._id;
+        delete transformed._id;
+      }
+
+      // CouchDB _rev (Revision) behalten für Updates
+      if (transformed._rev) {
+        transformed.dbRev = transformed._rev;
+        delete transformed._rev;
+      }
+
+      // Füge Frontend-Felder hinzu
+      transformed.isDirty = false;
+      transformed.isNew = false;
+      transformed.syncStatus = 'synced';
+
+      return transformed;
+    });
+  }
+
+  async save<T extends StorageEntity>(
+    key: string,
+    data: T[],
+    onProgress?: (current: number, total: number) => void
+  ): Promise<boolean> {
+    try {
+      const database = this.mapKeyToDatabase(key);
+      console.log(`🛋️ CouchDB: Speichere ${data.length} Einträge in ${database}`);
+
+      const transformedData = this.transformDataForCouchDB(data);
+
+      if (onProgress) {
+        onProgress(0, data.length);
+      }
+
+      // CouchDB Bulk API für bessere Performance
+      const bulkDocs = transformedData.map(doc => {
+        // Füge _rev hinzu falls vorhanden (für Updates)
+        const originalItem = data.find(orig => orig.id === doc._id);
+        if (originalItem && (originalItem as any).dbRev) {
+          doc._rev = (originalItem as any).dbRev;
+        }
+        return doc;
+      });
+
+      const response = await fetch(`${this.getBaseUrl()}/${database}/_bulk_docs`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ docs: bulkDocs })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ CouchDB Fehler: ${response.status}`, errorText);
+        throw new Error(`CouchDB Fehler: ${response.status} ${response.statusText}`);
+      }
+
+      const results = await response.json();
+      
+      // Aktualisiere _rev für zukünftige Updates
+      results.forEach((result: any, index: number) => {
+        if (result.ok && result.rev) {
+          const originalItem = data.find(orig => orig.id === result.id);
+          if (originalItem) {
+            (originalItem as any).dbRev = result.rev;
+            console.log(`✅ CouchDB: _rev aktualisiert für ${result.id}: ${result.rev}`);
+          }
+        } else if (result.error) {
+          console.error(`❌ CouchDB Fehler für Document ${result.id}:`, result.error, result.reason);
+        }
+      });
+
+      if (onProgress) {
+        onProgress(data.length, data.length);
+      }
+
+      console.log(`✅ CouchDB: ${data.length} Einträge erfolgreich gespeichert`);
+      return true;
+    } catch (error) {
+      console.error(`❌ CouchDB Fehler beim Speichern von ${key}:`, error);
+      return false;
+    }
+  }
+
+  async load<T extends StorageEntity>(key: string): Promise<T[] | null> {
+    try {
+      const database = this.mapKeyToDatabase(key);
+      console.log(`🛋️ CouchDB: Lade Daten aus ${database}`);
+
+      // CouchDB _all_docs Endpoint mit include_docs=true
+      const response = await fetch(`${this.getBaseUrl()}/${database}/_all_docs?include_docs=true`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`⚠️ CouchDB Datenbank ${database} existiert nicht - returniere leeres Array`);
+          return [];
+        }
+        throw new Error(`CouchDB Fehler: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      // Extrahiere docs aus rows
+      const docs = result.rows
+        .filter((row: any) => row.doc && !row.id.startsWith('_design/')) // Filter Design-Dokumente
+        .map((row: any) => row.doc);
+
+      console.log(`✅ CouchDB: ${docs.length} Einträge aus ${database} geladen`);
+
+      // Transformiere zurück zu Frontend-Format
+      const transformedData = this.transformDataFromCouchDB(docs);
+
+      return transformedData as T[];
+    } catch (error) {
+      console.error(`❌ CouchDB Fehler beim Laden von ${key}:`, error);
+      return null;
+    }
+  }
+
+  async delete<T extends StorageEntity>(key: string, id: string): Promise<boolean> {
+    try {
+      const database = this.mapKeyToDatabase(key);
+      console.log(`🛋️ CouchDB: Lösche Document ${id} aus ${database}`);
+
+      // CouchDB benötigt _rev zum Löschen - hole es zuerst
+      const getResponse = await fetch(`${this.getBaseUrl()}/${database}/${id}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!getResponse.ok) {
+        if (getResponse.status === 404) {
+          console.log(`⚠️ Document ${id} existiert nicht`);
+          return false;
+        }
+        throw new Error(`Fehler beim Abrufen von ${id}: ${getResponse.status}`);
+      }
+
+      const doc = await getResponse.json();
+
+      // Lösche mit _rev
+      const deleteResponse = await fetch(`${this.getBaseUrl()}/${database}/${id}?rev=${doc._rev}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!deleteResponse.ok) {
+        throw new Error(`CouchDB Löschfehler: ${deleteResponse.status} ${deleteResponse.statusText}`);
+      }
+
+      console.log(`✅ CouchDB: Document ${id} erfolgreich gelöscht`);
+      return true;
+    } catch (error) {
+      console.error(`❌ CouchDB Fehler beim Löschen von ${key} (${id}):`, error);
+      return false;
+    }
+  }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      console.log('🛋️ CouchDB: Verbindungstest');
+
+      // Teste CouchDB Root Endpoint
+      const response = await fetch(`${this.getBaseUrl()}/`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`CouchDB nicht erreichbar: ${response.status} ${response.statusText}`);
+      }
+
+      const info = await response.json();
+      console.log('✅ CouchDB Verbindungstest erfolgreich:', info);
+
+      // Teste auch die Datenbank
+      const database = this.connectionData.database || 'chef_numbers';
+      const dbResponse = await fetch(`${this.getBaseUrl()}/${database}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (dbResponse.ok) {
+        const dbInfo = await dbResponse.json();
+        console.log(`✅ CouchDB Datenbank ${database} ist verfügbar:`, dbInfo);
+      } else if (dbResponse.status === 404) {
+        console.log(`⚠️ CouchDB Datenbank ${database} existiert noch nicht (wird bei erstem Schreiben erstellt)`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ CouchDB Verbindungstest fehlgeschlagen:', error);
+      return false;
+    }
+  }
+}
+
 // MinIO Adapter (für Bilder)
 class MinIOAdapter implements StorageAdapter {
   name = 'MinIOAdapter';
@@ -2807,10 +3091,6 @@ export class StorageLayer {
         this.pictureAdapter = await this.createPictureAdapter(storageConfig.picture, connections);
         
         console.log(`☁️ Cloud-Modus: ${storageConfig.data} für Daten, ${storageConfig.picture} für Bilder`);
-      } else if (storageConfig.mode === 'hybrid') {
-        // TODO: Implement hybrid mode
-        console.log('🔄 Hybrid-Modus: Noch nicht implementiert');
-        return false;
       }
 
       // Test connections
@@ -2856,6 +3136,10 @@ export class StorageLayer {
       case 'MySQL':
         console.log(`🔧 MySQL ConnectionData:`, connectionData?.mysql);
         return new PrismaAdapter(connectionData?.mysql, 'mysql');
+      
+      case 'CouchDB':
+        console.log(`🛋️ CouchDB ConnectionData:`, connectionData?.couchdb);
+        return new CouchDBAdapter(connectionData?.couchdb);
       
       case 'Supabase':
         console.log(`☁️ Supabase ConnectionData:`, connectionData?.supabase);

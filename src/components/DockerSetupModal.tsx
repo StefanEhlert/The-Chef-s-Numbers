@@ -8,7 +8,7 @@ interface DockerSetupModalProps {
   onRestartTest: () => void;
   colors: any;
   dockerConfig: DockerComposeConfig;
-  serviceType?: 'postgresql' | 'mariadb' | 'mysql' | 'minio' | 'all';
+  serviceType?: 'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio' | 'all';
 }
 
 const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
@@ -49,6 +49,14 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
           filename: 'docker-compose-mysql.yml',
           icon: '🗄️'
         };
+      case 'couchdb':
+        return {
+          title: 'CouchDB Setup',
+          description: 'CouchDB NoSQL-Dokumentendatenbank Container',
+          services: ['CouchDB', 'CouchDB Init'],
+          filename: 'docker-compose-couchdb.yml',
+          icon: '🗄️'
+        };
       case 'minio':
         return {
           title: 'MinIO Object Storage Setup',
@@ -79,6 +87,8 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
         return 'MariaDB-Verbindungstest erneut starten';
       case 'mysql':
         return 'MySQL-Verbindungstest erneut starten';
+      case 'couchdb':
+        return 'CouchDB-Verbindungstest erneut starten';
       case 'minio':
         return 'MinIO-Verbindungstest erneut starten';
       default:
@@ -100,6 +110,10 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
       filename = result.filename;
     } else if (serviceType === 'mysql') {
       const result = await dockerComposeGenerator.generateServiceSpecificCompose('mysql', dockerConfig);
+      dockerComposeContent = result.content;
+      filename = result.filename;
+    } else if (serviceType === 'couchdb') {
+      const result = await dockerComposeGenerator.generateServiceSpecificCompose('couchdb', dockerConfig);
       dockerComposeContent = result.content;
       filename = result.filename;
     } else if (serviceType === 'minio') {
@@ -141,6 +155,10 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
         filename = result.filename;
       } else if (serviceType === 'mysql') {
         const result = await dockerComposeGenerator.generateServiceSpecificCompose('mysql', dockerConfig);
+        dockerComposeContent = result.content;
+        filename = result.filename;
+      } else if (serviceType === 'couchdb') {
+        const result = await dockerComposeGenerator.generateServiceSpecificCompose('couchdb', dockerConfig);
         dockerComposeContent = result.content;
         filename = result.filename;
       } else if (serviceType === 'minio') {

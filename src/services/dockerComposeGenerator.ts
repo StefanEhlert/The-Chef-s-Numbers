@@ -28,6 +28,13 @@ export interface DockerComposeConfig {
     password: string;
     prismaPort: string;
   };
+  couchdb: {
+    host: string;
+    port: string;
+    database: string;
+    username: string;
+    password: string;
+  };
   prisma: {
     port: string; // Legacy - wird für Rückwärtskompatibilität beibehalten
   };
@@ -505,6 +512,186 @@ networks:
     driver: bridge
     name: chef-numbers-network`;
 
+      case 'couchdb':
+        return `version: '3.8'
+
+services:
+  # CouchDB NoSQL Database
+  couchdb:
+    image: couchdb:3.3
+    container_name: chef-numbers-couchdb
+    restart: unless-stopped
+    environment:
+      COUCHDB_USER: {{CONFIG:couchdb.username}}
+      COUCHDB_PASSWORD: {{CONFIG:couchdb.password}}
+    ports:
+      - "{{CONFIG:couchdb.port}}:5984"
+    volumes:
+      - couchdb_data:/opt/couchdb/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5984/_up || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - chef-numbers-network
+
+  # CouchDB Initialisierung
+  couchdb-init:
+    image: curlimages/curl:latest
+    container_name: chef-numbers-couchdb-init
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        echo '🚀 CouchDB Datenbank-Initialisierung gestartet...'
+        
+        # Warte kurz
+        sleep 5
+        
+        # CORS aktivieren (WICHTIG für Browser-Zugriff!)
+        echo '🌐 Aktiviere CORS für Browser-Zugriff...'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_node/_local/_config/httpd/enable_cors \
+          -d '"true"'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_node/_local/_config/cors/origins \
+          -d '"*"'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_node/_local/_config/cors/credentials \
+          -d '"true"'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_node/_local/_config/cors/methods \
+          -d '"GET, PUT, POST, HEAD, DELETE, OPTIONS"'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_node/_local/_config/cors/headers \
+          -d '"accept, authorization, content-type, origin, referer, x-csrf-token"'
+        
+        echo '✅ CORS aktiviert'
+        
+        # Erstelle System-Datenbanken (falls nicht vorhanden)
+        echo '🔧 Erstelle System-Datenbanken...'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_users
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_replicator
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/_global_changes
+        
+        echo '✅ System-Datenbanken erstellt'
+        
+        # Erstelle App-Datenbanken
+        echo '📦 Erstelle App-Datenbanken...'
+        
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/{{CONFIG:couchdb.database}}
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/suppliers
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/articles
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/recipes
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/design
+        curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/system_info
+        
+        echo '✅ App-Datenbanken erstellt'
+        
+        # Setze Berechtigungen
+        echo '🔒 Setze Berechtigungen...'
+        
+        for db in {{CONFIG:couchdb.database}} suppliers articles recipes design system_info; do
+          curl -X PUT http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/$db/_security \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"admins\": {
+                \"names\": [\"{{CONFIG:couchdb.username}}\"],
+                \"roles\": [\"_admin\"]
+              },
+              \"members\": {
+                \"names\": [\"{{CONFIG:couchdb.username}}\"],
+                \"roles\": []
+              }
+            }"
+        done
+        
+        echo '✅ Berechtigungen gesetzt'
+        
+        # Erstelle Indizes für häufige Queries
+        echo '📑 Erstelle Indizes...'
+        
+        # Index für articles by name
+        curl -X POST http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/articles/_index \
+          -H "Content-Type: application/json" \
+          -d '{
+            "index": {
+              "fields": ["name"]
+            },
+            "name": "name-index",
+            "type": "json"
+          }'
+        
+        # Index für articles by supplierId
+        curl -X POST http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/articles/_index \
+          -H "Content-Type: application/json" \
+          -d '{
+            "index": {
+              "fields": ["supplierId"]
+            },
+            "name": "supplier-index",
+            "type": "json"
+          }'
+        
+        # Index für suppliers by name
+        curl -X POST http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/suppliers/_index \
+          -H "Content-Type: application/json" \
+          -d '{
+            "index": {
+              "fields": ["name"]
+            },
+            "name": "name-index",
+            "type": "json"
+          }'
+        
+        # Index für recipes by name
+        curl -X POST http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/recipes/_index \
+          -H "Content-Type: application/json" \
+          -d '{
+            "index": {
+              "fields": ["name"]
+            },
+            "name": "name-index",
+            "type": "json"
+          }'
+        
+        echo '✅ Indizes erstellt'
+        
+        # System-Info Dokument
+        echo '📊 Erstelle System-Info...'
+        
+        curl -X POST http://{{CONFIG:couchdb.username}}:{{CONFIG:couchdb.password}}@couchdb:5984/system_info \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"_id\": \"schema_version\",
+            \"key\": \"schema_version\",
+            \"value\": \"2.2.2\",
+            \"description\": \"Chef Numbers Schema Version\",
+            \"created_at\": \"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\"
+          }"
+        
+        echo '✅ System-Info erstellt'
+        echo '🎉 CouchDB Initialisierung abgeschlossen!'
+        
+    networks:
+      - chef-numbers-network
+    restart: "no"
+
+volumes:
+  couchdb_data:
+    driver: local
+
+networks:
+  chef-numbers-network:
+    driver: bridge
+    name: chef-numbers-network`;
+
       default:
         throw new Error(`Template nicht gefunden: ${templateName}`);
     }
@@ -569,7 +756,7 @@ export const dockerComposeGenerator = {
   },
 
   // Generiert service-spezifische Docker-Compose-Dateien
-  async generateServiceSpecificCompose(serviceType: 'postgresql' | 'mariadb' | 'mysql' | 'minio', config: DockerComposeConfig): Promise<GeneratedDockerCompose> {
+  async generateServiceSpecificCompose(serviceType: 'postgresql' | 'mariadb' | 'mysql' | 'couchdb' | 'minio', config: DockerComposeConfig): Promise<GeneratedDockerCompose> {
     const template = await templateEngine.loadTemplate(serviceType);
     const content = templateEngine.processTemplate(template, config);
     
@@ -588,6 +775,9 @@ export const dockerComposeGenerator = {
       services.push('mysql', 'prisma-api');
       ports.mysql = config.mysql.port;
       ports.prisma = config.mysql.prismaPort;
+    } else if (serviceType === 'couchdb') {
+      services.push('couchdb', 'couchdb-init');
+      ports.couchdb = config.couchdb.port;
     } else if (serviceType === 'minio') {
       services.push('minio', 'minio-init');
       ports.minio = config.minio.port;
@@ -811,6 +1001,18 @@ networks:
     // Prüfe auf Port-Konflikte zwischen MySQL und Prisma
     if (mysqlPort === mysqlPrismaPort) {
       errors.push('MySQL und Prisma API können nicht denselben Port verwenden');
+    }
+    
+    // CouchDB Validierung
+    if (!config.couchdb.host) errors.push('CouchDB Host ist erforderlich');
+    if (!config.couchdb.port) errors.push('CouchDB Port ist erforderlich');
+    if (!config.couchdb.database) errors.push('CouchDB Datenbankname ist erforderlich');
+    if (!config.couchdb.username) errors.push('CouchDB Benutzername ist erforderlich');
+    if (!config.couchdb.password) errors.push('CouchDB Passwort ist erforderlich');
+    
+    const couchdbPort = parseInt(config.couchdb.port);
+    if (isNaN(couchdbPort) || couchdbPort < 1 || couchdbPort > 65535) {
+      errors.push('CouchDB Port muss eine gültige Portnummer sein (1-65535)');
     }
     
     // Prisma API ist immer aktiviert für MariaDB
@@ -1309,6 +1511,10 @@ ${dockerComposeGenerator.generateServiceUrls(config)}
         return `MariaDB Datenbank auf Port ${config.mariadb.port}`;
       case 'mysql':
         return `MySQL Datenbank auf Port ${config.mysql.port}`;
+      case 'couchdb':
+        return `CouchDB NoSQL-Datenbank auf Port ${config.couchdb.port}`;
+      case 'couchdb-init':
+        return `CouchDB Initialisierung (erstellt System- und App-Datenbanken, Indizes)`;
       case 'prisma-api':
         // Prisma-Port hängt vom Service-Typ ab - wird dynamisch bestimmt
         return `Prisma REST API (Port wird service-spezifisch konfiguriert)`;
