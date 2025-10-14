@@ -9,7 +9,7 @@ services:
   frontend:
     # Fertiges Docker Image von GitHub Container Registry
     # KEIN Build nötig - Image wird automatisch heruntergeladen!
-    image: ghcr.io/StefanEhlert/the-chefs-numbers:latest
+    image: ghcr.io/stefanehlert/the-chef-s-numbers:latest
     
     # Container-Name
     container_name: chef-numbers-frontend
