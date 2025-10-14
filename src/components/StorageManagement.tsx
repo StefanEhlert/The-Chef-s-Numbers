@@ -117,6 +117,13 @@ interface StorageManagement {
       lastTested?: string;
       testMessage?: string;
     };
+    frontend: {
+      host: string;
+      port: string;
+      connectionStatus: boolean;
+      lastTested?: string;
+      testMessage?: string;
+    };
   };
 }
 
@@ -196,6 +203,29 @@ const StorageManagement: React.FC = () => {
         if (parsed.connections.couchdb && !parsed.connections.couchdb.hasOwnProperty('testMessage')) {
           parsed.connections.couchdb.testMessage = '';
           parsed.connections.couchdb.lastTested = undefined;
+        }
+        
+        // Migration: Füge Frontend-Konfiguration hinzu, falls nicht vorhanden
+        if (!parsed.connections.frontend) {
+          console.log('🔄 Migration: Füge Frontend-Konfiguration hinzu');
+          parsed.connections.frontend = {
+            host: 'localhost',
+            port: '3000',
+            connectionStatus: false,
+            lastTested: undefined,
+            testMessage: ''
+          };
+        } else {
+          // Stelle sicher dass alle Felder vorhanden sind (ohne Werte zu überschreiben!)
+          if (!parsed.connections.frontend.hasOwnProperty('testMessage')) {
+            parsed.connections.frontend.testMessage = '';
+          }
+          if (!parsed.connections.frontend.hasOwnProperty('lastTested')) {
+            parsed.connections.frontend.lastTested = undefined;
+          }
+          if (!parsed.connections.frontend.hasOwnProperty('connectionStatus')) {
+            parsed.connections.frontend.connectionStatus = false;
+          }
         }
         
         return parsed;
@@ -284,6 +314,13 @@ const StorageManagement: React.FC = () => {
           appId: '',
           connectionStatus: false
         },
+        frontend: {
+          host: 'localhost',
+          port: '3000',
+          connectionStatus: false,
+          lastTested: undefined,
+          testMessage: ''
+        }
       }
     };
   });
@@ -614,7 +651,8 @@ const StorageManagement: React.FC = () => {
         couchdb: updates.connections.couchdb ? { ...storageManagement.connections.couchdb, ...updates.connections.couchdb } : storageManagement.connections.couchdb,
         minio: updates.connections.minio ? { ...storageManagement.connections.minio, ...updates.connections.minio } : storageManagement.connections.minio,
         supabase: updates.connections.supabase ? { ...storageManagement.connections.supabase, ...updates.connections.supabase } : storageManagement.connections.supabase,
-        firebase: updates.connections.firebase ? { ...storageManagement.connections.firebase, ...updates.connections.firebase } : storageManagement.connections.firebase
+        firebase: updates.connections.firebase ? { ...storageManagement.connections.firebase, ...updates.connections.firebase } : storageManagement.connections.firebase,
+        frontend: updates.connections.frontend ? { ...storageManagement.connections.frontend, ...updates.connections.frontend } : storageManagement.connections.frontend
       } : storageManagement.connections
     };
 
@@ -2080,6 +2118,14 @@ const StorageManagement: React.FC = () => {
     handleSupabaseConnectionTest();
   };
 
+  // Prüft, ob die App cloud-gehostet ist und eine Docker-Konfiguration ausgewählt wurde
+  const isCloudHostedWithDockerConfig = (): boolean => {
+    return (
+      hostingEnvironment === 'cloud' &&
+      storageManagement.selectedStorage.selectedCloudType === 'docker'
+    );
+  };
+
   // Handler für Konfiguration übernehmen
   const handleConfigApply = () => {
     setShowConfigModal(true);
@@ -2207,6 +2253,13 @@ const StorageManagement: React.FC = () => {
       // Fahre mit der Konfigurationsübernahme fort
       await finalizeConfigurationChange();
       setShowConfigModal(false);
+      
+      // Lade die Seite neu, um sicherzustellen dass alle Komponenten
+      // mit den neuen Daten aus dem neuen Storage arbeiten
+      console.log('🔄 Lade Seite neu nach Konfigurationsänderung...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // Kurze Verzögerung, damit die Success-Message noch angezeigt wird
       
     } catch (error) {
       console.error('❌ Fehler beim Finalisieren:', error);
@@ -3214,6 +3267,13 @@ const StorageManagement: React.FC = () => {
       // Fahre mit Finalisierung fort
       await finalizeConfigurationChange();
       setShowConfigModal(false);
+      
+      // Lade die Seite neu, um sicherzustellen dass alle Komponenten
+      // mit den neuen Daten aus dem neuen Storage arbeiten
+      console.log('🔄 Lade Seite neu nach Konfigurationsänderung...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // Kurze Verzögerung, damit die Success-Message noch angezeigt wird
 
     } catch (error) {
       console.error('❌ Fehler beim Übernehmen der Konfiguration:', error);
@@ -3526,6 +3586,13 @@ const StorageManagement: React.FC = () => {
   };
 
   // Validierungsfunktion für Port
+  // Einfache Port-Validierung (nur Check ob gültig)
+  const isValidPort = (port: string): boolean => {
+    if (!port || !port.trim()) return false;
+    const portNumber = parseInt(port);
+    return !isNaN(portNumber) && portNumber >= 1 && portNumber <= 65535;
+  };
+
   const validatePort = (port: string): { isValid: boolean; message: string } => {
     if (!port.trim()) {
       return { isValid: false, message: 'Port ist erforderlich' };
@@ -5597,7 +5664,6 @@ const StorageManagement: React.FC = () => {
     if (portNumber === 5984) return { type: 'database', name: 'CouchDB', description: 'CouchDB-Datenbank' };
     if (portNumber === 1433) return { type: 'database', name: 'SQL Server', description: 'Microsoft SQL Server' };
     if (portNumber === 1521) return { type: 'database', name: 'Oracle', description: 'Oracle-Datenbank' };
-    if (portNumber === 27017) return { type: 'database', name: 'MongoDB', description: 'MongoDB-Datenbank' };
     if (portNumber === 6379) return { type: 'database', name: 'Redis', description: 'Redis-Datenbank' };
 
     // Standard-API-Ports
@@ -5855,10 +5921,10 @@ const StorageManagement: React.FC = () => {
       const result = await pingHost(hostname);
       setPingResults(prev => ({ ...prev, [hostKey]: result }));
 
-      // Automatisches Verschwinden nach 10 Sekunden
+      // Automatisches Verschwinden nach 8 Sekunden
       setTimeout(() => {
         setPingResults(prev => ({ ...prev, [hostKey]: null }));
-      }, 10000);
+      }, 8000);
 
     } finally {
       setPingingHosts(prev => ({ ...prev, [hostKey]: false }));
@@ -5877,10 +5943,97 @@ const StorageManagement: React.FC = () => {
       const result = await checkPortAvailability(hostname, port);
       setPortResults(prev => ({ ...prev, [portKey]: result }));
 
-      // Automatisches Verschwinden nach 10 Sekunden
+      // Automatisches Verschwinden nach 8 Sekunden
       setTimeout(() => {
         setPortResults(prev => ({ ...prev, [portKey]: null }));
-      }, 10000);
+      }, 8000);
+
+    } finally {
+      setCheckingPorts(prev => ({ ...prev, [portKey]: false }));
+    }
+  };
+
+  // Port-Verfügbarkeitsprüfung für FREIE Ports (Frontend-Installation)
+  const handleCheckFreePort = async (hostname: string, port: string, portKey: string) => {
+    if (!hostname.trim() || !port.trim()) {
+      return;
+    }
+
+    setCheckingPorts(prev => ({ ...prev, [portKey]: true }));
+
+    try {
+      const portNumber = parseInt(port);
+      if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
+        setPortResults(prev => ({ 
+          ...prev, 
+          [portKey]: { success: false, message: 'Ungültiger Port (1-65535)' }
+        }));
+        return;
+      }
+
+      const startTime = Date.now();
+      const portInfo = getPortType(portNumber);
+
+      // Prüfe ob Port FREI ist (umgekehrte Logik zu checkPortAvailability)
+      try {
+        const ws = new WebSocket(`ws://${hostname}:${port}`);
+        
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            ws.close();
+            resolve('timeout');
+          }, 3000);
+
+          ws.onopen = () => {
+            clearTimeout(timeout);
+            ws.close();
+            reject('port_in_use'); // Port ist belegt!
+          };
+
+          ws.onerror = () => {
+            clearTimeout(timeout);
+            ws.close();
+            resolve('port_free'); // Port ist frei!
+          };
+        });
+
+        // Wenn wir hier ankommen: Port ist FREI
+        const latency = Date.now() - startTime;
+        setPortResults(prev => ({ 
+          ...prev, 
+          [portKey]: { 
+            success: true, 
+            message: `✅ Port ${port} ist verfügbar und kann verwendet werden`,
+            latency 
+          }
+        }));
+
+      } catch (error) {
+        if (error === 'port_in_use') {
+          // Port ist belegt = SCHLECHT für Installation
+          setPortResults(prev => ({ 
+            ...prev, 
+            [portKey]: { 
+              success: false, 
+              message: `❌ Port ${port} ist bereits belegt${portInfo.name !== 'Unknown' ? ` (möglicherweise ${portInfo.name})` : ''}. Bitte wählen Sie einen anderen Port.`
+            }
+          }));
+        } else {
+          // Anderer Fehler
+          setPortResults(prev => ({ 
+            ...prev, 
+            [portKey]: { 
+              success: false, 
+              message: `❌ Fehler beim Prüfen von Port ${port}`
+            }
+          }));
+        }
+      }
+
+      // Automatisches Verschwinden nach 8 Sekunden
+      setTimeout(() => {
+        setPortResults(prev => ({ ...prev, [portKey]: null }));
+      }, 8000);
 
     } finally {
       setCheckingPorts(prev => ({ ...prev, [portKey]: false }));
@@ -6395,7 +6548,8 @@ const StorageManagement: React.FC = () => {
                       borderRadius: '8px'
                     }}>
                       <div className="card-body" style={{ padding: '24px' }}>
-                        <div className="d-flex align-items-start">
+                        {/* Header mit Icon und Vorteilen */}
+                        <div className="d-flex align-items-start mb-3">
                           <div className="me-3" style={{ 
                             backgroundColor: colors.primary,
                             borderRadius: '50%',
@@ -6409,44 +6563,250 @@ const StorageManagement: React.FC = () => {
                             <FaDocker style={{ color: '#ffffff', fontSize: '30px' }} />
                           </div>
                           <div className="flex-grow-1">
-                            <h5 style={{ color: colors.text, marginBottom: '12px' }}>
-                              Vollständig selbst-gehostete Lösung
-                            </h5>
-                            <p style={{ color: colors.textSecondary, marginBottom: '16px' }}>
-                              Stellen Sie The Chef's Numbers komplett auf Ihrem eigenen Server bereit - 
-                              Frontend, Datenbank und Bildspeicher in einem Docker-Netzwerk.
+                            <div className="d-flex align-items-center flex-wrap mb-2">
+                              <h5 style={{ color: colors.text, marginBottom: 0, marginRight: '16px' }}>
+                                Vollständig selbst-gehostete Lösung
+                              </h5>
+                              <div className="d-flex align-items-center" style={{ gap: '12px' }}>
+                                <span style={{ color: colors.text, fontSize: '0.85rem', display: 'flex', alignItems: 'center' }}>
+                                  <FaCheck className="me-1" style={{ color: '#28a745', fontSize: '0.9em' }} />
+                                  Volle Datenhoheit
+                                </span>
+                                <span style={{ color: colors.text, fontSize: '0.85rem', display: 'flex', alignItems: 'center' }}>
+                                  <FaCheck className="me-1" style={{ color: '#28a745', fontSize: '0.9em' }} />
+                                  Professionelle Lösung
+                                </span>
+                              </div>
+                            </div>
+                            <p style={{ color: colors.textSecondary, marginBottom: 0, fontSize: '0.9rem' }}>
+                              Frontend, Datenbank und Bildspeicher in einem Docker-Netzwerk
                             </p>
-                            <div className="row mb-3">
-                              <div className="col-md-6 mb-2">
-                                <div className="d-flex align-items-center">
-                                  <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                                  <span style={{ color: colors.text }}>Volle Datenhoheit</span>
+                          </div>
+                        </div>
+
+                            {/* Konfigurationsfelder und Button in einer Zeile */}
+                            <div className="row align-items-start">
+                              <div className="col-md-4">
+                                <div className="mb-0">
+                                  <label className="form-label" style={{ color: colors.text, fontWeight: '500', fontSize: '0.9rem' }}>
+                                    Docker Host/IP
+                                  </label>
+                                  <div className="input-group">
+                                    <input
+                                      type="text"
+                                      className={`form-control ${storageManagement.connections.frontend.host && !validateHostname(storageManagement.connections.frontend.host).isValid ? 'is-invalid' : ''}`}
+                                      value={storageManagement.connections.frontend.host}
+                                      onChange={(e) => updateConnection('frontend', { host: e.target.value })}
+                                      placeholder="localhost"
+                                      style={{
+                                        borderColor: colors.cardBorder,
+                                        color: colors.text,
+                                        backgroundColor: !storageManagement.connections.frontend.host ? colors.accent + '20' : undefined,
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = colors.accent;
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = colors.cardBorder;
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-secondary"
+                                      onClick={() => handlePingHost(storageManagement.connections.frontend.host, 'frontend-host')}
+                                      disabled={!storageManagement.connections.frontend.host}
+                                      title="Host-Erreichbarkeit testen (Ping)"
+                                      style={{
+                                        borderColor: colors.cardBorder,
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (!e.currentTarget.disabled) {
+                                          e.currentTarget.style.borderColor = colors.accent;
+                                          e.currentTarget.style.backgroundColor = colors.accent + '20';
+                                        }
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = colors.cardBorder;
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                      }}
+                                    >
+                                      <FaWifi style={{ fontSize: '1.1em' }} />
+                                    </button>
+                                  </div>
+                                  {/* Feedback-Bereich mit fester Mindesthöhe */}
+                                  <div style={{ minHeight: '40px', marginTop: '4px' }}>
+                                    {storageManagement.connections.frontend.host && !validateHostname(storageManagement.connections.frontend.host).isValid && (
+                                      <small className="text-danger">
+                                        {validateHostname(storageManagement.connections.frontend.host).message}
+                                      </small>
+                                    )}
+
+                                    {/* Ping-Ergebnis anzeigen */}
+                                    {pingResults['frontend-host'] && (
+                                      <div style={{
+                                        color: pingResults['frontend-host'].success ? '#198754' : '#dc3545',
+                                        fontSize: '0.875em',
+                                        fontWeight: '500',
+                                        marginTop: '2px'
+                                      }}>
+                                        {pingResults['frontend-host'].message}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="col-md-6 mb-2">
-                                <div className="d-flex align-items-center">
-                                  <FaCheck className="me-2" style={{ color: '#28a745' }} />
-                                  <span style={{ color: colors.text }}>Professionelle Lösung</span>
+
+                              <div className="col-md-4">
+                                <div className="mb-0">
+                                  <label className="form-label" style={{ color: colors.text, fontWeight: '500', fontSize: '0.9rem' }}>
+                                    Frontend-Port
+                                  </label>
+                                  <div className="input-group">
+                                    <input
+                                      type="text"
+                                      className={`form-control ${storageManagement.connections.frontend.port && !isValidPort(storageManagement.connections.frontend.port) ? 'is-invalid' : ''}`}
+                                      value={storageManagement.connections.frontend.port}
+                                      onChange={(e) => updateConnection('frontend', { port: e.target.value })}
+                                      placeholder="3000"
+                                      style={{
+                                        borderColor: colors.cardBorder,
+                                        color: colors.text,
+                                        backgroundColor: !storageManagement.connections.frontend.port ? colors.accent + '20' : undefined,
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = colors.accent;
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = colors.cardBorder;
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-secondary"
+                                      onClick={() => handleCheckFreePort(
+                                        storageManagement.connections.frontend.host,
+                                        storageManagement.connections.frontend.port,
+                                        'frontend-port'
+                                      )}
+                                      disabled={!storageManagement.connections.frontend.host || !storageManagement.connections.frontend.port}
+                                      title="Port-Verfügbarkeit testen (prüft ob Port frei ist)"
+                                      style={{
+                                        borderColor: colors.cardBorder,
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (!e.currentTarget.disabled) {
+                                          e.currentTarget.style.borderColor = colors.accent;
+                                          e.currentTarget.style.backgroundColor = colors.accent + '20';
+                                        }
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = colors.cardBorder;
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                      }}
+                                    >
+                                      <FaNetworkWired style={{ fontSize: '1.1em' }} />
+                                    </button>
+                                  </div>
+                                  {/* Feedback-Bereich mit fester Mindesthöhe */}
+                                  <div style={{ minHeight: '40px', marginTop: '4px' }}>
+                                    {storageManagement.connections.frontend.port && !isValidPort(storageManagement.connections.frontend.port) && (
+                                      <small className="text-danger">
+                                        Port muss zwischen 1 und 65535 liegen
+                                      </small>
+                                    )}
+
+                                    {/* Port-Check-Ergebnis anzeigen */}
+                                    {portResults['frontend-port'] && (
+                                      <div style={{
+                                        color: portResults['frontend-port'].success ? '#198754' : '#dc3545',
+                                        fontSize: '0.875em',
+                                        fontWeight: '500',
+                                        marginTop: '2px'
+                                      }}>
+                                        {portResults['frontend-port'].message}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-md-4">
+                                <div className="mb-0">
+                                  <label className="form-label" style={{ color: colors.text, fontWeight: '500', fontSize: '0.9rem', visibility: 'hidden' }}>
+                                    Platzhalter
+                                  </label>
+                                  <button 
+                                    className={`btn w-100 ${
+                                      storageManagement.connections.frontend?.host &&
+                                      storageManagement.connections.frontend?.port &&
+                                      validateHostname(storageManagement.connections.frontend.host).isValid &&
+                                      isValidPort(storageManagement.connections.frontend.port)
+                                      ? 'btn-outline-primary' 
+                                      : 'btn-outline-secondary'
+                                    }`}
+                                    onClick={() => {
+                                      setDockerModalServiceType('frontend');
+                                      setShowDockerSetupModal(true);
+                                    }}
+                                    disabled={
+                                      !storageManagement.connections.frontend?.host ||
+                                      !storageManagement.connections.frontend?.port ||
+                                      !validateHostname(storageManagement.connections.frontend?.host || '').isValid ||
+                                      !isValidPort(storageManagement.connections.frontend?.port || '')
+                                    }
+                                    style={{
+                                      opacity: (
+                                        storageManagement.connections.frontend?.host &&
+                                        storageManagement.connections.frontend?.port &&
+                                        validateHostname(storageManagement.connections.frontend.host).isValid &&
+                                        isValidPort(storageManagement.connections.frontend.port)
+                                      ) ? 1 : 0.6,
+                                      cursor: (
+                                        storageManagement.connections.frontend?.host &&
+                                        storageManagement.connections.frontend?.port &&
+                                        validateHostname(storageManagement.connections.frontend.host).isValid &&
+                                        isValidPort(storageManagement.connections.frontend.port)
+                                      ) ? 'pointer' : 'not-allowed'
+                                    }}
+                                    title={
+                                      (storageManagement.connections.frontend?.host &&
+                                       storageManagement.connections.frontend?.port &&
+                                       validateHostname(storageManagement.connections.frontend.host).isValid &&
+                                       isValidPort(storageManagement.connections.frontend.port))
+                                      ? 'Frontend Docker Setup öffnen'
+                                      : 'Host und Port müssen gültig ausgefüllt sein'
+                                    }
+                                  >
+                                    <FaDocker className="me-1" />
+                                    Frontend installieren
+                                  </button>
+                                  
+                                  {/* Feedback-Bereich mit fester Mindesthöhe (für Alignment) */}
+                                  <div style={{ minHeight: '40px', marginTop: '4px' }}>
+                                    {/* Leer - nur für konsistente Höhe */}
+                                  </div>
                                 </div>
                               </div>
                             </div>
 
-                            <button 
-                              className="btn btn-primary btn-lg"
-                              onClick={() => {
-                                setDockerModalServiceType('frontend');
-                                setShowDockerSetupModal(true);
-                              }}
-                              style={{
-                                fontSize: '1.1rem',
-                                padding: '12px 24px'
-                              }}
-                            >
-                              <FaDocker className="me-2" />
-                              Frontend auf Docker installieren
-                            </button>
-                          </div>
-                        </div>
+                            {/* Vorschau-Text in neuer Zeile */}
+                            {storageManagement.connections.frontend.host && 
+                             storageManagement.connections.frontend.port && 
+                             validateHostname(storageManagement.connections.frontend.host).isValid && 
+                             isValidPort(storageManagement.connections.frontend.port) && (
+                              <div className="row">
+                                <div className="col-12">
+                                  <small style={{ color: colors.textSecondary, fontSize: '0.85rem' }}>
+                                    <FaInfoCircle className="me-1" style={{ fontSize: '0.9em' }} />
+                                    Frontend wird auf <strong>http://{storageManagement.connections.frontend.host}:{storageManagement.connections.frontend.port}</strong> erreichbar sein
+                                  </small>
+                                </div>
+                              </div>
+                            )}
                       </div>
                     </div>
                   </div>
@@ -9758,19 +10118,21 @@ const StorageManagement: React.FC = () => {
 
                 {/* Rechts: Konfiguration übernehmen Button */}
                 <button
-                  className={`btn ${(storageManagement.selectedStorage.isTested && isConfigurationDifferent()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                  disabled={!storageManagement.selectedStorage.isTested || !isConfigurationDifferent()}
+                  className={`btn ${(storageManagement.selectedStorage.isTested && isConfigurationDifferent() && !isCloudHostedWithDockerConfig()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                  disabled={!storageManagement.selectedStorage.isTested || !isConfigurationDifferent() || isCloudHostedWithDockerConfig()}
                   onClick={handleConfigApply}
                   style={{
-                    opacity: (storageManagement.selectedStorage.isTested && isConfigurationDifferent()) ? 1 : 0.6,
-                    cursor: (storageManagement.selectedStorage.isTested && isConfigurationDifferent()) ? 'pointer' : 'not-allowed'
+                    opacity: (storageManagement.selectedStorage.isTested && isConfigurationDifferent() && !isCloudHostedWithDockerConfig()) ? 1 : 0.6,
+                    cursor: (storageManagement.selectedStorage.isTested && isConfigurationDifferent() && !isCloudHostedWithDockerConfig()) ? 'pointer' : 'not-allowed'
                   }}
                   title={
-                    !storageManagement.selectedStorage.isTested
-                      ? 'Alle Verbindungen müssen erfolgreich getestet werden'
-                      : !isConfigurationDifferent()
-                        ? 'Die ausgewählte Konfiguration ist identisch mit der aktuellen'
-                        : 'Konfiguration übernehmen'
+                    isCloudHostedWithDockerConfig()
+                      ? 'Docker-Konfigurationen können nicht auf cloud-gehosteten Apps aktiviert werden. Bitte verwenden Sie eine selbst-gehostete Installation.'
+                      : !storageManagement.selectedStorage.isTested
+                        ? 'Alle Verbindungen müssen erfolgreich getestet werden'
+                        : !isConfigurationDifferent()
+                          ? 'Die ausgewählte Konfiguration ist identisch mit der aktuellen'
+                          : 'Konfiguration übernehmen'
                   }
                 >
                   <FaCheckCircle className="me-2" />
@@ -9859,8 +10221,8 @@ const StorageManagement: React.FC = () => {
                 useSSL: storageManagement.connections.minio.useSSL
               },
               frontend: {
-                host: 'localhost',
-                port: '3000'
+                host: storageManagement.connections.frontend?.host || 'localhost',
+                port: storageManagement.connections.frontend?.port || '3000'
               }
             }}
           />

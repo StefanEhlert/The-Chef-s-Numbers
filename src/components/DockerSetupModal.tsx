@@ -88,6 +88,9 @@ const DockerSetupModal: React.FC<DockerSetupModalProps> = ({
 
   // Frontend Docker Compose Content Generator
   const getFrontendDockerCompose = () => {
+    const frontendPort = dockerConfig.frontend?.port || '3000';
+    const frontendHost = dockerConfig.frontend?.host || 'localhost';
+    
     return `# ============================================
 # The Chef's Numbers - Frontend Docker Compose
 # Stellt nur die React App bereit
@@ -105,9 +108,9 @@ services:
     container_name: chef-numbers-frontend
     
     # Port-Mapping (Host:Container)
-    # Zugriff über: http://localhost:3000
+    # Zugriff über: http://${frontendHost}:${frontendPort}
     ports:
-      - "3000:80"
+      - "${frontendPort}:80"
     
     # Umgebungsvariablen (optional)
     environment:
@@ -429,8 +432,8 @@ services:
                           )}
                           {serviceType === 'frontend' && (
                             <>
-                              <li>Frontend wird auf Port 3000 verfügbar sein</li>
-                              <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://localhost:3000</code></li>
+                              <li>Frontend wird auf Port {dockerConfig.frontend?.port || '3000'} verfügbar sein</li>
+                              <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://{dockerConfig.frontend?.host || 'localhost'}:{dockerConfig.frontend?.port || '3000'}</code></li>
                             </>
                           )}
                         </ol>
@@ -477,7 +480,20 @@ services:
                 {serviceType === 'frontend' && (
                   <div className="alert alert-info mt-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
                     <FaInfoCircle className="me-2" />
-                    <strong>Nach der Installation:</strong> Öffnen Sie <code>http://localhost:3000</code> im Browser und wählen Sie Ihre Datenbank aus.
+                    <strong>Nach der Installation:</strong> Öffnen Sie{' '}
+                    <a 
+                      href={`http://${dockerConfig.frontend?.host || 'localhost'}:${dockerConfig.frontend?.port || '3000'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ 
+                        color: '#17a2b8',
+                        fontWeight: 'bold',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      http://{dockerConfig.frontend?.host || 'localhost'}:{dockerConfig.frontend?.port || '3000'}
+                    </a>
+                    {' '}im Browser und wählen Sie Ihre Datenbank aus.
                   </div>
                 )}
               </div>

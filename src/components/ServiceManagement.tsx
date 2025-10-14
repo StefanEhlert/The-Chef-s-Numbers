@@ -194,7 +194,6 @@ const ServiceManagement: React.FC = () => {
       case 'mariadb': return 3306;
       case 'minio': return 9000;
       case 'redis': return 6379;
-      case 'mongodb': return 27017;
       default: return 5432;
     }
   };
@@ -445,7 +444,6 @@ const ServiceManagement: React.FC = () => {
                   <option value="mariadb">MariaDB</option>
                   <option value="minio">MinIO</option>
                   <option value="redis">Redis</option>
-                  <option value="mongodb">MongoDB</option>
                 </select>
               </div>
 

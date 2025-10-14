@@ -15,7 +15,7 @@ export interface ServiceConfig {
   updatedAt: Date;
 }
 
-export type ServiceType = 'postgres' | 'mariadb' | 'minio' | 'redis' | 'mongodb';
+export type ServiceType = 'postgres' | 'mariadb' | 'minio' | 'redis';
 
 export interface ServiceCredentials {
   username: string;

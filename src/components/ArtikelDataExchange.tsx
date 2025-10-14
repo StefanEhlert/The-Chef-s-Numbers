@@ -951,18 +951,18 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
         const nutritionMapping = fieldMappings['nutritionInfo'];
         if (nutritionMapping && nutritionMapping !== '__DEFAULT__' && nutritionMapping !== '') {
           // Nur dann Nährwertangaben initialisieren und verarbeiten
-          if (!article.nutritionInfo) {
-            article.nutritionInfo = {
-              calories: 0,
-              kilojoules: 0,
-              protein: 0,
-              fat: 0,
-              carbohydrates: 0,
-              fiber: 0,
-              sugar: 0,
-              salt: 0
-            };
-          }
+          // WICHTIG: Immer ein neues Objekt erstellen, auch wenn article.nutritionInfo bereits gesetzt wurde
+          // (könnte als String aus CSV kommen)
+          article.nutritionInfo = {
+            calories: 0,
+            kilojoules: 0,
+            protein: 0,
+            fat: 0,
+            carbohydrates: 0,
+            fiber: 0,
+            sugar: 0,
+            salt: 0
+          };
           
           // Prüfe ob es sich um die spezielle Nährwert-Option handelt
           if (nutritionMapping.startsWith('[Nährwertfelder:') && nutritionMapping.endsWith(']')) {
