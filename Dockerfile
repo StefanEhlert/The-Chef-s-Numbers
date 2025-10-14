@@ -12,7 +12,7 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Metadata
-LABEL maintainer="The Chef's Numbers Team"
+LABEL maintainer="Stefan Ehlert"
 LABEL description="The Chef's Numbers - Professional Recipe Management"
 LABEL version="2.3.0"
 

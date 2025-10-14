@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { FaPlus, FaSearch, FaUtensils, FaChartLine, FaClock, FaStar, FaCloud } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaUtensils, FaChartLine, FaClock, FaStar, FaCloud, FaInfoCircle } from 'react-icons/fa';
 import { useAppContext } from '../contexts/AppContext';
 import StorageStatus from './ui/StorageStatus';
 
@@ -500,6 +500,32 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Version Footer - dezent unten rechts */}
+      <div style={{
+        position: 'fixed',
+        bottom: '16px',
+        right: '16px',
+        padding: '8px 12px',
+        backgroundColor: colors.card,
+        border: `1px solid ${colors.cardBorder}`,
+        borderRadius: '6px',
+        fontSize: '0.75rem',
+        color: colors.textSecondary,
+        opacity: 0.7,
+        transition: 'opacity 0.3s ease',
+        cursor: 'pointer',
+        zIndex: 1000
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+      onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+      title={`Build: ${process.env.REACT_APP_BUILD_DATE || new Date().toLocaleDateString('de-DE')}\nHosting: ${window.location.hostname}`}
+      >
+        <div className="d-flex align-items-center">
+          <FaInfoCircle className="me-2" style={{ fontSize: '0.9rem' }} />
+          <span>v{require('../../package.json').version}</span>
         </div>
       </div>
     </div>
