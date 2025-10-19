@@ -180,7 +180,19 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
-                      fontSize: '14px'
+                      fontSize: '14px',
+                      transition: 'background-color 0.2s ease',
+                      cursor: 'pointer'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (state.currentPage !== 'artikel') {
+                        e.currentTarget.style.backgroundColor = colors.accent + '10';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (state.currentPage !== 'artikel') {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
                     }}
                   >
                     <FaList style={{ 
