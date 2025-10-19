@@ -294,7 +294,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
           </div>
           <div>
             <button
-              className="btn btn-outline-secondary w-full"
+              className="btn btn-outline-secondary no-hover w-full"
               onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
               style={{
                 borderColor: colors.cardBorder,

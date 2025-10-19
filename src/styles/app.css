@@ -146,6 +146,13 @@ button:disabled {
   border-color: #6c757d;
 }
 
+/* Spezielle Klasse um Hover-Effekt zu deaktivieren */
+.btn-outline-secondary.no-hover:hover {
+  background-color: transparent;
+  color: #6c757d;
+  border-color: #6c757d;
+}
+
 .btn-outline {
   background-color: transparent;
   color: var(--btn-primary-bg);
