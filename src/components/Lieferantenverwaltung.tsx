@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaPencilAlt, FaTimes, FaUsers } from 'react-icons/fa';
 import { Supplier } from '../types';
+import { setButtonColors } from '../utils/cssVariables';
 
 interface LieferantenverwaltungProps {
   suppliers: Supplier[];
@@ -45,6 +46,11 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
 }) => {
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const filteredSuppliers = filteredAndSortedSuppliers() || [];
+
+  // Setze CSS Custom Properties für Button-Farben
+  useEffect(() => {
+    setButtonColors(colors);
+  }, [colors]);
 
   return (
     <div className="container-fluid p-4 pt-0">
