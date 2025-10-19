@@ -404,28 +404,56 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
           // Grid-Ansicht
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredRecipes.map(recipe => (
-              <div key={recipe.id} className="w-full">
-                <div className="card h-100" style={{
-                  backgroundColor: colors.card,
-                  borderColor: colors.cardBorder,
-                  cursor: 'pointer'
-                }}
-                onDoubleClick={() => handleEditRecipe(recipe)}
-                title="Doppelklick zum Bearbeiten"
+              <div key={recipe.id} className="mb-3">
+                <div 
+                  className="card h-full" 
+                  style={{
+                    backgroundColor: colors.card,
+                    borderColor: colors.cardBorder,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer'
+                  }}
+                  onDoubleClick={() => handleEditRecipe(recipe)}
+                  title="Doppelklick zum Bearbeiten"
                 >
-                  <div className="p-4">
+                  <div className="card-body">
                     <div className="flex justify-between items-start mb-2">
-                      <h6 className="card-title mb-0" style={{ color: colors.text }}>
-                        {recipe.name}
-                      </h6>
                       <input
                         type="checkbox"
                         checked={selectedRecipes.includes(recipe.id)}
                         onChange={() => handleSelectRecipe(recipe.id)}
                         style={{ accentColor: colors.accent }}
-                        onClick={(e) => e.stopPropagation()}
                       />
+                      <div className="flex gap-1">
+                        <button
+                          className="btn btn-link p-0"
+                          title="Bearbeiten"
+                          style={{
+                            color: colors.accent,
+                            textDecoration: 'none',
+                            fontSize: '12px'
+                          }}
+                          onClick={() => handleEditRecipe(recipe)}
+                        >
+                          <FaPencilAlt />
+                        </button>
+                        <button
+                          className="btn btn-link p-0"
+                          title="Löschen"
+                          style={{
+                            color: '#dc3545',
+                            textDecoration: 'none',
+                            fontSize: '12px'
+                          }}
+                          onClick={() => handleDeleteSingleRecipe(recipe.id, recipe.name)}
+                        >
+                          <FaTimes />
+                        </button>
+                      </div>
                     </div>
+                    <h6 className="card-title" style={{ color: colors.text }}>
+                      {recipe.name}
+                    </h6>
                     <p className="card-text small" style={{ color: colors.accent }}>
                       {recipe.description}
                     </p>
@@ -458,52 +486,6 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                         <small style={{ color: colors.text }}>Kalorien</small>
                         <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.totalNutritionInfo?.calories || 0} kcal</div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="card-footer" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
-                    <div className="d-flex justify-content-between">
-                      <button
-                        className="btn btn-link p-0"
-                        onClick={() => handleEditRecipe(recipe)}
-                        title="Bearbeiten"
-                        style={{
-                          color: colors.accent,
-                          textDecoration: 'none',
-                          fontSize: '12px'
-                        }}
-                      >
-                        <FaPencilAlt />
-                      </button>
-                      <button
-                        className="btn btn-link p-0"
-                        title="Drucken"
-                        style={{
-                          color: colors.accent,
-                          textDecoration: 'none',
-                          fontSize: '12px'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          /* TODO: Druckfunktion */
-                        }}
-                      >
-                        <FaPrint />
-                      </button>
-                      <button
-                        className="btn btn-link p-0"
-                        title="Löschen"
-                        style={{
-                          color: colors.accent,
-                          textDecoration: 'none',
-                          fontSize: '12px'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteSingleRecipe(recipe.id, recipe.name);
-                        }}
-                      >
-                        <FaTimes />
-                      </button>
                     </div>
                   </div>
                 </div>
