@@ -39,9 +39,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
       
       {/* Haupt-Navigation */}
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <ul className="nav flex-column p-2">
+        <ul className="flex flex-col p-2">
           {/* Dashboard */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -79,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Datenbasis */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -152,7 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.datenbasis && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -183,7 +183,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Artikel</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -218,7 +218,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Kalkulation */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -291,7 +291,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.kalkulation && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -322,7 +322,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Rezepte</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -353,7 +353,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Speisekarten</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -384,7 +384,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Menüs &amp; Büffets</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -419,7 +419,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Einkauf */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -492,7 +492,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.einkauf && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -523,7 +523,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Einkaufslisten</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -554,7 +554,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Einkauf planen</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -589,7 +589,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Inventur */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -662,7 +662,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.inventur && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -693,7 +693,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Warenbestand</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -728,7 +728,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Personal */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -801,7 +801,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.personal && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -832,7 +832,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Personaldaten</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -863,7 +863,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Dienstpläne</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -894,7 +894,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Urlaubsplan</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -929,7 +929,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* HACCP */}
-          <li className="nav-item mb-2">
+          <li className="mb-2">
             <button 
               className="sidebar-button" 
               onClick={() => { 
@@ -1002,7 +1002,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.haccp && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -1033,7 +1033,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Temperaturlisten</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -1064,7 +1064,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Reinigungslisten</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -1179,7 +1179,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
                 opacity: accordionOpen.einstellungen && state.sidebarOpen ? 1 : 0
               }}>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
@@ -1210,7 +1210,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Speicher-Verwaltung</span>
                   </button>
                 </li>
-                <li className="nav-item mb-1">
+                <li className="mb-1">
                   <button 
                     className="sidebar-sub-button"
                     onClick={() => { 
