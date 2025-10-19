@@ -188,8 +188,8 @@ const Dashboard: React.FC<DashboardProps> = ({
           }}>
             {icon}
           </div>
-          <h5 className="card-title text-lg font-semibold" style={{ color: colors.text }}>{title}</h5>
-          <p className="card-text text-4xl font-bold" style={{ color: colors.accent, margin: 0 }}>{value}</p>
+          <h5 className="card-title" style={{ color: colors.text }}>{title}</h5>
+          <h3 className="card-text" style={{ color: colors.accent, margin: 0 }}>{value}</h3>
           <small style={{ color: colors.text }}>{subtitle}</small>
           {additionalInfo && (
             <div className="mt-2">
