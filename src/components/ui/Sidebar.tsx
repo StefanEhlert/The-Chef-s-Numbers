@@ -478,9 +478,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Inventur */}
           <li className="mb-2">
             <button 
-                className={`sidebar-button ${state.currentPage === 'inventur' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
+                className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
-                  dispatch({ type: 'SET_CURRENT_PAGE', payload: 'inventur' }); 
+                  toggleAccordion('inventur');
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="Inventur"
@@ -587,9 +587,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Personal */}
           <li className="mb-2">
             <button 
-                className={`sidebar-button ${state.currentPage === 'personal' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
+                className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
-                  dispatch({ type: 'SET_CURRENT_PAGE', payload: 'personal' }); 
+                  toggleAccordion('personal');
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="Personal"
@@ -758,9 +758,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* HACCP */}
           <li className="mb-2">
             <button 
-                className={`sidebar-button ${state.currentPage === 'haccp' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
+                className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
-                  dispatch({ type: 'SET_CURRENT_PAGE', payload: 'haccp' }); 
+                  toggleAccordion('haccp');
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="HACCP"
@@ -905,9 +905,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
         <ul className="nav flex-column">
           <li className="nav-item">
             <button 
-              className={`sidebar-button ${state.currentPage === 'einstellungen' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
+              className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'einstellungen' }); 
+                toggleAccordion('einstellungen');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einstellungen"
