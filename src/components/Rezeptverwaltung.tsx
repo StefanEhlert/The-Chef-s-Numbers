@@ -285,7 +285,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
         {/* Rezept-Liste */}
         {recipeViewMode === 'list' ? (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse" style={{
+            <table className="table table-hover" style={{
               backgroundColor: colors.card,
               borderColor: colors.cardBorder
             }}>
