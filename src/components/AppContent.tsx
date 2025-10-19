@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaUtensils, FaBars, FaTimes, FaCalculator, FaShoppingCart, FaBoxes, FaPalette, FaPlus, FaSearch, FaCog, FaUsers, FaTachometerAlt, FaEdit, FaTrash, FaList, FaTh, FaFilter, FaSort, FaPencilAlt, FaGlobe, FaTimes as FaClose, FaSave, FaArrowLeft, FaPercent, FaEuroSign, FaCheck, FaImage, FaPrint, FaDatabase, FaChevronDown, FaChevronRight, FaDownload, FaCode } from 'react-icons/fa';
+import { FaUtensils, FaBars, FaPalette } from 'react-icons/fa';
 import Dashboard from './Dashboard';
 import Kalkulation from './Kalkulation';
-import Einkauf from './Einkauf';
-import Inventur from './Inventur';
 import { ColorProvider } from '../contexts/ColorContext';
 import ErrorBoundary from './ui/ErrorBoundary';
 import { useStorage } from '../hooks/useStorage';
@@ -14,6 +12,7 @@ import { generateId } from '../utils/storageUtils';
 
 import StorageManagement from './StorageManagement';
 import DevelopmentPage from './DevelopmentPage';
+import Sidebar from './ui/Sidebar';
 
 import Rezeptverwaltung from './Rezeptverwaltung';
 import Rezeptformular from './Rezeptformular';
@@ -192,11 +191,16 @@ function AppContent() {
 
   // Accordion State
   const [accordionOpen, setAccordionOpen] = useState({
+    datenbasis: false,
     kalkulation: false,
+    einkauf: false,
+    inventur: false,
+    personal: false,
+    haccp: false,
     einstellungen: false
   });
 
-  const toggleAccordion = (section: 'kalkulation' | 'einstellungen') => {
+  const toggleAccordion = (section: 'datenbasis' | 'kalkulation' | 'einkauf' | 'inventur' | 'personal' | 'haccp' | 'einstellungen') => {
     setAccordionOpen(prev => ({
       ...prev,
       [section]: !prev[section]
@@ -205,8 +209,18 @@ function AppContent() {
 
   const isAccordionActive = (section: string) => {
     switch (section) {
+      case 'datenbasis':
+        return ['datenbasis', 'artikel', 'lieferanten'].includes(state.currentPage);
       case 'kalkulation':
-        return ['kalkulation', 'rezepte', 'artikel', 'lieferanten'].includes(state.currentPage);
+        return ['kalkulation', 'rezepte', 'speisekarten', 'menus-buffets', 'nachkalkulationen'].includes(state.currentPage);
+      case 'einkauf':
+        return ['einkauf', 'einkaufslisten', 'einkauf-planen', 'rechnungen'].includes(state.currentPage);
+      case 'inventur':
+        return ['inventur', 'warenbestand', 'inventar-verwalten'].includes(state.currentPage);
+      case 'personal':
+        return ['personal', 'personaldaten', 'dienstplaene', 'urlaubsplan', 'fehlzeiten'].includes(state.currentPage);
+      case 'haccp':
+        return ['haccp', 'temperaturlisten', 'reinigungslisten', 'material-verluste'].includes(state.currentPage);
       case 'einstellungen':
         return ['storage-settings', 'storage-management', 'development'].includes(state.currentPage);
       default:
@@ -219,13 +233,33 @@ function AppContent() {
   useEffect(() => {
     // Schließe alle Accordion-Bereiche zuerst
     setAccordionOpen(prev => ({
+      datenbasis: false,
       kalkulation: false,
+      einkauf: false,
+      inventur: false,
+      personal: false,
+      haccp: false,
       einstellungen: false
     }));
 
     // Öffne nur den aktiven Bereich
+    if (isAccordionActive('datenbasis')) {
+      setAccordionOpen(prev => ({ ...prev, datenbasis: true }));
+    }
     if (isAccordionActive('kalkulation')) {
       setAccordionOpen(prev => ({ ...prev, kalkulation: true }));
+    }
+    if (isAccordionActive('einkauf')) {
+      setAccordionOpen(prev => ({ ...prev, einkauf: true }));
+    }
+    if (isAccordionActive('inventur')) {
+      setAccordionOpen(prev => ({ ...prev, inventur: true }));
+    }
+    if (isAccordionActive('personal')) {
+      setAccordionOpen(prev => ({ ...prev, personal: true }));
+    }
+    if (isAccordionActive('haccp')) {
+      setAccordionOpen(prev => ({ ...prev, haccp: true }));
     }
     if (isAccordionActive('einstellungen')) {
       setAccordionOpen(prev => ({ ...prev, einstellungen: true }));
@@ -515,9 +549,399 @@ function AppContent() {
             isStorageAvailable={true}
           />
         );
-                           
 
-                           case 'storage-management':
+      case 'datenbasis':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Datenbasis</h1>
+              <p style={{ color: colors.text }}>Verwalten Sie Ihre Artikel und Lieferanten.</p>
+            </div>
+          </div>
+        );
+
+      case 'artikel':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Artikelverwaltung</h1>
+              <p style={{ color: colors.text }}>Hier wird die Artikelverwaltung implementiert.</p>
+            </div>
+          </div>
+        );
+
+      case 'lieferanten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Lieferantenverwaltung</h1>
+              <p style={{ color: colors.text }}>Hier wird die Lieferantenverwaltung implementiert.</p>
+            </div>
+          </div>
+        );
+
+      case 'kalkulation':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Kalkulation</h1>
+              <p style={{ color: colors.text }}>Verwalten Sie Rezepte, Speisekarten und Menüs.</p>
+            </div>
+          </div>
+        );
+
+      case 'speisekarten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Speisekarten</h1>
+              <p style={{ color: colors.text }}>Hier werden die Speisekarten verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'menus-buffets':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Menüs &amp; Büffets</h1>
+              <p style={{ color: colors.text }}>Hier werden Menüs und Büffets verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'nachkalkulationen':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Nachkalkulationen</h1>
+              <p style={{ color: colors.text }}>Hier werden Nachkalkulationen durchgeführt.</p>
+            </div>
+          </div>
+        );
+
+      case 'einkauf':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Einkauf</h1>
+              <p style={{ color: colors.text }}>Verwalten Sie Einkaufslisten und Rechnungen.</p>
+            </div>
+          </div>
+        );
+
+      case 'einkaufslisten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Einkaufslisten</h1>
+              <p style={{ color: colors.text }}>Hier werden Einkaufslisten verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'einkauf-planen':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Einkauf planen</h1>
+              <p style={{ color: colors.text }}>Hier wird der Einkauf geplant.</p>
+            </div>
+          </div>
+        );
+
+      case 'rechnungen':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Rechnungen</h1>
+              <p style={{ color: colors.text }}>Hier werden Rechnungen verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'inventur':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Inventur</h1>
+              <p style={{ color: colors.text }}>Verwalten Sie Warenbestand und Inventar.</p>
+            </div>
+          </div>
+        );
+
+      case 'warenbestand':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Warenbestand</h1>
+              <p style={{ color: colors.text }}>Hier wird der Warenbestand verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'inventar-verwalten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Inventar verwalten</h1>
+              <p style={{ color: colors.text }}>Hier wird das Inventar verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'personal':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Personal</h1>
+              <p style={{ color: colors.text }}>Verwalten Sie Personaldaten und Dienstpläne.</p>
+            </div>
+          </div>
+        );
+
+      case 'personaldaten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Personaldaten</h1>
+              <p style={{ color: colors.text }}>Hier werden Personaldaten verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'dienstplaene':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Dienstpläne</h1>
+              <p style={{ color: colors.text }}>Hier werden Dienstpläne verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'urlaubsplan':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Urlaubsplan</h1>
+              <p style={{ color: colors.text }}>Hier wird der Urlaubsplan verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'fehlzeiten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Fehlzeiten</h1>
+              <p style={{ color: colors.text }}>Hier werden Fehlzeiten verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'haccp':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>HACCP</h1>
+              <p style={{ color: colors.text }}>Verwalten Sie Temperaturlisten und Reinigungslisten.</p>
+            </div>
+          </div>
+        );
+
+      case 'temperaturlisten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Temperaturlisten</h1>
+              <p style={{ color: colors.text }}>Hier werden Temperaturlisten verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'reinigungslisten':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Reinigungslisten</h1>
+              <p style={{ color: colors.text }}>Hier werden Reinigungslisten verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'material-verluste':
+        return (
+          <div className="container-fluid p-4">
+            <div style={{
+              backgroundColor: colors.paper || colors.card,
+              borderRadius: '12px',
+              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              padding: '2rem',
+              minHeight: 'calc(100vh - 120px)',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Material-Verluste</h1>
+              <p style={{ color: colors.text }}>Hier werden Material-Verluste verwaltet.</p>
+            </div>
+          </div>
+        );
+
+      case 'storage-management':
           return (
             <div className="container-fluid">
               <div className="row">
@@ -772,10 +1196,6 @@ function AppContent() {
             setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
           />
         );
-      case 'einkauf':
-        return <Einkauf getCurrentColors={getCurrentColors} />;
-      case 'inventur':
-        return <Inventur getCurrentColors={getCurrentColors} />;
       default:
         return null;
     }
@@ -798,7 +1218,7 @@ function AppContent() {
   return (
     <ErrorBoundary>
       <ColorProvider getCurrentColors={getCurrentColors}>
-        <div style={{ backgroundColor: colors.background, minHeight: '100vh' }}>
+        <div className="drawer" style={{ backgroundColor: colors.background, minHeight: '100vh' }}>
           <style>
             {`
               .sidebar-icon {
@@ -812,8 +1232,9 @@ function AppContent() {
                 display: flex !important;
                 align-items: center !important;
                 justify-content: flex-start !important;
-                min-height: 48px !important;
                 width: 100% !important;
+                background: none !important;
+                border: none !important;
                 margin: 0 !important;
                 padding: 0 !important;
               }
@@ -821,12 +1242,8 @@ function AppContent() {
                 display: block !important;
                 visibility: visible !important;
                 opacity: 1 !important;
-              }
-              .nav-link {
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .btn-link {
+                font-size: 14px !important;
+                font-weight: 500 !important;
                 margin: 0 !important;
                 padding: 0 !important;
               }
@@ -835,28 +1252,31 @@ function AppContent() {
                 align-items: center !important;
                 justify-content: flex-start !important;
                 width: 100% !important;
+                background: none !important;
+                border: none !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                border: none !important;
-                background: none !important;
-                color: inherit !important;
-                text-decoration: none !important;
               }
             `}
           </style>
+          <input 
+            id="drawer-toggle" 
+            type="checkbox" 
+            className="drawer-toggle" 
+            checked={state.sidebarOpen}
+            onChange={toggleSidebar}
+          />
           
-          {/* Header */}
-          <nav className="navbar navbar-dark fixed-top" style={{ 
-            backgroundColor: colors.primary,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            zIndex: 1030
-          }}>
-            <button 
-              onClick={toggleSidebar}
-              style={{ 
+          {/* Main Content */}
+          <div className="drawer-content flex flex-col">
+            {/* Header */}
+            <nav className="navbar navbar-dark fixed-top" style={{ 
+              backgroundColor: colors.primary,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              zIndex: 1030
+            }}>
+              <label htmlFor="drawer-toggle" className="btn btn-square btn-ghost" style={{ 
                 color: 'white',
-                background: 'none',
-                border: 'none',
                 fontSize: '24px',
                 cursor: 'pointer',
                 padding: '8px',
@@ -866,35 +1286,45 @@ function AppContent() {
                 justifyContent: 'center',
                 minWidth: '40px',
                 minHeight: '40px'
-              }}
-            >
-              <FaBars />
-            </button>
-            <span className="navbar-brand mx-auto d-flex align-items-center">
-              <FaUtensils className="me-2" style={{ fontSize: '20px' }} />
-              The Chef's Numbers
-            </span>
-            <button 
-              onClick={() => dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: !state.showDesignSelector })}
-              title="Design ändern"
-              style={{ 
-                color: 'white',
-                background: 'none',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer',
-                padding: '8px',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '40px',
-                minHeight: '40px'
-              }}
-            >
-              <FaPalette />
-            </button>
-          </nav>
+              }}>
+                <FaBars />
+              </label>
+              <span className="navbar-brand mx-auto d-flex align-items-center">
+                <FaUtensils className="me-2" style={{ fontSize: '20px' }} />
+                The Chef's Numbers
+              </span>
+              <button 
+                onClick={() => dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: !state.showDesignSelector })}
+                title="Design ändern"
+                style={{ 
+                  color: 'white',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: '40px',
+                  minHeight: '40px'
+                }}
+              >
+                <FaPalette />
+              </button>
+            </nav>
+
+            {/* Main Content Area */}
+            <div style={{ 
+              marginLeft: state.sidebarOpen ? 224 : 60,
+              marginTop: 56,
+              transition: 'margin-left 0.3s ease',
+              minHeight: 'calc(100vh - 56px)'
+            }}>
+              {renderPage()}
+            </div>
+          </div>
 
           {/* Design Selector */}
           {state.showDesignSelector && (
@@ -990,567 +1420,60 @@ function AppContent() {
             />
           )}
 
-                     {/* Lieferantenformular Modal */}
-           <Lieferantenformular
-             suppliers={state.suppliers}
-             showSupplierForm={state.showSupplierForm}
-             setShowSupplierForm={(show) => dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: show })}
-             getCurrentColors={getCurrentColors}
-             isValidUrl={isValidUrl}
-             openWebsite={openWebsite}
-             onReset={() => dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: null })}
-           />
+          {/* Lieferantenformular Modal */}
+          <Lieferantenformular
+            suppliers={state.suppliers}
+            showSupplierForm={state.showSupplierForm}
+            setShowSupplierForm={(show) => dispatch({ type: 'SET_SHOW_SUPPLIER_FORM', payload: show })}
+            getCurrentColors={getCurrentColors}
+            isValidUrl={isValidUrl}
+            openWebsite={openWebsite}
+            onReset={() => dispatch({ type: 'SET_EDITING_SUPPLIER_ID', payload: null })}
+          />
 
-                     {/* Rezept-Formular Modal */}
-           <Rezeptformular
-             articles={state.articles}
-             recipes={state.recipes}
-             setRecipes={(recipes) => {
-               if (typeof recipes === 'function') {
-                 const newRecipes = recipes(state.recipes);
-                 dispatch({ type: 'SET_RECIPES', payload: newRecipes });
-               } else {
-                 dispatch({ type: 'SET_RECIPES', payload: recipes });
-               }
-             }}
-             setShowArticleForm={(show) => dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: show })}
-             setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
-             formatPrice={formatPrice}
-             getCurrentColors={getCurrentColors}
-             show={state.showRecipeForm || !!state.editingRecipe}
-             onClose={() => {
-               dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
-               dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
-             }}
-             onSave={(recipe) => {
-               if (state.editingRecipe) {
-                 // Rezept bearbeiten
-                 dispatch({ type: 'UPDATE_RECIPE', payload: { id: state.editingRecipe.id, recipe } });
-               } else {
-                 // Neues Rezept erstellen
-                 dispatch({ type: 'ADD_RECIPE', payload: recipe });
-               }
-             }}
-             onReset={() => {
-               dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
-             }}
-           />
+          {/* Rezept-Formular Modal */}
+          <Rezeptformular
+            articles={state.articles}
+            recipes={state.recipes}
+            setRecipes={(recipes) => {
+              if (typeof recipes === 'function') {
+                const newRecipes = recipes(state.recipes);
+                dispatch({ type: 'SET_RECIPES', payload: newRecipes });
+              } else {
+                dispatch({ type: 'SET_RECIPES', payload: recipes });
+              }
+            }}
+            setShowArticleForm={(show) => dispatch({ type: 'SET_SHOW_ARTICLE_FORM', payload: show })}
+            setEditingArticle={(article) => dispatch({ type: 'SET_EDITING_ARTICLE', payload: article })}
+            formatPrice={formatPrice}
+            getCurrentColors={getCurrentColors}
+            show={state.showRecipeForm || !!state.editingRecipe}
+            onClose={() => {
+              dispatch({ type: 'SET_SHOW_RECIPE_FORM', payload: false });
+              dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+            }}
+            onSave={(recipe) => {
+              if (state.editingRecipe) {
+                // Rezept bearbeiten
+                dispatch({ type: 'UPDATE_RECIPE', payload: { id: state.editingRecipe.id, recipe } });
+              } else {
+                // Neues Rezept erstellen
+                dispatch({ type: 'ADD_RECIPE', payload: recipe });
+              }
+            }}
+            onReset={() => {
+              dispatch({ type: 'SET_EDITING_RECIPE', payload: null });
+            }}
+          />
 
           {/* Enhanced Sidebar */}
-          <div
-            className="position-fixed top-0 start-0 h-100 shadow transition-all"
-            style={{ 
-              width: state.sidebarOpen ? 224 : 60, 
-              zIndex: 1020, 
-              top: 56,
-              transition: 'width 0.3s ease',
-              backgroundColor: colors.sidebar,
-              borderRight: `1px solid ${colors.cardBorder}`,
-              display: state.isMobile ? (state.sidebarOpen ? 'flex' : 'none') : 'flex',
-              flexDirection: 'column',
-              height: 'calc(100vh - 56px)'
-            }}
-          >
-            <div className="d-flex justify-content-between align-items-center p-3 border-bottom" style={{ borderColor: colors.cardBorder }}>
-              {state.sidebarOpen && <span className="fw-bold" style={{ color: colors.text, fontSize: '1.1rem' }}>Navigation</span>}
-              <button 
-                onClick={toggleSidebar} 
-                style={{ 
-                  color: colors.text,
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  padding: '8px',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: '40px',
-                  minHeight: '40px'
-                }}
-              >
-                {state.sidebarOpen ? <FaTimes /> : <FaBars />}
-              </button>
-            </div>
-            
-            {/* Haupt-Navigation */}
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              <ul className="nav flex-column p-2">
-              <li className="nav-item mb-2">
-                <button 
-                  className="sidebar-button" 
-                  onClick={() => { 
-                    dispatch({ type: 'SET_CURRENT_PAGE', payload: 'dashboard' }); 
-                    if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                  }}
-                  title="Dashboard"
-                  style={{ 
-                    color: colors.text,
-                    borderRadius: '8px',
-                    backgroundColor: state.currentPage === 'dashboard' ? colors.accent + '20' : 'transparent',
-                    justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                    minHeight: '50px',
-                    border: 'none',
-                    outline: 'none',
-                    padding: state.sidebarOpen ? '12px' : '2px',
-                    width: '100%'
-                  }}
-                >
-                  <FaTachometerAlt className="sidebar-icon" style={{ 
-                    marginRight: state.sidebarOpen ? '12px' : '0',
-                    display: 'block',
-                    flexShrink: 0,
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: colors.text,
-                    minWidth: '18px',
-                    textAlign: 'center',
-                    width: state.sidebarOpen ? 'auto' : '100%'
-                  }} />
-                  {state.sidebarOpen && <span>Dashboard</span>}
-                </button>
-              </li>
-              <li className="nav-item mb-2">
-                <button 
-                  className="sidebar-button" 
-                  onClick={() => { 
-                    dispatch({ type: 'SET_CURRENT_PAGE', payload: 'kalkulation' }); 
-                    if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                  }}
-                  title="Kalkulation"
-                  style={{ 
-                    color: colors.text,
-                    borderRadius: '8px',
-                    backgroundColor: (state.currentPage === 'kalkulation' || state.currentPage === 'rezepte' || state.currentPage === 'artikel' || state.currentPage === 'lieferanten') ? colors.accent + '20' : 'transparent',
-                    justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                    minHeight: '50px',
-                    border: 'none',
-                    outline: 'none',
-                    padding: state.sidebarOpen ? '12px' : '2px',
-                    width: '100%'
-                  }}
-                >
-                  <FaCalculator className="sidebar-icon" style={{ 
-                    marginRight: state.sidebarOpen ? '12px' : '0',
-                    display: 'block',
-                    flexShrink: 0,
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: colors.text,
-                    minWidth: '18px',
-                    textAlign: 'center',
-                    width: state.sidebarOpen ? 'auto' : '100%'
-                  }} />
-                  {state.sidebarOpen && <span>Kalkulation</span>}
-                  {state.sidebarOpen && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleAccordion('kalkulation');
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: colors.text,
-                        marginLeft: 'auto',
-                        padding: '4px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: '24px',
-                        minHeight: '24px',
-                        borderRadius: '4px',
-                        transition: 'background-color 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.accent + '20';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleAccordion('kalkulation');
-                        }
-                      }}
-                    >
-                      {accordionOpen.kalkulation ? <FaChevronDown /> : <FaChevronRight />}
-                    </div>
-                  )}
-                </button>
-                {/* Accordion Unterpunkte */}
-                {accordionOpen.kalkulation && state.sidebarOpen && (
-                  <div 
-                    className="accordion-content"
-                    style={{
-                      overflow: 'hidden',
-                      transition: 'all 0.3s ease',
-                      maxHeight: '200px',
-                      opacity: 1
-                    }}
-                  >
-                    <ul className="nav flex-column mt-2" style={{ 
-                      paddingLeft: '2rem'
-                    }}>
-                      <li className="nav-item mb-1">
-                        <button 
-                          className="sidebar-sub-button"
-                          onClick={() => { 
-                            dispatch({ type: 'SET_CURRENT_PAGE', payload: 'artikel' }); 
-                            if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                          }}
-                          style={{ 
-                            color: colors.text,
-                            borderRadius: '6px',
-                            backgroundColor: state.currentPage === 'artikel' ? colors.accent + '15' : 'transparent',
-                            padding: '8px 12px',
-                            fontSize: '0.9rem',
-                            border: 'none',
-                            width: '100%',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (state.currentPage !== 'artikel') {
-                              e.currentTarget.style.backgroundColor = colors.accent + '10';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (state.currentPage !== 'artikel') {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }
-                          }}
-                        >
-                          <FaBoxes className="me-2" style={{ fontSize: '14px' }} />
-                          Artikel
-                        </button>
-                      </li>
-                      <li className="nav-item mb-1">
-                        <button 
-                          className="sidebar-sub-button"
-                          onClick={() => { 
-                            dispatch({ type: 'SET_CURRENT_PAGE', payload: 'lieferanten' }); 
-                            if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                          }}
-                          style={{ 
-                            color: colors.text,
-                            borderRadius: '6px',
-                            backgroundColor: state.currentPage === 'lieferanten' ? colors.accent + '15' : 'transparent',
-                            padding: '8px 12px',
-                            fontSize: '0.9rem',
-                            border: 'none',
-                            width: '100%',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (state.currentPage !== 'lieferanten') {
-                              e.currentTarget.style.backgroundColor = colors.accent + '10';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (state.currentPage !== 'lieferanten') {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }
-                          }}
-                        >
-                          <FaUsers className="me-2" style={{ fontSize: '14px' }} />
-                          Lieferanten
-                        </button>
-                      </li>
-                      <li className="nav-item mb-1">
-                        <button 
-                          className="sidebar-sub-button"
-                          onClick={() => { 
-                            dispatch({ type: 'SET_CURRENT_PAGE', payload: 'rezepte' }); 
-                            if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                          }}
-                          style={{ 
-                            color: colors.text,
-                            borderRadius: '6px',
-                            backgroundColor: state.currentPage === 'rezepte' ? colors.accent + '15' : 'transparent',
-                            padding: '8px 12px',
-                            fontSize: '0.9rem',
-                            border: 'none',
-                            width: '100%',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (state.currentPage !== 'rezepte') {
-                              e.currentTarget.style.backgroundColor = colors.accent + '10';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (state.currentPage !== 'rezepte') {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }
-                          }}
-                        >
-                          <FaUtensils className="me-2" style={{ fontSize: '14px' }} />
-                          Rezepte
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                )}
-              </li>
-              <li className="nav-item mb-2">
-                <button 
-                  className="sidebar-button" 
-                  onClick={() => { 
-                    dispatch({ type: 'SET_CURRENT_PAGE', payload: 'einkauf' }); 
-                    if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                  }}
-                  title="Einkauf"
-                  style={{ 
-                    color: colors.text,
-                    borderRadius: '8px',
-                    backgroundColor: state.currentPage === 'einkauf' ? colors.accent + '20' : 'transparent',
-                    justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                    minHeight: '50px',
-                    border: 'none',
-                    outline: 'none',
-                    padding: state.sidebarOpen ? '12px' : '2px',
-                    width: '100%'
-                  }}
-                >
-                  <FaShoppingCart className="sidebar-icon" style={{ 
-                    marginRight: state.sidebarOpen ? '12px' : '0',
-                    display: 'block',
-                    flexShrink: 0,
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: colors.text,
-                    minWidth: '18px',
-                    textAlign: 'center',
-                    width: state.sidebarOpen ? 'auto' : '100%'
-                  }} />
-                  {state.sidebarOpen && <span>Einkauf</span>}
-                </button>
-              </li>
-              <li className="nav-item mb-2">
-                <button 
-                  className="sidebar-button" 
-                  onClick={() => { 
-                    dispatch({ type: 'SET_CURRENT_PAGE', payload: 'inventur' }); 
-                    if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                  }}
-                  title="Inventur"
-                  style={{ 
-                    color: colors.text,
-                    borderRadius: '8px',
-                    backgroundColor: state.currentPage === 'inventur' ? colors.accent + '20' : 'transparent',
-                    justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                    minHeight: '50px',
-                    border: 'none',
-                    outline: 'none',
-                    padding: state.sidebarOpen ? '12px' : '2px',
-                    width: '100%'
-                  }}
-                >
-                  <FaBoxes className="sidebar-icon" style={{ 
-                    marginRight: state.sidebarOpen ? '12px' : '0',
-                    display: 'block',
-                    flexShrink: 0,
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: colors.text,
-                    minWidth: '18px',
-                    textAlign: 'center',
-                    width: state.sidebarOpen ? 'auto' : '100%'
-                  }} />
-                  {state.sidebarOpen && <span>Inventur</span>}
-                </button>
-              </li>
-              </ul>
-            </div>
-            
-            {/* Einstellungen am unteren Rand */}
-            <div style={{ marginTop: 'auto', padding: '8px' }}>
-              <ul className="nav flex-column">
-                {/* Haupt-Einstellungen */}
-                <li className="nav-item mb-2">
-                  <button 
-                    className="sidebar-button" 
-                    onClick={() => { 
-                      dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-settings' }); 
-                      if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                    }}
-                    title="Einstellungen"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '8px',
-                      backgroundColor: (state.currentPage === 'storage-settings' || state.currentPage === 'storage-management') ? colors.accent + '20' : 'transparent',
-                      justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                      minHeight: '50px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: state.sidebarOpen ? '12px' : '2px',
-                      width: '100%'
-                    }}
-                  >
-                    <FaCog className="sidebar-icon" style={{ 
-                      marginRight: state.sidebarOpen ? '12px' : '0',
-                      display: 'block',
-                      flexShrink: 0,
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      color: colors.text,
-                      minWidth: '18px',
-                      textAlign: 'center',
-                      width: state.sidebarOpen ? 'auto' : '100%'
-                    }} />
-                    {state.sidebarOpen && <span>Einstellungen</span>}
-                    {state.sidebarOpen && (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleAccordion('einstellungen');
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: colors.text,
-                          marginLeft: 'auto',
-                          padding: '4px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          minWidth: '24px',
-                          minHeight: '24px',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = colors.accent + '20';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleAccordion('einstellungen');
-                          }
-                        }}
-                      >
-                        {accordionOpen.einstellungen ? <FaChevronDown /> : <FaChevronRight />}
-                      </div>
-                    )}
-                  </button>
-                  {/* Accordion Unterpunkte */}
-                  {accordionOpen.einstellungen && state.sidebarOpen && (
-                    <div 
-                      className="accordion-content"
-                      style={{
-                        overflow: 'hidden',
-                        transition: 'all 0.3s ease',
-                        maxHeight: '200px',
-                        opacity: 1
-                      }}
-                    >
-                      <ul className="nav flex-column mt-2" style={{ 
-                        paddingLeft: '2rem'
-                      }}>
-                        <li className="nav-item mb-1">
-                          <button 
-                            className="sidebar-sub-button"
-                            onClick={() => { 
-                              dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-management' }); 
-                              if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                            }}
-                            style={{ 
-                              color: colors.text,
-                              borderRadius: '6px',
-                              backgroundColor: state.currentPage === 'storage-management' ? colors.accent + '15' : 'transparent',
-                              padding: '8px 12px',
-                              fontSize: '0.9rem',
-                              border: 'none',
-                              width: '100%',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              transition: 'background-color 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (state.currentPage !== 'storage-management') {
-                                e.currentTarget.style.backgroundColor = colors.accent + '10';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (state.currentPage !== 'storage-management') {
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                              }
-                            }}
-                          >
-                            <FaDatabase className="me-2" style={{ fontSize: '14px' }} />
-                            Speicherverwaltung
-                          </button>
-                        </li>
-                        <li className="nav-item mb-1">
-                          <button 
-                            className="sidebar-sub-button"
-                            onClick={() => { 
-                              dispatch({ type: 'SET_CURRENT_PAGE', payload: 'development' }); 
-                              if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-                            }}
-                            style={{ 
-                              color: colors.text,
-                              borderRadius: '6px',
-                              backgroundColor: state.currentPage === 'development' ? colors.accent + '15' : 'transparent',
-                              padding: '8px 12px',
-                              fontSize: '0.9rem',
-                              border: 'none',
-                              width: '100%',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              transition: 'background-color 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (state.currentPage !== 'development') {
-                                e.currentTarget.style.backgroundColor = colors.accent + '10';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (state.currentPage !== 'development') {
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                              }
-                            }}
-                          >
-                            <FaCode className="me-2" style={{ fontSize: '14px' }} />
-                            Entwicklung
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                  )}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div style={{ 
-            marginLeft: state.sidebarOpen ? 224 : 60, 
-            marginTop: 56,
-            transition: 'margin-left 0.3s ease',
-            minHeight: 'calc(100vh - 56px)'
-          }}>
-            {renderPage()}
-          </div>
+          <Sidebar
+            state={state}
+            dispatch={dispatch}
+            colors={colors}
+            accordionOpen={accordionOpen}
+            toggleAccordion={toggleAccordion}
+          />
 
                      {/* Storage Status */}
            <StorageStatus 
