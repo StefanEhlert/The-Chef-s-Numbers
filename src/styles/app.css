@@ -208,6 +208,18 @@ input:focus, select:focus, textarea:focus {
 .accordion-content {
   overflow: hidden;
   transition: max-height 0.5s ease-in-out, opacity 0.4s ease-in-out;
+  margin-left: 20px;
+  margin-top: 8px;
+  border-left: 2px solid var(--card-border-color, #e5e7eb);
+  padding-left: 12px;
+}
+
+.accordion-content.open {
+  opacity: 1;
+}
+
+.accordion-content.closed {
+  opacity: 0;
 }
 
 /* Loading Spinner */

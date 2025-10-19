@@ -95,16 +95,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             
             {/* Accordion Unterpunkte */}
             <div 
-              className="accordion-content"
+              className={`accordion-content ${accordionOpen.datenbasis && state.sidebarOpen ? 'open' : 'closed'}`}
               style={{
-                marginLeft: '20px',
-                marginTop: '8px',
-                borderLeft: `2px solid ${colors.cardBorder}`,
-                paddingLeft: '12px',
-                maxHeight: accordionOpen.datenbasis && state.sidebarOpen ? '200px' : '0',
-                overflow: 'hidden',
-                transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
-                opacity: accordionOpen.datenbasis && state.sidebarOpen ? 1 : 0
+                maxHeight: accordionOpen.datenbasis && state.sidebarOpen ? '200px' : '0'
               }}>
                 <li className="mb-1">
                   <button 
@@ -211,16 +204,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             
             {/* Accordion Unterpunkte */}
             <div 
-              className="accordion-content"
+              className={`accordion-content ${accordionOpen.kalkulation && state.sidebarOpen ? 'open' : 'closed'}`}
               style={{
-                marginLeft: '20px',
-                marginTop: '8px',
-                borderLeft: `2px solid ${colors.cardBorder}`,
-                paddingLeft: '12px',
-                maxHeight: accordionOpen.kalkulation && state.sidebarOpen ? '300px' : '0',
-                overflow: 'hidden',
-                transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out',
-                opacity: accordionOpen.kalkulation && state.sidebarOpen ? 1 : 0
+                maxHeight: accordionOpen.kalkulation && state.sidebarOpen ? '300px' : '0'
               }}>
                 <li className="mb-1">
                   <button 
