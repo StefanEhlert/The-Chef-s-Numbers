@@ -1053,7 +1053,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'material-verluste' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'material-verluste' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -1062,7 +1062,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'material-verluste' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -1168,7 +1168,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'storage-management' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-management' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -1177,7 +1177,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'storage-management' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -1199,7 +1199,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'development' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'development' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -1208,7 +1208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'development' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
