@@ -43,14 +43,13 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Dashboard */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
+              className={`sidebar-button ${state.currentPage === 'dashboard' ? 'active' : ''}`}
               onClick={() => { 
                 dispatch({ type: 'SET_CURRENT_PAGE', payload: 'dashboard' }); 
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Dashboard"
               style={{ 
-                backgroundColor: state.currentPage === 'dashboard' ? colors.accent + '20' : 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 padding: state.sidebarOpen ? '12px' : '2px'
               }}
@@ -343,7 +342,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'menus-buffets' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'menus-buffets' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -352,7 +351,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'menus-buffets' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
