@@ -319,20 +319,25 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <button 
-                  className="btn w-full p-3 border-2 transition-all duration-200 hover:scale-105" 
+                  className="btn w-full p-3 border-2 transition-all duration-200" 
                   onClick={() => setShowArticleForm(true)}
                   style={{ 
                     borderColor: colors.accent, 
                     color: colors.accent, 
                     backgroundColor: 'transparent',
                     borderRadius: '8px',
-                    borderStyle: 'solid'
+                    borderStyle: 'solid',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                   }}
                   onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
                     e.currentTarget.style.backgroundColor = colors.accent + '20';
                     e.currentTarget.style.borderColor = colors.accent;
                   }}
                   onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
                     e.currentTarget.style.backgroundColor = 'transparent';
                     e.currentTarget.style.borderColor = colors.accent;
                   }}
@@ -343,20 +348,25 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <button 
-                  className="btn w-full p-3 border-2 transition-all duration-200 hover:scale-105" 
+                  className="btn w-full p-3 border-2 transition-all duration-200" 
                   onClick={handleNewRecipe}
                   style={{ 
                     borderColor: colors.accent, 
                     color: colors.accent, 
                     backgroundColor: 'transparent',
                     borderRadius: '8px',
-                    borderStyle: 'solid'
+                    borderStyle: 'solid',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                   }}
                   onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
                     e.currentTarget.style.backgroundColor = colors.accent + '20';
                     e.currentTarget.style.borderColor = colors.accent;
                   }}
                   onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
                     e.currentTarget.style.backgroundColor = 'transparent';
                     e.currentTarget.style.borderColor = colors.accent;
                   }}
