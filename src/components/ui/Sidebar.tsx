@@ -174,37 +174,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Kalkulation */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
+              className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
                 toggleAccordion('kalkulation');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Kalkulation"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
             >
-              <FaCalculator className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              <FaCalculator className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Kalkulation</span>}
               {state.sidebarOpen && (
                 <div
@@ -375,37 +352,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Einkauf */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
+              className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
                 toggleAccordion('einkauf');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einkauf"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
             >
-              <FaShoppingCart className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              <FaShoppingCart className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Einkauf</span>}
               {state.sidebarOpen && (
                 <div
@@ -1062,37 +1016,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
         <ul className="nav flex-column">
           <li className="nav-item">
             <button 
-              className="sidebar-button" 
+              className={`sidebar-button ${state.currentPage === 'storage-management' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
                 dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-management' }); 
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einstellungen"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: state.currentPage === 'storage-management' ? colors.accent + '20' : 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
             >
-              <FaCog className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              <FaCog className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Einstellungen</span>}
               {state.sidebarOpen && (
                 <div
