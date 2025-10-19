@@ -481,7 +481,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'einkaufslisten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'einkaufslisten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -490,7 +490,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'einkaufslisten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -512,7 +512,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'einkauf-planen' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'einkauf-planen' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -521,7 +521,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'einkauf-planen' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -543,7 +543,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'rechnungen' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'rechnungen' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -552,7 +552,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'rechnungen' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -578,16 +578,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Inventur */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
-              onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'inventur' }); 
-                if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-              }}
-              title="Inventur"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: state.currentPage === 'inventur' ? colors.accent + '20' : 'transparent',
+                className={`sidebar-button ${state.currentPage === 'inventur' ? 'active' : ''}`} 
+                onClick={() => { 
+                  dispatch({ type: 'SET_CURRENT_PAGE', payload: 'inventur' }); 
+                  if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                }}
+                title="Inventur"
+                style={{ 
+                  color: colors.text,
+                  borderRadius: '8px',
+                  backgroundColor: 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 minHeight: '50px',
                 border: 'none',
@@ -651,7 +651,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'warenbestand' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'warenbestand' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -660,7 +660,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'warenbestand' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -682,7 +682,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'inventar-verwalten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'inventar-verwalten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -691,7 +691,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'inventar-verwalten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -717,16 +717,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Personal */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
-              onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'personal' }); 
-                if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-              }}
-              title="Personal"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: state.currentPage === 'personal' ? colors.accent + '20' : 'transparent',
+                className={`sidebar-button ${state.currentPage === 'personal' ? 'active' : ''}`} 
+                onClick={() => { 
+                  dispatch({ type: 'SET_CURRENT_PAGE', payload: 'personal' }); 
+                  if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                }}
+                title="Personal"
+                style={{ 
+                  color: colors.text,
+                  borderRadius: '8px',
+                  backgroundColor: 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 minHeight: '50px',
                 border: 'none',
@@ -790,7 +790,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'personaldaten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'personaldaten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -799,7 +799,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'personaldaten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -821,7 +821,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'dienstplaene' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'dienstplaene' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -830,7 +830,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'dienstplaene' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -852,7 +852,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'urlaubsplan' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'urlaubsplan' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -861,7 +861,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'urlaubsplan' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -883,7 +883,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'fehlzeiten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'fehlzeiten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -892,7 +892,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'fehlzeiten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -918,16 +918,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* HACCP */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
-              onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'haccp' }); 
-                if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
-              }}
-              title="HACCP"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: state.currentPage === 'haccp' ? colors.accent + '20' : 'transparent',
+                className={`sidebar-button ${state.currentPage === 'haccp' ? 'active' : ''}`} 
+                onClick={() => { 
+                  dispatch({ type: 'SET_CURRENT_PAGE', payload: 'haccp' }); 
+                  if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                }}
+                title="HACCP"
+                style={{ 
+                  color: colors.text,
+                  borderRadius: '8px',
+                  backgroundColor: 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 minHeight: '50px',
                 border: 'none',
@@ -991,7 +991,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'temperaturlisten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'temperaturlisten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -1000,7 +1000,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'temperaturlisten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -1022,7 +1022,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'reinigungslisten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'reinigungslisten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -1031,7 +1031,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'reinigungslisten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
