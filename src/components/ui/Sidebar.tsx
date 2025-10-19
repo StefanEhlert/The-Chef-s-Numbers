@@ -83,14 +83,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             <button 
               className="sidebar-button" 
               onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'datenbasis' }); 
+                toggleAccordion('datenbasis');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Datenbasis"
               style={{ 
                 color: colors.text,
                 borderRadius: '8px',
-                backgroundColor: state.currentPage === 'datenbasis' ? colors.accent + '20' : 'transparent',
+                backgroundColor: 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 minHeight: '50px',
                 border: 'none',
@@ -98,7 +98,15 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 padding: state.sidebarOpen ? '12px' : '2px',
                 width: '100%',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                transition: 'background-color 0.2s ease',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.accent + '10';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               <FaDatabase className="sidebar-icon" style={{ 
@@ -222,14 +230,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             <button 
               className="sidebar-button" 
               onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'kalkulation' }); 
+                toggleAccordion('kalkulation');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Kalkulation"
               style={{ 
                 color: colors.text,
                 borderRadius: '8px',
-                backgroundColor: state.currentPage === 'kalkulation' ? colors.accent + '20' : 'transparent',
+                backgroundColor: 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 minHeight: '50px',
                 border: 'none',
@@ -237,7 +245,15 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 padding: state.sidebarOpen ? '12px' : '2px',
                 width: '100%',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                transition: 'background-color 0.2s ease',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.accent + '10';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               <FaCalculator className="sidebar-icon" style={{ 
@@ -423,14 +439,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             <button 
               className="sidebar-button" 
               onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'einkauf' }); 
+                toggleAccordion('einkauf');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einkauf"
               style={{ 
                 color: colors.text,
                 borderRadius: '8px',
-                backgroundColor: state.currentPage === 'einkauf' ? colors.accent + '20' : 'transparent',
+                backgroundColor: 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
                 minHeight: '50px',
                 border: 'none',
@@ -438,7 +454,15 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 padding: state.sidebarOpen ? '12px' : '2px',
                 width: '100%',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                transition: 'background-color 0.2s ease',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.accent + '10';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               <FaShoppingCart className="sidebar-icon" style={{ 
