@@ -121,6 +121,7 @@ button:disabled {
 .btn-outline-primary:hover {
   background-color: #3b82f6;
   color: white;
+  border-color: #3b82f6;
 }
 
 .btn-outline-secondary {
