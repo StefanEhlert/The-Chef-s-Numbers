@@ -47,7 +47,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
   const filteredSuppliers = filteredAndSortedSuppliers() || [];
 
   return (
-    <div className="container-fluid p-4">
+    <div className="container-fluid p-4 pt-0">
       <div style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
@@ -57,13 +57,13 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
         border: `1px solid ${colors.cardBorder}`
       }}>
         {/* Header */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="flex justify-between items-center mb-4">
           <h1 style={{ color: colors.text, margin: 0 }}>Lieferantenverwaltung</h1>
         </div>
 
         {/* Suchleiste und Ansichtswechsel */}
-        <div className="row mb-3">
-          <div className="col-md-7">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
+          <div className="md:col-span-7">
             <div className="input-group">
               <span className="input-group-text" style={{
                 backgroundColor: colors.secondary,
@@ -97,8 +97,8 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
               </button>
             </div>
           </div>
-          <div className="col-md-3">
-            <div className="btn-group w-100" role="group">
+          <div className="md:col-span-3">
+            <div className="btn-group w-full" role="group">
               <button
                 type="button"
                 className={`btn ${supplierViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
@@ -127,14 +127,14 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
               </button>
             </div>
           </div>
-          <div className="col-md-2">
+          <div className="md:col-span-2">
             {/* Platzhalter für zukünftige Funktionen */}
           </div>
         </div>
 
         {/* Filter und Sortierung */}
-        <div className="row mb-3">
-          <div className="col-md-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
+          <div className="md:col-span-3">
             <select
               className="form-select"
               value={supplierSortField}
@@ -150,9 +150,9 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
               <option value="address.city">Stadt</option>
             </select>
           </div>
-          <div className="col-md-3">
+          <div className="md:col-span-3">
             <button
-              className="btn btn-outline-secondary w-100"
+              className="btn btn-outline-secondary no-hover w-full"
               onClick={() => setSupplierSortDirection(supplierSortDirection === 'asc' ? 'desc' : 'asc')}
               style={{
                 borderColor: colors.cardBorder,
@@ -163,7 +163,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
               {supplierSortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
             </button>
           </div>
-          <div className="col-md-6 text-end">
+          <div className="md:col-span-6 text-end">
             <span style={{ color: colors.text }}>
               {filteredSuppliers.length} Lieferant{filteredSuppliers.length !== 1 ? 'en' : ''} gefunden
             </span>
@@ -180,7 +180,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
             position: 'relative',
             overflow: 'hidden'
           }}>
-            <div className="d-flex justify-content-between align-items-center">
+            <div className="flex justify-between items-center">
               <span>{selectedSuppliers.length} Lieferant{selectedSuppliers.length !== 1 ? 'en' : ''} ausgewählt</span>
               <button
                 className="btn btn-danger btn-sm"
@@ -239,7 +239,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
 
         {/* Lieferanten-Liste */}
         {supplierViewMode === 'list' ? (
-          <div className="table-responsive">
+          <div className="overflow-x-auto">
             <table className="table table-hover" style={{
               backgroundColor: colors.card,
               borderColor: colors.cardBorder
@@ -292,7 +292,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                     </td>
                     <td style={{ borderColor: colors.cardBorder }}>{supplier.address?.city || '-'}</td>
                     <td style={{ borderColor: colors.cardBorder }}>
-                      <div className="d-flex gap-1">
+                      <div className="flex gap-1">
                         <button
                           className="btn btn-link p-0"
                           title="Bearbeiten"
@@ -332,11 +332,11 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
           </div>
         ) : (
           /* Lieferanten-Kacheln */
-          <div className="row">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredSuppliers.map(supplier => (
-              <div key={supplier.id} className="col-md-4 col-lg-3 mb-3">
+              <div key={supplier.id} className="mb-3">
                 <div 
-                  className="card h-100"
+                  className="card h-full"
                   onDoubleClick={() => handleEditSupplier(supplier)}
                   style={{
                     backgroundColor: colors.card,
@@ -347,14 +347,14 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                   title="Doppelklick zum Bearbeiten"
                 >
                   <div className="card-body">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
+                    <div className="flex justify-between items-start mb-2">
                       <input
                         type="checkbox"
                         checked={selectedSuppliers && selectedSuppliers.includes(supplier.id)}
                         onChange={() => handleSelectSupplier(supplier.id)}
                         style={{ accentColor: colors.accent }}
                       />
-                      <div className="d-flex gap-1">
+                      <div className="flex gap-1">
                         <button
                           className="btn btn-link p-0"
                           title="Bearbeiten"
