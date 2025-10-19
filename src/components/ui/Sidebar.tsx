@@ -905,9 +905,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
         <ul className="nav flex-column">
           <li className="nav-item">
             <button 
-              className={`sidebar-button ${state.currentPage === 'storage-management' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
+              className={`sidebar-button ${state.currentPage === 'einstellungen' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
-                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'storage-management' }); 
+                dispatch({ type: 'SET_CURRENT_PAGE', payload: 'einstellungen' }); 
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einstellungen"
