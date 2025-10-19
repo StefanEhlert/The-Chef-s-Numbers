@@ -1,0 +1,52 @@
+{
+  "spacing": {
+    "page-padding": "1rem",
+    "card-padding": "1.5rem",
+    "input-padding": "0.5rem 0.75rem",
+    "button-padding": "0.5rem 1rem",
+    "sidebar-width-open": "224px",
+    "sidebar-width-closed": "60px",
+    "header-height": "56px",
+    "modal-padding": "2rem",
+    "table-cell-padding": "0.75rem",
+    "sidebar-button-padding": "0.75rem 1rem"
+  },
+  "borderRadius": {
+    "small": "0.375rem",
+    "medium": "0.5rem",
+    "large": "0.75rem",
+    "card": "12px",
+    "modal": "12px",
+    "button": "0.375rem",
+    "input": "0.375rem"
+  },
+  "fontSize": {
+    "small": "0.75rem",
+    "base": "0.875rem",
+    "large": "1rem",
+    "heading": "1.5rem",
+    "stat-number": "2rem",
+    "icon": "2rem"
+  },
+  "fontWeight": {
+    "normal": "400",
+    "medium": "500",
+    "semibold": "600",
+    "bold": "700"
+  },
+  "shadows": {
+    "card": "0 4px 12px rgba(0, 0, 0, 0.1)",
+    "modal": "0 10px 40px rgba(0, 0, 0, 0.2)",
+    "focus": "0 0 0 3px rgba(59, 130, 246, 0.1)"
+  },
+  "transitions": {
+    "fast": "0.2s",
+    "medium": "0.3s",
+    "slow": "0.5s"
+  },
+  "zIndex": {
+    "modal-backdrop": "1040",
+    "modal": "1050",
+    "dropdown": "1000"
+  }
+}
