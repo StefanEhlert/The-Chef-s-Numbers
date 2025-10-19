@@ -125,6 +125,27 @@ input:focus, select:focus, textarea:focus {
   text-align: left;
   transition: background-color 0.2s ease;
   cursor: pointer;
+  border: none;
+  outline: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.sidebar-button {
+  color: var(--text-color, #1f2937);
+  border-radius: 8px;
+  min-height: 50px;
+  padding: 12px;
+}
+
+.sidebar-sub-button {
+  color: var(--text-color, #1f2937);
+  border-radius: 6px;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+  justify-content: flex-start;
 }
 
 .sidebar-button:hover {
@@ -138,6 +159,31 @@ input:focus, select:focus, textarea:focus {
 /* Active state for sub-buttons */
 .sidebar-sub-button.active {
   background-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+/* Active state for main buttons */
+.sidebar-button.active {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Sidebar icons */
+.sidebar-icon {
+  display: block;
+  flex-shrink: 0;
+  font-weight: bold;
+  color: var(--text-color, #1f2937);
+  min-width: 18px;
+  text-align: center;
+  width: auto;
+}
+
+/* Sidebar icon spacing */
+.sidebar-icon.open {
+  margin-right: 12px;
+}
+
+.sidebar-icon.closed {
+  margin-right: 0;
 }
 
 .accordion-content {

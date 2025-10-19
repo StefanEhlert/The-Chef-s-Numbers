@@ -50,25 +50,13 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}
               title="Dashboard"
               style={{ 
-                color: colors.text,
-                borderRadius: '8px',
                 backgroundColor: state.currentPage === 'dashboard' ? colors.accent + '20' : 'transparent',
                 justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
+                padding: state.sidebarOpen ? '12px' : '2px'
               }}
             >
-              <FaTachometerAlt className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
+              <FaTachometerAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ 
                 fontSize: '18px',
-                fontWeight: 'bold',
                 color: colors.text,
                 minWidth: '18px',
                 textAlign: 'center',
