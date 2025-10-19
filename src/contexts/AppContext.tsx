@@ -292,7 +292,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Zeige Ladebildschirm während Initialisierung
   if (!isInitialized) {
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
+      <div className="flex justify-center items-center" style={{ height: '100vh' }}>
         <div className="text-center">
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Lädt...</span>

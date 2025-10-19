@@ -20,7 +20,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   };
 
   const spinner = (
-    <div className="d-flex flex-column align-items-center justify-content-center">
+    <div className="flex flex-col items-center justify-center">
       <div 
         className="spinner-border" 
         role="status"
@@ -43,7 +43,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   if (fullScreen) {
     return (
       <div 
-        className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+        className="fixed top-0 left-0 w-full h-full flex items-center justify-center"
         style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.8)',
           zIndex: 9999
@@ -55,7 +55,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   }
 
   return (
-    <div className="d-flex align-items-center justify-content-center p-4">
+    <div className="flex items-center justify-center p-4">
       {spinner}
     </div>
   );

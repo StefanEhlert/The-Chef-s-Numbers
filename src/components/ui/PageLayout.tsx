@@ -9,7 +9,7 @@ interface PageLayoutProps {
 
 const PageLayout: React.FC<PageLayoutProps> = React.memo(({ title, children, colors, headerActions }) => {
   return (
-    <div className="container-fluid p-4">
+    <div className="w-full px-4">
       <div style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
@@ -18,7 +18,7 @@ const PageLayout: React.FC<PageLayoutProps> = React.memo(({ title, children, col
         minHeight: 'calc(100vh - 120px)',
         border: `1px solid ${colors.cardBorder}`
       }}>
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="flex justify-between items-center mb-4">
           <h1 style={{ color: colors.text }}>{title}</h1>
           {headerActions && (
             <div>

@@ -21,7 +21,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = React.memo(({ status, colors, sh
 
   return (
     <span 
-      className="badge"
+      className="badge badge-lg"
       style={{ 
         backgroundColor: getStatusColor(status, colors),
         color: 'white'

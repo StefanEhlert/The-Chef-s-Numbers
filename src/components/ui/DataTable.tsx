@@ -35,8 +35,8 @@ const DataTable: React.FC<DataTableProps> = React.memo(({
   }
 
   return (
-    <div className="table-responsive">
-      <table className="table" style={{ color: colors.text }}>
+    <div className="overflow-x-auto">
+      <table className="table table-zebra w-full" style={{ color: colors.text }}>
         <thead>
           <tr>
             {columns.map(column => (
