@@ -409,12 +409,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                         }}
                         onClick={() => handleEditArticle(article)}
                       >
-                        <div>
-                          <strong style={{ color: colors.text }}>{article.name}</strong>
-                          <br />
-                          <small style={{ color: colors.accent }}>
+                        <div className="flex-1 min-w-0">
+                          <div 
+                            className="font-semibold truncate" 
+                            style={{ color: colors.text }}
+                            title={article.name}
+                          >
+                            {article.name}
+                          </div>
+                          <div className="text-sm" style={{ color: colors.accent }}>
                             {article.category} • {formatDate(article.timestamp)}
-                          </small>
+                          </div>
                         </div>
                         <span className="badge" style={{ backgroundColor: colors.accent }}>
                           {formatPrice(article.bundlePrice)}
@@ -459,12 +464,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                         }}
                         onClick={() => handleEditArticle(article)}
                       >
-                        <div>
-                          <strong style={{ color: colors.text }}>{article.name}</strong>
-                          <br />
-                          <small style={{ color: colors.accent }}>
+                        <div className="flex-1 min-w-0">
+                          <div 
+                            className="font-semibold truncate" 
+                            style={{ color: colors.text }}
+                            title={article.name}
+                          >
+                            {article.name}
+                          </div>
+                          <div className="text-sm" style={{ color: colors.accent }}>
                             {article.category} • {getSupplierName(article.supplierId)}
-                          </small>
+                          </div>
                         </div>
                         <span className="badge" style={{ backgroundColor: colors.accent }}>
                           {formatPrice(article.bundlePrice)}
