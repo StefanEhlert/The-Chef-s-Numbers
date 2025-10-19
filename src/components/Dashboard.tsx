@@ -319,7 +319,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <button 
-                  className="btn w-full p-3 border-2 transition-all duration-200 hover:scale-105" 
+                  className="btn btn-outline w-full p-3 transition-all duration-200 hover:scale-105" 
                   onClick={() => setShowArticleForm(true)}
                   style={{ 
                     borderColor: colors.accent, 
@@ -342,7 +342,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <button 
-                  className="btn w-full p-3 border-2 transition-all duration-200 hover:scale-105" 
+                  className="btn btn-outline w-full p-3 transition-all duration-200 hover:scale-105" 
                   onClick={handleNewRecipe}
                   style={{ 
                     borderColor: colors.accent, 
