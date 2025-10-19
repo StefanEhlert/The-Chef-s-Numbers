@@ -135,15 +135,15 @@ input:focus, select:focus, textarea:focus {
 .sidebar-button {
   color: var(--text-color, #1f2937);
   border-radius: 8px;
-  min-height: 50px;
-  padding: 12px;
+  min-height: 40px;
+  padding: 8px 12px;
 }
 
 .sidebar-sub-button {
   color: var(--text-color, #1f2937);
   border-radius: 6px;
-  min-height: 40px;
-  padding: 8px 12px;
+  min-height: 32px;
+  padding: 6px 12px;
   font-size: 14px;
   justify-content: flex-start;
 }
@@ -191,7 +191,7 @@ input:focus, select:focus, textarea:focus {
 /* Sidebar button states */
 .sidebar-button.open {
   justify-content: flex-start;
-  padding: 12px;
+  padding: 8px 12px;
 }
 
 .sidebar-button.closed {
