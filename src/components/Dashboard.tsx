@@ -225,7 +225,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
         boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
-        padding: '2rem',
+        padding: '1rem 2rem',
         minHeight: 'calc(100vh - 120px)',
         border: `1px solid ${colors.cardBorder}`
       }}>
