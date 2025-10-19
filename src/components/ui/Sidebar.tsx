@@ -98,15 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 padding: state.sidebarOpen ? '12px' : '2px',
                 width: '100%',
                 display: 'flex',
-                alignItems: 'center',
-                transition: 'background-color 0.2s ease',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = colors.accent + '10';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                alignItems: 'center'
               }}
             >
               <FaDatabase className="sidebar-icon" style={{ 
@@ -162,7 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               }}>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'artikel' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'artikel' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -171,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'artikel' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
@@ -180,19 +172,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
-                      fontSize: '14px',
-                      transition: 'background-color 0.2s ease',
-                      cursor: 'pointer'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (state.currentPage !== 'artikel') {
-                        e.currentTarget.style.backgroundColor = colors.accent + '10';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (state.currentPage !== 'artikel') {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }
+                      fontSize: '14px'
                     }}
                   >
                     <FaList style={{ 
@@ -257,15 +237,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 padding: state.sidebarOpen ? '12px' : '2px',
                 width: '100%',
                 display: 'flex',
-                alignItems: 'center',
-                transition: 'background-color 0.2s ease',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = colors.accent + '10';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                alignItems: 'center'
               }}
             >
               <FaCalculator className="sidebar-icon" style={{ 
@@ -466,15 +438,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 padding: state.sidebarOpen ? '12px' : '2px',
                 width: '100%',
                 display: 'flex',
-                alignItems: 'center',
-                transition: 'background-color 0.2s ease',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = colors.accent + '10';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                alignItems: 'center'
               }}
             >
               <FaShoppingCart className="sidebar-icon" style={{ 
