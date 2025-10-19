@@ -146,6 +146,20 @@ button:disabled {
   border-color: #6c757d;
 }
 
+.btn-outline {
+  background-color: transparent;
+  color: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-border);
+  border-width: 1px;
+  border-style: solid;
+}
+
+.btn-outline:hover {
+  background-color: var(--btn-primary-bg);
+  color: #ffffff !important;
+  border-color: var(--btn-primary-border);
+}
+
 /* Input Base */
 input, select, textarea {
   padding: 0.5rem 0.75rem;
