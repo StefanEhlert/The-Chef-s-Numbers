@@ -191,15 +191,13 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
             <div className="btn-group w-full" role="group">
               <button
                 type="button"
-                className="btn"
+                className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
                 onClick={() => setViewMode('list')}
                 style={{
                   backgroundColor: viewMode === 'list' ? colors.accent : 'transparent',
-                  borderColor: colors.cardBorder,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
+                  borderColor: viewMode === 'list' ? colors.accent : colors.cardBorder,
                   color: viewMode === 'list' ? 'white' : colors.text,
-                  borderRadius: viewMode === 'list' ? '0.375rem 0 0 0.375rem' : '0.375rem 0 0 0.375rem'
+                  borderRadius: '0.375rem 0 0 0.375rem'
                 }}
               >
                 <FaList className="me-1" />
@@ -207,15 +205,13 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               </button>
               <button
                 type="button"
-                className="btn"
+                className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
                 onClick={() => setViewMode('grid')}
                 style={{
                   backgroundColor: viewMode === 'grid' ? colors.accent : 'transparent',
-                  borderColor: colors.cardBorder,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
+                  borderColor: viewMode === 'grid' ? colors.accent : colors.cardBorder,
                   color: viewMode === 'grid' ? 'white' : colors.text,
-                  borderRadius: viewMode === 'grid' ? '0 0.375rem 0.375rem 0' : '0 0.375rem 0.375rem 0'
+                  borderRadius: '0 0.375rem 0.375rem 0'
                 }}
               >
                 <FaTh className="me-1" />
