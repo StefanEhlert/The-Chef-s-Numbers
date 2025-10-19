@@ -220,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   );
 
   return (
-    <div className="container-fluid p-4">
+    <div className="w-full px-4">
       <div style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
@@ -230,12 +230,12 @@ const Dashboard: React.FC<DashboardProps> = ({
         border: `1px solid ${colors.cardBorder}`
       }}>
         {/* Header */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="flex justify-between items-center mb-4">
           <h1 style={{ color: colors.text, margin: 0 }}>Dashboard</h1>
           
           {/* Speicher-Info mit Link */}
           <div 
-            className="d-flex align-items-center gap-2 px-3 py-2 rounded"
+            className="flex items-center gap-2 px-3 py-2 rounded"
             style={{
               backgroundColor: colors.secondary,
               border: `1px solid ${colors.cardBorder}`,
@@ -285,7 +285,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
         
         {/* Hauptstatistiken */}
-        <div className="row">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {renderStatCard(
             '📦', 
             'Artikel', 
@@ -313,27 +313,27 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Quick Actions */}
-        <div className="row mt-4">
-          <div className="col-12">
+        <div className="mt-4">
+          <div className="w-full">
             <h3 style={{ color: colors.text, marginBottom: '1rem' }}>Schnellzugriff</h3>
-            <div className="row">
-              <div className="col-md-6 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
                 <button 
-                  className="btn btn-outline-primary w-100 p-3" 
+                  className="btn btn-outline-primary w-full p-3" 
                   onClick={() => setShowArticleForm(true)}
                   style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
                 >
-                  <FaPlus className="me-2" />
+                  <FaPlus className="mr-2" />
                   Neuen Artikel anlegen
                 </button>
               </div>
-              <div className="col-md-6 mb-3">
+              <div>
                 <button 
-                  className="btn btn-outline-primary w-100 p-3" 
+                  className="btn btn-outline-primary w-full p-3" 
                   onClick={handleNewRecipe}
                   style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
                 >
-                  <FaUtensils className="me-2" />
+                  <FaUtensils className="mr-2" />
                   Neues Rezept erstellen
                 </button>
               </div>
@@ -342,9 +342,9 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Detaillierte Statistiken */}
-        <div className="row mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           {/* Neueste Artikel */}
-          <div className="col-md-6 mb-4">
+          <div>
             <div className="card" style={{ 
               backgroundColor: colors.card, 
               borderColor: colors.cardBorder,
@@ -353,17 +353,17 @@ const Dashboard: React.FC<DashboardProps> = ({
             }}>
               <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaClock className="me-2" />
+                  <FaClock className="mr-2" />
                   Neueste Artikel
                 </h5>
               </div>
               <div className="card-body">
                 {statistics.newestArticles.length > 0 ? (
-                  <div className="list-group list-group-flush">
+                  <div className="space-y-2">
                     {statistics.newestArticles.map((article, index) => (
                       <div 
                         key={article.id || `newest-article-${index}`} 
-                        className="list-group-item d-flex justify-content-between align-items-center"
+                        className="flex justify-between items-center p-3 rounded border"
                         style={{ 
                           backgroundColor: 'transparent', 
                           borderColor: colors.cardBorder,
