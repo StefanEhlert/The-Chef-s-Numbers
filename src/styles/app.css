@@ -3,6 +3,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Custom Properties für dynamische Farben */
+:root {
+  --btn-primary-bg: #3b82f6;
+  --btn-primary-border: #3b82f6;
+  --btn-primary-text: #ffffff;
+}
+
 /* Custom Styles unterhalb */
 
 /* Reset und Base Styles */
@@ -107,21 +114,21 @@ button:disabled {
 
 /* Button Varianten */
 .btn-primary {
-  background-color: #3b82f6;
-  color: white;
-  border: 1px solid #3b82f6;
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: 1px solid var(--btn-primary-border);
 }
 
 .btn-outline-primary {
   background-color: transparent;
-  color: #3b82f6;
-  border: 1px solid #3b82f6;
+  color: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-border);
 }
 
 .btn-outline-primary:hover {
-  background-color: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: var(--btn-primary-border);
 }
 
 .btn-outline-secondary {

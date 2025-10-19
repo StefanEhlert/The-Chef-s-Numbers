@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSave, FaSort, FaTrash, FaPencilAlt, FaTimes, FaBoxes, FaCheck } from 'react-icons/fa';
 import { Article } from '../types';
+import { setButtonColors } from '../utils/cssVariables';
 
 interface ArtikelverwaltungProps {
   articles: Article[];
@@ -70,6 +71,11 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
   const filteredArticles = filteredAndSortedArticles();
   const categories = getUsedCategories();
   const uniqueSuppliers = getUniqueSuppliers();
+
+  // Setze CSS Custom Properties für Button-Farben
+  useEffect(() => {
+    setButtonColors(colors);
+  }, [colors]);
 
   // Hilfsfunktion zur Formatierung der Nährwerte
   const formatNutritionInfo = (article: Article) => {
