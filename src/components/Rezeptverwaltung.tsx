@@ -418,13 +418,15 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                 >
                   <div className="card-body">
                     <div className="flex justify-between items-start mb-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedRecipes.includes(recipe.id)}
-                        onChange={() => handleSelectRecipe(recipe.id)}
-                        style={{ accentColor: colors.accent }}
-                      />
-                      <div className="flex gap-1">
+                      <div className="flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedRecipes.includes(recipe.id)}
+                          onChange={() => handleSelectRecipe(recipe.id)}
+                          style={{ accentColor: colors.accent }}
+                        />
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
                         <button
                           className="btn btn-link p-0"
                           title="Bearbeiten"
