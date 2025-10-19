@@ -319,9 +319,22 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <button 
-                  className="btn btn-outline w-full p-3" 
+                  className="btn w-full p-3 border-2 transition-all duration-200 hover:scale-105" 
                   onClick={() => setShowArticleForm(true)}
-                  style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
+                  style={{ 
+                    borderColor: colors.accent, 
+                    color: colors.accent, 
+                    backgroundColor: 'transparent',
+                    borderRadius: '8px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.accent + '20';
+                    e.currentTarget.style.borderColor = colors.accent;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.borderColor = colors.accent;
+                  }}
                 >
                   <FaPlus className="mr-2" />
                   Neuen Artikel anlegen
@@ -329,9 +342,22 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <button 
-                  className="btn btn-outline w-full p-3" 
+                  className="btn w-full p-3 border-2 transition-all duration-200 hover:scale-105" 
                   onClick={handleNewRecipe}
-                  style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
+                  style={{ 
+                    borderColor: colors.accent, 
+                    color: colors.accent, 
+                    backgroundColor: 'transparent',
+                    borderRadius: '8px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.accent + '20';
+                    e.currentTarget.style.borderColor = colors.accent;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.borderColor = colors.accent;
+                  }}
                 >
                   <FaUtensils className="mr-2" />
                   Neues Rezept erstellen
