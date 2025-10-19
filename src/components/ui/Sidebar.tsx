@@ -324,7 +324,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </li>
                 <li className="mb-1">
                   <button 
-                    className="sidebar-sub-button"
+                    className={`sidebar-sub-button ${state.currentPage === 'speisekarten' ? 'active' : ''}`}
                     onClick={() => { 
                       dispatch({ type: 'SET_CURRENT_PAGE', payload: 'speisekarten' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
@@ -333,7 +333,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     style={{ 
                       color: colors.text,
                       borderRadius: '6px',
-                      backgroundColor: state.currentPage === 'speisekarten' ? colors.accent + '15' : 'transparent',
+                      backgroundColor: 'transparent',
                       justifyContent: 'flex-start',
                       minHeight: '40px',
                       border: 'none',
