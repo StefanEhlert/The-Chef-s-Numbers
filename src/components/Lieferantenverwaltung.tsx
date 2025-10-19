@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaPencilAlt, FaTimes, FaUsers } from 'react-icons/fa';
 import { Supplier } from '../types';
-import { setButtonColors } from '../utils/cssVariables';
+import { setComponentColors } from '../utils/cssVariables';
 
 interface LieferantenverwaltungProps {
   suppliers: Supplier[];
@@ -47,9 +47,9 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const filteredSuppliers = filteredAndSortedSuppliers() || [];
 
-  // Setze CSS Custom Properties für Button-Farben
+  // Setze CSS Custom Properties für Button- und Text-Farben
   useEffect(() => {
-    setButtonColors(colors);
+    setComponentColors(colors);
   }, [colors]);
 
   return (
@@ -287,9 +287,9 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                         style={{ accentColor: colors.accent }}
                       />
                     </td>
-                    <td style={{ borderColor: colors.cardBorder, fontWeight: 'bold' }}>{supplier.name}</td>
-                    <td style={{ borderColor: colors.cardBorder }}>{supplier.contactPerson}</td>
-                    <td style={{ borderColor: colors.cardBorder }}>{supplier.email}</td>
+                    <td style={{ borderColor: colors.cardBorder, fontWeight: 'bold' }} className="text-dynamic">{supplier.name}</td>
+                    <td style={{ borderColor: colors.cardBorder }} className="text-dynamic">{supplier.contactPerson}</td>
+                    <td style={{ borderColor: colors.cardBorder }} className="text-dynamic">{supplier.email}</td>
                     <td style={{ borderColor: colors.cardBorder }}>
                       {supplier.phoneNumbers && supplier.phoneNumbers.length > 0 ? supplier.phoneNumbers[0].number : '-'}
                       {supplier.phoneNumbers && supplier.phoneNumbers.length > 1 && (
@@ -393,16 +393,16 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                         </button>
                       </div>
                     </div>
-                    <h6 className="card-title" style={{ color: colors.text, fontWeight: 'bold' }}>
+                    <h6 className="card-title text-dynamic" style={{ fontWeight: 'bold' }}>
                       {supplier.name}
                     </h6>
-                    <p className="card-text mb-1" style={{ color: colors.text, fontSize: '0.9rem' }}>
+                    <p className="card-text mb-1 text-dynamic" style={{ fontSize: '0.9rem' }}>
                       <strong>Kontakt:</strong> {supplier.contactPerson}
                     </p>
-                    <p className="card-text mb-1" style={{ color: colors.text, fontSize: '0.9rem' }}>
+                    <p className="card-text mb-1 text-dynamic" style={{ fontSize: '0.9rem' }}>
                       <strong>E-Mail:</strong> {supplier.email}
                     </p>
-                    <p className="card-text mb-1" style={{ color: colors.text, fontSize: '0.9rem' }}>
+                    <p className="card-text mb-1 text-dynamic" style={{ fontSize: '0.9rem' }}>
                       <strong>Telefon:</strong> {supplier.phoneNumbers && supplier.phoneNumbers.length > 0 ? supplier.phoneNumbers[0].number : '-'}
                       {supplier.phoneNumbers && supplier.phoneNumbers.length > 1 && (
                         <span style={{ color: colors.accent }}> (+{supplier.phoneNumbers.length - 1})</span>

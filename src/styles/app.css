@@ -9,6 +9,17 @@
   --btn-primary-border: #3b82f6;
   --btn-primary-text: #ffffff;
   --btn-primary-text-hover: #ffffff;
+  --text-color: #1f2937;
+  --text-secondary-color: #6b7280;
+}
+
+/* Dynamische Textfarben */
+.text-dynamic {
+  color: var(--text-color) !important;
+}
+
+.text-secondary-dynamic {
+  color: var(--text-secondary-color) !important;
 }
 
 /* Custom Styles unterhalb */

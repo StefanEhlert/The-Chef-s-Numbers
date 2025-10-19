@@ -44,6 +44,38 @@ export const setTextColors = (colors: any) => {
 };
 
 /**
+ * Setzt alle relevanten CSS Custom Properties für Komponenten
+ * @param colors - Das colors-Objekt aus der Komponente
+ */
+export const setComponentColors = (colors: any) => {
+  const root = document.documentElement;
+  
+  // Button-Farben
+  if (colors.accent) {
+    root.style.setProperty('--btn-primary-bg', colors.accent);
+    root.style.setProperty('--btn-primary-border', colors.accent);
+  }
+  
+  if (colors.text) {
+    root.style.setProperty('--btn-primary-text', colors.text);
+  }
+  
+  // Setze eine kontrastierende Hover-Textfarbe
+  if (colors.accent) {
+    root.style.setProperty('--btn-primary-text-hover', '#ffffff');
+  }
+  
+  // Text-Farben
+  if (colors.text) {
+    root.style.setProperty('--text-color', colors.text);
+  }
+  
+  if (colors.textSecondary) {
+    root.style.setProperty('--text-secondary-color', colors.textSecondary);
+  }
+};
+
+/**
  * Setzt alle CSS Custom Properties
  * @param colors - Das colors-Objekt aus der Komponente
  */
