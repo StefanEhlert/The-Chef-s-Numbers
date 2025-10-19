@@ -146,9 +146,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     additionalInfo?: string,
     onClick?: () => void
   ) => (
-    <div className="col-md-4 mb-4">
+    <div className="mb-4">
       <div 
-        className="card h-100" 
+        className="card h-full w-full" 
         style={{ 
           backgroundColor: colors.card, 
           borderColor: colors.cardBorder,
