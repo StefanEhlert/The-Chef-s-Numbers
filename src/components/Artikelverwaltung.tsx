@@ -132,7 +132,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
   };
 
   return (
-    <div className="container-fluid p-4">
+    <div className="container-fluid p-4 pt-0">
       <div style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
@@ -142,15 +142,15 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
         border: `1px solid ${colors.cardBorder}`
       }}>
         {/* Header */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="flex justify-between items-center mb-4">
           <h1 style={{ color: colors.text, margin: 0 }}>Artikelverwaltung</h1>
-          <div className="d-flex align-items-center gap-3">
+          <div className="flex items-center gap-3">
           </div>
         </div>
 
         {/* Suchleiste und Ansichtswechsel */}
-        <div className="row mb-3">
-          <div className="col-md-7">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
+          <div className="md:col-span-7">
             <div className="input-group">
               <span className="input-group-text" style={{
                 backgroundColor: colors.secondary,
@@ -187,8 +187,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               </button>
             </div>
           </div>
-          <div className="col-md-3">
-            <div className="btn-group w-100" role="group">
+          <div className="md:col-span-3">
+            <div className="btn-group w-full" role="group">
               <button
                 type="button"
                 className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
@@ -217,10 +217,10 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               </button>
             </div>
           </div>
-          <div className="col-md-2">
+          <div className="md:col-span-2">
             <button
               type="button"
-              className="btn btn-outline-primary w-100"
+              className="btn btn-outline-primary w-full"
               onClick={() => setShowImportExportModal(true)}
               style={{
                 borderColor: colors.accent,
@@ -234,8 +234,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
         </div>
 
         {/* Filter und Sortierung */}
-        <div className="row mb-3">
-          <div className="col-md-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
+          <div>
             <select
               className="form-select"
               value={selectedCategory}
@@ -251,7 +251,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               ))}
             </select>
           </div>
-          <div className="col-md-3">
+          <div>
             <select
               className="form-select"
               value={selectedSupplier}
@@ -267,7 +267,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               ))}
             </select>
           </div>
-          <div className="col-md-3">
+          <div>
             <select
               className="form-select"
               value={sortField}
@@ -284,9 +284,9 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                                       <option value="pricePerUnit">Inhaltspreis</option>
             </select>
           </div>
-          <div className="col-md-3">
+          <div>
             <button
-              className="btn btn-outline-secondary w-100"
+              className="btn btn-outline-secondary w-full"
               onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
               style={{
                 borderColor: colors.cardBorder,
@@ -309,11 +309,11 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
             position: 'relative',
             overflow: 'hidden'
           }}>
-            <div className="d-flex justify-content-between align-items-center">
+            <div className="flex justify-between items-center">
               <span>{selectedArticles.length} Artikel ausgewählt</span>
-              <div className="d-flex align-items-center gap-4">
+              <div className="flex items-center gap-4">
                 {/* Preisänderung */}
-                <div className="d-flex align-items-center gap-2">
+                <div className="flex items-center gap-2">
                   <label className="form-label mb-0 me-2" style={{ color: colors.text, fontSize: '0.875rem' }}>
                     Agio:
                   </label>
@@ -399,7 +399,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
 
         {/* Artikel-Liste */}
         {viewMode === 'list' ? (
-          <div className="table-responsive">
+          <div className="overflow-x-auto">
             <table className="table table-hover" style={{
               backgroundColor: colors.card,
               borderColor: colors.cardBorder
@@ -444,7 +444,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                     <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
                       <strong>{article.name}</strong>
                       <br />
-                      <div className="d-flex justify-content-between align-items-center">
+                        <div className="flex justify-between items-center">
                         <small style={{ color: colors.accent }}>{article.category}</small>
                         {formatNutritionInfo(article) && (
                           <small style={{ color: colors.accent }}>{formatNutritionInfo(article)}</small>
@@ -478,7 +478,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                       <small style={{ color: colors.accent }}>pro {article.contentUnit}</small>
                     </td>
                     <td style={{ borderColor: colors.cardBorder }}>
-                      <div className="d-flex gap-2">
+                      <div className="flex gap-2">
                         <button
                           className="btn btn-link p-0"
                           title="Bearbeiten"
@@ -512,11 +512,11 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
           </div>
         ) : (
           /* Kachel-Ansicht */
-          <div className="row">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredArticles.map(article => (
-              <div key={article.id} className="col-md-4 col-lg-3 mb-3">
+              <div key={article.id} className="mb-3">
                 <div 
-                  className="card h-100" 
+                  className="card h-full" 
                   style={{
                     backgroundColor: colors.card,
                     borderColor: colors.cardBorder,
@@ -527,14 +527,14 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                   title="Doppelklick zum Bearbeiten"
                 >
                   <div className="card-body">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
+                    <div className="flex justify-between items-start mb-2">
                       <input
                         type="checkbox"
                         checked={selectedArticles.includes(article.id)}
                         onChange={() => handleSelectArticle(article.id)}
                         style={{ accentColor: colors.accent }}
                       />
-                      <div className="d-flex gap-1">
+                      <div className="flex gap-1">
                         <button
                           className="btn btn-link p-0"
                           title="Bearbeiten"
@@ -564,7 +564,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                     <h6 className="card-title" style={{ color: colors.text }}>
                       {article.name}
                     </h6>
-                    <div className="d-flex justify-content-between align-items-center">
+                        <div className="flex justify-between items-center">
                       <small style={{ color: colors.accent }}>{article.category}</small>
                       {formatNutritionInfo(article) && (
                         <small style={{ color: colors.accent }}>{formatNutritionInfo(article)}</small>
