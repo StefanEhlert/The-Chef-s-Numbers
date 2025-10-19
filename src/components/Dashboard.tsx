@@ -319,7 +319,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <button 
-                  className="btn btn-outline-primary w-full p-3" 
+                  className="btn btn-outline w-full p-3" 
                   onClick={() => setShowArticleForm(true)}
                   style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
                 >
@@ -329,7 +329,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <button 
-                  className="btn btn-outline-primary w-full p-3" 
+                  className="btn btn-outline w-full p-3" 
                   onClick={handleNewRecipe}
                   style={{ borderColor: colors.accent, color: colors.accent, borderRadius: '8px' }}
                 >
