@@ -49,8 +49,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Dashboard"
+              style={{ color: colors.text }}
             >
-              <FaTachometerAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+              <FaTachometerAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Dashboard</span>}
             </button>
           </li>
@@ -64,8 +65,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Datenbasis"
+              style={{ color: colors.text }}
             >
-              <FaDatabase className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+              <FaDatabase className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Datenbasis</span>}
               {state.sidebarOpen && (
                 <div
@@ -173,8 +175,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Kalkulation"
+              style={{ color: colors.text }}
             >
-              <FaCalculator className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+              <FaCalculator className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Kalkulation</span>}
               {state.sidebarOpen && (
                 <div
@@ -344,8 +347,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einkauf"
+              style={{ color: colors.text }}
             >
-              <FaShoppingCart className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+              <FaShoppingCart className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Einkauf</span>}
               {state.sidebarOpen && (
                 <div
@@ -484,8 +488,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="Inventur"
+                style={{ color: colors.text }}
               >
-                <FaBoxes className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+                <FaBoxes className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Inventur</span>}
               {state.sidebarOpen && (
                 <div
@@ -593,8 +598,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="Personal"
+                style={{ color: colors.text }}
               >
-                <FaUsers className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+                <FaUsers className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Personal</span>}
               {state.sidebarOpen && (
                 <div
@@ -764,8 +770,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="HACCP"
+                style={{ color: colors.text }}
               >
-                <FaShieldAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+                <FaShieldAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>HACCP</span>}
               {state.sidebarOpen && (
                 <div
@@ -911,8 +918,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Einstellungen"
+              style={{ color: colors.text }}
             >
-              <FaCog className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
+              <FaCog className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ color: colors.text }} />
               {state.sidebarOpen && <span>Einstellungen</span>}
               {state.sidebarOpen && (
                 <div
