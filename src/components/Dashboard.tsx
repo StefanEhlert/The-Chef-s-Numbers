@@ -509,7 +509,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Top-Lieferanten */}
-        <div className="row">
+        <div className="row mt-4">
           <div className="col-md-12 mb-4">
             <div className="card" style={{ 
               backgroundColor: colors.card, 
