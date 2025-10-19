@@ -478,37 +478,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Inventur */}
           <li className="mb-2">
             <button 
-                className={`sidebar-button ${state.currentPage === 'inventur' ? 'active' : ''}`} 
+                className={`sidebar-button ${state.currentPage === 'inventur' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
                   dispatch({ type: 'SET_CURRENT_PAGE', payload: 'inventur' }); 
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="Inventur"
-                style={{ 
-                  color: colors.text,
-                  borderRadius: '8px',
-                  backgroundColor: 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <FaBoxes className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              >
+                <FaBoxes className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Inventur</span>}
               {state.sidebarOpen && (
                 <div
@@ -610,37 +587,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Personal */}
           <li className="mb-2">
             <button 
-                className={`sidebar-button ${state.currentPage === 'personal' ? 'active' : ''}`} 
+                className={`sidebar-button ${state.currentPage === 'personal' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
                   dispatch({ type: 'SET_CURRENT_PAGE', payload: 'personal' }); 
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="Personal"
-                style={{ 
-                  color: colors.text,
-                  borderRadius: '8px',
-                  backgroundColor: 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <FaUsers className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              >
+                <FaUsers className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Personal</span>}
               {state.sidebarOpen && (
                 <div
@@ -804,37 +758,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* HACCP */}
           <li className="mb-2">
             <button 
-                className={`sidebar-button ${state.currentPage === 'haccp' ? 'active' : ''}`} 
+                className={`sidebar-button ${state.currentPage === 'haccp' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
                   dispatch({ type: 'SET_CURRENT_PAGE', payload: 'haccp' }); 
                   if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                 }}
                 title="HACCP"
-                style={{ 
-                  color: colors.text,
-                  borderRadius: '8px',
-                  backgroundColor: 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <FaShieldAlt className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              >
+                <FaShieldAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>HACCP</span>}
               {state.sidebarOpen && (
                 <div
