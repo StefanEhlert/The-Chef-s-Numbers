@@ -220,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   );
 
   return (
-    <div className="w-full px-4">
+    <div className="container-fluid p-4">
       <div style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
