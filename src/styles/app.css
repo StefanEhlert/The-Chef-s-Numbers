@@ -128,7 +128,7 @@ button:disabled {
 
 .btn-outline-primary:hover {
   background-color: var(--btn-primary-bg);
-  color: var(--btn-primary-text-hover);
+  color: #ffffff !important;
   border-color: var(--btn-primary-border);
 }
 
