@@ -397,17 +397,25 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div className="card-body">
                 {statistics.newestArticles.length > 0 ? (
-                  <div className="space-y-2">
+                  <div>
                     {statistics.newestArticles.map((article, index) => (
                       <div 
                         key={article.id || `newest-article-${index}`} 
-                        className="flex justify-between items-center p-3 rounded border"
+                        className="flex justify-between items-center"
                         style={{ 
                           backgroundColor: 'transparent', 
-                          borderColor: colors.cardBorder,
-                          cursor: 'pointer'
+                          padding: '0.75rem 1.25rem',
+                          borderBottom: index < statistics.newestArticles.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s ease'
                         }}
                         onClick={() => handleEditArticle(article)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = colors.accent + '10';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                       >
                         <div className="flex-1 min-w-0">
                           <div 
@@ -452,17 +460,25 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div className="card-body">
                 {statistics.mostExpensiveArticles.length > 0 ? (
-                  <div className="space-y-2">
+                  <div>
                     {statistics.mostExpensiveArticles.map((article, index) => (
                       <div 
                         key={article.id || `expensive-article-${index}`} 
-                        className="flex justify-between items-center p-3 rounded border"
+                        className="flex justify-between items-center"
                         style={{ 
                           backgroundColor: 'transparent', 
-                          borderColor: colors.cardBorder,
-                          cursor: 'pointer'
+                          padding: '0.75rem 1.25rem',
+                          borderBottom: index < statistics.mostExpensiveArticles.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s ease'
                         }}
                         onClick={() => handleEditArticle(article)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = colors.accent + '10';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                       >
                         <div className="flex-1 min-w-0">
                           <div 
