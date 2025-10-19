@@ -191,12 +191,15 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
             <div className="btn-group w-full" role="group">
               <button
                 type="button"
-                className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                className="btn"
                 onClick={() => setViewMode('list')}
                 style={{
                   backgroundColor: viewMode === 'list' ? colors.accent : 'transparent',
                   borderColor: colors.cardBorder,
-                  color: viewMode === 'list' ? 'white' : colors.text
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  color: viewMode === 'list' ? 'white' : colors.text,
+                  borderRadius: viewMode === 'list' ? '0.375rem 0 0 0.375rem' : '0.375rem 0 0 0.375rem'
                 }}
               >
                 <FaList className="me-1" />
@@ -204,12 +207,15 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
               </button>
               <button
                 type="button"
-                className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                className="btn"
                 onClick={() => setViewMode('grid')}
                 style={{
                   backgroundColor: viewMode === 'grid' ? colors.accent : 'transparent',
                   borderColor: colors.cardBorder,
-                  color: viewMode === 'grid' ? 'white' : colors.text
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  color: viewMode === 'grid' ? 'white' : colors.text,
+                  borderRadius: viewMode === 'grid' ? '0 0.375rem 0.375rem 0' : '0 0.375rem 0.375rem 0'
                 }}
               >
                 <FaTh className="me-1" />
