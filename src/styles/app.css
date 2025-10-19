@@ -175,6 +175,7 @@ input:focus, select:focus, textarea:focus {
   min-width: 18px;
   text-align: center;
   width: auto;
+  font-size: 18px;
 }
 
 /* Sidebar icon spacing */
@@ -184,6 +185,24 @@ input:focus, select:focus, textarea:focus {
 
 .sidebar-icon.closed {
   margin-right: 0;
+  width: 100%;
+}
+
+/* Sidebar button states */
+.sidebar-button.open {
+  justify-content: flex-start;
+  padding: 12px;
+}
+
+.sidebar-button.closed {
+  justify-content: center;
+  padding: 2px;
+}
+
+/* Sidebar sub-button icons */
+.sidebar-sub-button .sidebar-icon {
+  font-size: 14px;
+  margin-right: 8px;
 }
 
 .accordion-content {

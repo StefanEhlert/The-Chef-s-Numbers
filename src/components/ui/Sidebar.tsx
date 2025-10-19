@@ -43,24 +43,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Dashboard */}
           <li className="mb-2">
             <button 
-              className={`sidebar-button ${state.currentPage === 'dashboard' ? 'active' : ''}`}
+              className={`sidebar-button ${state.currentPage === 'dashboard' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`}
               onClick={() => { 
                 dispatch({ type: 'SET_CURRENT_PAGE', payload: 'dashboard' }); 
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Dashboard"
-              style={{ 
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                padding: state.sidebarOpen ? '12px' : '2px'
-              }}
             >
-              <FaTachometerAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} style={{ 
-                fontSize: '18px',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              <FaTachometerAlt className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Dashboard</span>}
             </button>
           </li>
@@ -68,37 +58,14 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           {/* Datenbasis */}
           <li className="mb-2">
             <button 
-              className="sidebar-button" 
+              className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
                 toggleAccordion('datenbasis');
                 if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
               }}
               title="Datenbasis"
-              style={{ 
-                color: colors.text,
-                borderRadius: '8px',
-                backgroundColor: 'transparent',
-                justifyContent: state.sidebarOpen ? 'flex-start' : 'center',
-                minHeight: '50px',
-                border: 'none',
-                outline: 'none',
-                padding: state.sidebarOpen ? '12px' : '2px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center'
-              }}
             >
-              <FaDatabase className="sidebar-icon" style={{ 
-                marginRight: state.sidebarOpen ? '12px' : '0',
-                display: 'block',
-                flexShrink: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: colors.text,
-                minWidth: '18px',
-                textAlign: 'center',
-                width: state.sidebarOpen ? 'auto' : '100%'
-              }} />
+              <FaDatabase className={`sidebar-icon ${state.sidebarOpen ? 'open' : 'closed'}`} />
               {state.sidebarOpen && <span>Datenbasis</span>}
               {state.sidebarOpen && (
                 <div
