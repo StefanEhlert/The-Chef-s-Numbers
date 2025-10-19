@@ -432,7 +432,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* Teuerste Artikel */}
-          <div className="col-md-6 mb-4">
+          <div>
             <div className="card" style={{ 
               backgroundColor: colors.card, 
               borderColor: colors.cardBorder,
@@ -441,17 +441,17 @@ const Dashboard: React.FC<DashboardProps> = ({
             }}>
               <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaStar className="me-2" />
+                  <FaStar className="mr-2" />
                   Teuerste Artikel
                 </h5>
               </div>
               <div className="card-body">
                 {statistics.mostExpensiveArticles.length > 0 ? (
-                  <div className="list-group list-group-flush">
+                  <div className="space-y-2">
                     {statistics.mostExpensiveArticles.map((article, index) => (
                       <div 
                         key={article.id || `expensive-article-${index}`} 
-                        className="list-group-item d-flex justify-content-between align-items-center"
+                        className="flex justify-between items-center p-3 rounded border"
                         style={{ 
                           backgroundColor: 'transparent', 
                           borderColor: colors.cardBorder,
