@@ -41,7 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
       <div style={{ flex: 1, overflow: 'auto' }}>
         <ul className="flex flex-col p-2">
           {/* Dashboard */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
               className={`sidebar-button ${state.currentPage === 'dashboard' ? 'active' : ''} ${state.sidebarOpen ? 'open' : 'closed'}`}
               onClick={() => { 
@@ -56,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Datenbasis */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
               className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
@@ -99,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.datenbasis && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'artikel' ? 'active' : ''}`}
                     onClick={() => { 
@@ -130,7 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Artikel</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'lieferanten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -165,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Kalkulation */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
               className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
@@ -208,7 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.kalkulation && state.sidebarOpen ? '300px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'rezepte' ? 'active' : ''}`}
                     onClick={() => { 
@@ -239,7 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Rezepte</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'speisekarten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -270,7 +270,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Speisekarten</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'menus-buffets' ? 'active' : ''}`}
                     onClick={() => { 
@@ -301,7 +301,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Menüs &amp; Büffets</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'nachkalkulationen' ? 'active' : ''}`}
                     onClick={() => { 
@@ -336,7 +336,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Einkauf */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
               className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
               onClick={() => { 
@@ -379,7 +379,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.einkauf && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'einkaufslisten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -410,7 +410,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Einkaufslisten</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'einkauf-planen' ? 'active' : ''}`}
                     onClick={() => { 
@@ -441,7 +441,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Einkauf planen</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'rechnungen' ? 'active' : ''}`}
                     onClick={() => { 
@@ -476,7 +476,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Inventur */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
                 className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
@@ -519,7 +519,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.inventur && state.sidebarOpen ? '150px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'warenbestand' ? 'active' : ''}`}
                     onClick={() => { 
@@ -550,7 +550,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Warenbestand</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'inventar-verwalten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -585,7 +585,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* Personal */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
                 className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
@@ -628,7 +628,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.personal && state.sidebarOpen ? '250px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'personaldaten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -659,7 +659,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Personaldaten</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'dienstplaene' ? 'active' : ''}`}
                     onClick={() => { 
@@ -690,7 +690,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Dienstpläne</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'urlaubsplan' ? 'active' : ''}`}
                     onClick={() => { 
@@ -721,7 +721,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Urlaubsplan</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'fehlzeiten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -756,7 +756,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
           </li>
 
           {/* HACCP */}
-          <li className="mb-2">
+          <li className="mb-0.5">
             <button 
                 className={`sidebar-button ${state.sidebarOpen ? 'open' : 'closed'}`} 
                 onClick={() => { 
@@ -799,7 +799,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.haccp && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'temperaturlisten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -830,7 +830,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Temperaturlisten</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'reinigungslisten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -861,7 +861,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Reinigungslisten</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'material-verluste' ? 'active' : ''}`}
                     onClick={() => { 
@@ -946,7 +946,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.einstellungen && state.sidebarOpen ? '150px' : '0'
               }}>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'storage-management' ? 'active' : ''}`}
                     onClick={() => { 
@@ -977,7 +977,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                     <span>Speicher-Verwaltung</span>
                   </button>
                 </li>
-                <li className="mb-1">
+                <li className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'development' ? 'active' : ''}`}
                     onClick={() => { 
