@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaTrash, FaPencilAlt, FaPrint, FaTimes, FaUtensils, FaSave } from 'react-icons/fa';
 import { useAppContext } from '../contexts/AppContext';
 import { Recipe } from '../types';
-import { setComponentColors } from '../utils/cssVariables';
+import { setButtonColors } from '../utils/cssVariables';
 
 interface RezeptverwaltungProps {
   recipes: Recipe[];
@@ -70,9 +70,9 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
   const colors = getCurrentColors();
   const filteredRecipes = filteredAndSortedRecipes();
 
-  // Setze CSS Custom Properties für Button- und Text-Farben
+  // Setze CSS Custom Properties für Button-Farben
   useEffect(() => {
-    setComponentColors(colors);
+    setButtonColors(colors);
   }, [colors]);
 
   return (
@@ -87,14 +87,14 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
       }}>
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-dynamic" style={{ margin: 0 }}>Rezeptverwaltung</h1>
+          <h1 style={{ color: colors.text, margin: 0 }}>Rezeptverwaltung</h1>
         </div>
 
         {/* Suchleiste und Ansichtswechsel */}
-        <div className="grid grid-cols-12 gap-4 mb-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
           <div className="md:col-span-7">
-            <div className="flex">
-              <span className="flex items-center px-3 py-2 border border-r-0 rounded-l-lg" style={{
+            <div className="input-group">
+              <span className="input-group-text" style={{
                 backgroundColor: colors.secondary,
                 borderColor: colors.cardBorder,
                 color: colors.text
@@ -103,7 +103,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
               </span>
               <input
                 type="text"
-                className="flex-1 px-3 py-2 border rounded-none"
+                className="form-control"
                 placeholder="Rezepte suchen..."
                 value={recipeSearchTerm}
                 onChange={(e) => setRecipeSearchTerm(e.target.value)}
@@ -113,7 +113,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                 }}
               />
               <button
-                className="btn btn-primary rounded-l-none rounded-r-lg"
+                className="btn btn-primary"
                 style={{
                   backgroundColor: colors.accent,
                   borderColor: colors.accent,
@@ -127,31 +127,33 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
             </div>
           </div>
           <div className="md:col-span-3">
-            <div className="flex w-full" role="group">
+            <div className="btn-group w-full" role="group">
               <button
                 type="button"
-                className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'} rounded-r-none`}
+                className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
                 onClick={() => setRecipeViewMode('list')}
                 style={{
                   backgroundColor: recipeViewMode === 'list' ? colors.accent : 'transparent',
-                  borderColor: colors.cardBorder,
-                  color: recipeViewMode === 'list' ? 'white' : colors.text
+                  borderColor: recipeViewMode === 'list' ? colors.accent : colors.cardBorder,
+                  color: recipeViewMode === 'list' ? 'white' : colors.text,
+                  borderRadius: '0.375rem 0 0 0.375rem'
                 }}
               >
-                <FaList className="mr-1" />
+                <FaList className="me-1" />
                 Liste
               </button>
               <button
                 type="button"
-                className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'} rounded-l-none`}
+                className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
                 onClick={() => setRecipeViewMode('grid')}
                 style={{
                   backgroundColor: recipeViewMode === 'grid' ? colors.accent : 'transparent',
-                  borderColor: colors.cardBorder,
-                  color: recipeViewMode === 'grid' ? 'white' : colors.text
+                  borderColor: recipeViewMode === 'grid' ? colors.accent : colors.cardBorder,
+                  color: recipeViewMode === 'grid' ? 'white' : colors.text,
+                  borderRadius: '0 0.375rem 0.375rem 0'
                 }}
               >
-                <FaTh className="mr-1" />
+                <FaTh className="me-1" />
                 Kacheln
               </button>
             </div>
@@ -161,18 +163,22 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
               type="button"
               className="btn btn-outline-primary w-full"
               onClick={() => setShowImportExportModal(true)}
+              style={{
+                borderColor: colors.accent,
+                color: colors.accent
+              }}
             >
-              <FaSave className="mr-1" />
+              <FaSave className="me-1" />
               Import/Export
             </button>
           </div>
         </div>
 
         {/* Filter und Sortierung */}
-        <div className="grid grid-cols-12 gap-4 mb-3">
-          <div className="md:col-span-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
+          <div>
             <select
-              className="w-full px-3 py-2 border rounded-lg"
+              className="form-select"
               value={recipeSortBy}
               onChange={(e) => setRecipeSortBy(e.target.value as any)}
               style={{
@@ -188,18 +194,22 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
               <option value="timestamp">Zeitstempel</option>
             </select>
           </div>
-          <div className="md:col-span-2">
+          <div>
             <button
               type="button"
               className="btn btn-outline-secondary no-hover w-full"
               onClick={() => setRecipeSortOrder(recipeSortOrder === 'asc' ? 'desc' : 'asc')}
+              style={{
+                borderColor: colors.cardBorder,
+                color: colors.text
+              }}
             >
-              <FaSort className="mr-1" />
+              <FaSort className="me-1" />
               {recipeSortOrder === 'asc' ? 'A-Z' : 'Z-A'}
             </button>
           </div>
-          <div className="md:col-span-7 text-right">
-            <span className="text-dynamic">
+          <div className="md:col-span-2 text-end">
+            <span style={{ color: colors.text }}>
               {filteredRecipes.length} Rezept{filteredRecipes.length !== 1 ? 'e' : ''} gefunden
             </span>
           </div>
@@ -207,7 +217,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
 
         {/* Bulk-Aktionen */}
         {selectedRecipes.length > 0 && (
-          <div className="mb-3 p-4 rounded-lg border" style={{
+          <div className="alert alert-warning mb-3" style={{
             backgroundColor: colors.secondary,
             borderColor: colors.cardBorder,
             color: colors.text,
@@ -281,7 +291,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
             }}>
               <thead style={{ backgroundColor: colors.secondary }}>
                 <tr>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '5%' }}>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>
                     <input
                       type="checkbox"
                       checked={selectedRecipes.length === filteredRecipes.length && filteredRecipes.length > 0}
@@ -289,12 +299,12 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                       style={{ accentColor: colors.accent }}
                     />
                   </th>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '35%' }}>Rezept</th>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '10%' }}>Portionen</th>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '15%' }}>Kosten/Portion</th>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '15%' }}>Verkaufspreis</th>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '10%' }}>Kalorien</th>
-                  <th className="text-dynamic border-b p-3 text-left" style={{ borderColor: colors.cardBorder, width: '10%' }}>Aktionen</th>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Rezept</th>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Portionen</th>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Kosten/Portion</th>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Verkaufspreis</th>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Kalorien</th>
+                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Aktionen</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,7 +318,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                     onDoubleClick={() => handleEditRecipe(recipe)}
                     title="Doppelklick zum Bearbeiten"
                   >
-                    <td className="border-b p-3" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder }}>
                       <input
                         type="checkbox"
                         checked={selectedRecipes.includes(recipe.id)}
@@ -316,7 +326,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                         style={{ accentColor: colors.accent }}
                       />
                     </td>
-                    <td className="border-b p-3 text-dynamic" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
                       <div>
                         <strong>{recipe.name}</strong>
                         <br />
@@ -333,19 +343,19 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                         })()}
                       </div>
                     </td>
-                    <td className="border-b p-3 text-dynamic" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
                       {recipe.portions}
                     </td>
-                    <td className="border-b p-3 text-dynamic" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
                       <strong>{formatPrice(recipe.materialCosts / recipe.portions)}</strong>
                     </td>
-                    <td className="border-b p-3 text-dynamic" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
                       <strong>{formatPrice(recipe.sellingPrice)}</strong>
                     </td>
-                    <td className="border-b p-3 text-dynamic" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
                       <strong>{recipe.totalNutritionInfo?.calories || 0}</strong>
                     </td>
-                    <td className="border-b p-3" style={{ borderColor: colors.cardBorder }}>
+                    <td style={{ borderColor: colors.cardBorder }}>
                       <div className="flex gap-2">
                         <button
                           className="btn btn-link p-0"
@@ -405,7 +415,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                 >
                   <div className="p-4">
                     <div className="flex justify-between items-start mb-2">
-                      <h6 className="card-title mb-0 text-dynamic">
+                      <h6 className="card-title mb-0" style={{ color: colors.text }}>
                         {recipe.name}
                       </h6>
                       <input
@@ -416,7 +426,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
-                    <p className="text-sm mb-2" style={{ color: colors.accent }}>
+                    <p className="card-text small" style={{ color: colors.accent }}>
                       {recipe.description}
                     </p>
                     {(recipe.updatedAt || recipe.createdAt) && (() => {
@@ -424,34 +434,34 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                       if (!timestamp) return null;
                       const date = new Date(timestamp);
                       return (
-                        <p className="text-xs mb-2" style={{ color: colors.accent }}>
+                        <p className="card-text small" style={{ color: colors.accent, fontSize: '0.7rem' }}>
                           {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {date.toLocaleDateString('de-DE')} um {date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
                         </p>
                       );
                     })()}
-                    <div className="grid grid-cols-2 gap-2 text-center mb-2">
-                      <div>
-                        <small className="text-dynamic">Portionen</small>
+                    <div className="row text-center">
+                      <div className="col-6">
+                        <small style={{ color: colors.text }}>Portionen</small>
                         <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.portions}</div>
                       </div>
-                      <div>
-                        <small className="text-dynamic">Kosten/Portion</small>
+                      <div className="col-6">
+                        <small style={{ color: colors.text }}>Kosten/Portion</small>
                         <div style={{ color: colors.accent, fontWeight: 'bold' }}>{formatPrice(recipe.materialCosts / recipe.portions)}</div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-center">
-                      <div>
-                        <small className="text-dynamic">Verkaufspreis</small>
+                    <div className="row text-center mt-2">
+                      <div className="col-6">
+                        <small style={{ color: colors.text }}>Verkaufspreis</small>
                         <div style={{ color: colors.accent, fontWeight: 'bold' }}>{formatPrice(recipe.sellingPrice)}</div>
                       </div>
-                      <div>
-                        <small className="text-dynamic">Kalorien</small>
+                      <div className="col-6">
+                        <small style={{ color: colors.text }}>Kalorien</small>
                         <div style={{ color: colors.accent, fontWeight: 'bold' }}>{recipe.totalNutritionInfo?.calories || 0} kcal</div>
                       </div>
                     </div>
                   </div>
-                  <div className="p-3 border-t" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
-                    <div className="flex justify-between">
+                  <div className="card-footer" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
+                    <div className="d-flex justify-content-between">
                       <button
                         className="btn btn-link p-0"
                         onClick={() => handleEditRecipe(recipe)}
@@ -504,10 +514,10 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
 
         {/* Leere Liste */}
         {filteredRecipes.length === 0 && (
-          <div className="text-center py-12">
+          <div className="text-center py-5">
             <FaUtensils style={{ fontSize: '3rem', color: colors.accent, marginBottom: '1rem' }} />
-            <h5 className="text-dynamic">Keine Rezepte gefunden</h5>
-            <p className="text-dynamic">
+            <h5 style={{ color: colors.text }}>Keine Rezepte gefunden</h5>
+            <p style={{ color: colors.text }}>
               {recipeSearchTerm 
                 ? 'Versuchen Sie andere Suchkriterien.'
                 : 'Erstellen Sie Ihr erstes Rezept mit dem "Neues Rezept" Button.'
