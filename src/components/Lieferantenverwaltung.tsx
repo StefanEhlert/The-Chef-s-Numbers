@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaPencilAlt, FaTimes, FaUsers } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaList, FaTh, FaSort, FaPencilAlt, FaTimes, FaUsers, FaPrint } from 'react-icons/fa';
 import { Supplier } from '../types';
 import { setComponentColors } from '../utils/cssVariables';
 
@@ -54,7 +54,7 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
 
   return (
     <div className="container-fluid p-4 pt-0">
-      <div style={{
+      <div className="lieferantenverwaltung" style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
         boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
@@ -67,112 +67,106 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
           <h1 style={{ color: colors.text, margin: 0 }}>Lieferantenverwaltung</h1>
         </div>
 
-        {/* Suchleiste und Ansichtswechsel */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
-          <div className="md:col-span-7">
-            <div className="input-group">
-              <span className="input-group-text" style={{
-                backgroundColor: colors.secondary,
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}>
-                <FaSearch />
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Lieferanten suchen..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  borderColor: colors.cardBorder,
-                  color: colors.text
-                }}
-              />
-              <button
-                className="btn btn-primary"
-                style={{
-                  backgroundColor: colors.accent,
-                  borderColor: colors.accent,
-                  color: 'white'
-                }}
-                title="Neuer Lieferant"
-                onClick={() => setShowSupplierForm(true)}
-              >
-                <FaPlus />
-              </button>
+        {/* Suchleiste und Filter */}
+        <div className="card mb-3">
+          <div className="card-body">
+            {/* Suchleiste und Ansichtswechsel */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
+              <div className="md:col-span-7">
+                <div className="input-group">
+                  <span className="input-group-text">
+                    <FaSearch />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Lieferanten suchen..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <button
+                    className="btn btn-outline-input"
+                    title="Neuer Lieferant"
+                    onClick={() => setShowSupplierForm(true)}
+                  >
+                    <FaPlus />
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-3">
+                <div className="btn-group w-full" role="group">
+                  <button
+                    type="button"
+                    className={`btn ${supplierViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setSupplierViewMode('list')}
+                    style={{
+                      backgroundColor: supplierViewMode === 'list' ? colors.accent : 'transparent',
+                      borderColor: supplierViewMode === 'list' ? colors.accent : colors.cardBorder,
+                      color: supplierViewMode === 'list' ? 'white' : colors.text,
+                      borderRadius: '0.375rem 0 0 0.375rem'
+                    }}
+                  >
+                    <FaList className="me-1" />
+                    Liste
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${supplierViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setSupplierViewMode('grid')}
+                    style={{
+                      backgroundColor: supplierViewMode === 'grid' ? colors.accent : 'transparent',
+                      borderColor: supplierViewMode === 'grid' ? colors.accent : colors.cardBorder,
+                      color: supplierViewMode === 'grid' ? 'white' : colors.text,
+                      borderRadius: '0 0.375rem 0.375rem 0'
+                    }}
+                  >
+                    <FaTh className="me-1" />
+                    Kacheln
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                {/* Platzhalter für zukünftige Funktionen */}
+              </div>
             </div>
-          </div>
-          <div className="md:col-span-3">
-            <div className="btn-group w-full" role="group">
-              <button
-                type="button"
-                className={`btn ${supplierViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => setSupplierViewMode('list')}
-                style={{
-                  backgroundColor: supplierViewMode === 'list' ? colors.accent : 'transparent',
-                  borderColor: colors.cardBorder,
-                  color: supplierViewMode === 'list' ? 'white' : colors.text
-                }}
-              >
-                <FaList className="me-1" />
-                Liste
-              </button>
-              <button
-                type="button"
-                className={`btn ${supplierViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => setSupplierViewMode('grid')}
-                style={{
-                  backgroundColor: supplierViewMode === 'grid' ? colors.accent : 'transparent',
-                  borderColor: colors.cardBorder,
-                  color: supplierViewMode === 'grid' ? 'white' : colors.text
-                }}
-              >
-                <FaTh className="me-1" />
-                Kacheln
-              </button>
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            {/* Platzhalter für zukünftige Funktionen */}
-          </div>
-        </div>
 
-        {/* Filter und Sortierung */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
-          <div className="md:col-span-3">
-            <select
-              className="form-select"
-              value={supplierSortField}
-              onChange={(e) => setSupplierSortField(e.target.value)}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <option value="name">Name</option>
-              <option value="contactPerson">Kontaktperson</option>
-              <option value="email">E-Mail</option>
-              <option value="address.city">Stadt</option>
-            </select>
-          </div>
-          <div className="md:col-span-3">
-            <button
-              className="btn btn-outline-secondary no-hover w-full"
-              onClick={() => setSupplierSortDirection(supplierSortDirection === 'asc' ? 'desc' : 'asc')}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <FaSort className="me-1" />
-              {supplierSortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
-            </button>
-          </div>
-          <div className="md:col-span-6 text-end">
-            <span style={{ color: colors.text }}>
-              {filteredSuppliers.length} Lieferant{filteredSuppliers.length !== 1 ? 'en' : ''} gefunden
-            </span>
+            {/* Filter und Sortierung */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              <div className="md:col-span-3">
+                <select
+                  className="form-select"
+                  value={supplierSortField}
+                  onChange={(e) => setSupplierSortField(e.target.value)}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <option value="name">Name</option>
+                  <option value="contactPerson">Kontaktperson</option>
+                  <option value="email">E-Mail</option>
+                  <option value="address.city">Stadt</option>
+                </select>
+              </div>
+              <div className="md:col-span-3">
+                <button
+                  className="btn btn-outline-secondary no-hover w-full"
+                  onClick={() => setSupplierSortDirection(supplierSortDirection === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <FaSort className="me-1" />
+                  {supplierSortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
+                </button>
+              </div>
+              <div className="md:col-span-6 text-end">
+                <span style={{ color: colors.text }}>
+                  {filteredSuppliers.length} Lieferant{filteredSuppliers.length !== 1 ? 'en' : ''} gefunden
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -245,96 +239,108 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
 
         {/* Lieferanten-Liste */}
         {supplierViewMode === 'list' ? (
-          <div className="overflow-x-auto">
-            <table className="table table-hover" style={{
-              backgroundColor: colors.card,
-              borderColor: colors.cardBorder
-            }}>
-              <thead style={{ backgroundColor: colors.secondary }}>
-                <tr>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedSuppliers && selectedSuppliers.length === filteredSuppliers.length && filteredSuppliers.length > 0}
-                      onChange={handleSelectAllSuppliers}
-                      style={{ accentColor: colors.accent }}
-                    />
-                  </th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Name</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Kontaktperson</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>E-Mail</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Telefon</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Stadt</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSuppliers.map(supplier => (
-                  <tr 
-                    key={supplier.id}
-                    onDoubleClick={() => handleEditSupplier(supplier)}
-                    style={{ 
-                      borderColor: colors.cardBorder,
-                      cursor: 'pointer',
-                      backgroundColor: selectedSuppliers && selectedSuppliers.includes(supplier.id) ? colors.accent + '20' : 'transparent'
-                    }}
-                  >
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedSuppliers && selectedSuppliers.includes(supplier.id)}
-                        onChange={() => handleSelectSupplier(supplier.id)}
-                        style={{ accentColor: colors.accent }}
-                      />
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, fontWeight: 'bold' }} className="text-dynamic">{supplier.name}</td>
-                    <td style={{ borderColor: colors.cardBorder }} className="text-dynamic">{supplier.contactPerson}</td>
-                    <td style={{ borderColor: colors.cardBorder }} className="text-dynamic">{supplier.email}</td>
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      {supplier.phoneNumbers && supplier.phoneNumbers.length > 0 ? supplier.phoneNumbers[0].number : '-'}
-                      {supplier.phoneNumbers && supplier.phoneNumbers.length > 1 && (
-                        <span style={{ color: colors.accent }}> (+{supplier.phoneNumbers.length - 1})</span>
-                      )}
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder }}>{supplier.address?.city || '-'}</td>
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      <div className="flex gap-1">
-                        <button
-                          className="btn btn-link p-0"
-                          title="Bearbeiten"
-                          style={{
-                            color: colors.accent,
-                            textDecoration: 'none',
-                            fontSize: '12px'
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditSupplier(supplier);
-                          }}
-                        >
-                          <FaPencilAlt />
-                        </button>
-                        <button
-                          className="btn btn-link p-0"
-                          title="Löschen"
-                          style={{
-                            color: '#dc3545',
-                            textDecoration: 'none',
-                            fontSize: '12px'
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteSingleSupplier(supplier.id, supplier.name);
-                          }}
-                        >
-                          <FaTimes />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="card">
+            <div className="card-body p-0">
+              <div className="overflow-x-auto">
+                <table className="table table-hover modern-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={selectedSuppliers && selectedSuppliers.length === filteredSuppliers.length && filteredSuppliers.length > 0}
+                          onChange={handleSelectAllSuppliers}
+                          className="form-check-input"
+                        />
+                      </th>
+                      <th>Name</th>
+                      <th>Kontaktperson</th>
+                      <th>E-Mail</th>
+                      <th>Telefon</th>
+                      <th>Stadt</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSuppliers.map(supplier => (
+                      <tr 
+                        key={supplier.id}
+                        className="table-row-clickable"
+                        onDoubleClick={() => handleEditSupplier(supplier)}
+                        title="Doppelklick zum Bearbeiten"
+                        style={{ 
+                          backgroundColor: selectedSuppliers && selectedSuppliers.includes(supplier.id) ? colors.accent + '20' : 'transparent'
+                        }}
+                      >
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedSuppliers && selectedSuppliers.includes(supplier.id)}
+                            onChange={() => handleSelectSupplier(supplier.id)}
+                            className="form-check-input"
+                          />
+                        </td>
+                        <td>
+                          <div className="supplier-name supplier-name-bold">{supplier.name}</div>
+                        </td>
+                        <td>
+                          <div className="contact-info">{supplier.contactPerson}</div>
+                        </td>
+                        <td>
+                          <div className="email-info">{supplier.email}</div>
+                        </td>
+                        <td>
+                          <div className="phone-info">
+                            {supplier.phoneNumbers && supplier.phoneNumbers.length > 0 ? supplier.phoneNumbers[0].number : '-'}
+                            {supplier.phoneNumbers && supplier.phoneNumbers.length > 1 && (
+                              <span className="phone-additional"> (+{supplier.phoneNumbers.length - 1})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="city-info">{supplier.address?.city || '-'}</div>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              className="btn btn-link btn-action"
+                              title="Bearbeiten"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditSupplier(supplier);
+                              }}
+                            >
+                              <FaPencilAlt />
+                            </button>
+                            <button
+                              className="btn btn-link btn-action"
+                              title="Drucken"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // TODO: Druckfunktionalität implementieren
+                                console.log('Drucken für Lieferant:', supplier.name);
+                              }}
+                            >
+                              <FaPrint />
+                            </button>
+                            <button
+                              className="btn btn-link btn-action btn-danger"
+                              title="Löschen"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSingleSupplier(supplier.id, supplier.name);
+                              }}
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         ) : (
           /* Lieferanten-Kacheln */

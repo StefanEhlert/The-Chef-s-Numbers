@@ -5,6 +5,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { storageLayer } from '../services/storageLayer';
 import { Supplier, PhoneType } from '../types';
 import { UUIDUtils } from '../utils/uuidUtils';
+import { extractContactsFromHtml, combineExtractionResults } from '../services/contactExtractionService';
 
 interface LieferantenformularProps {
   suppliers: Supplier[];
@@ -794,6 +795,8 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
 
   // Daten aus Impressum extrahieren
   const extractDataFromImpressum = async (htmlContent: string, websiteUrl: string) => {
+    console.log('📄 Starte Impressum-Extraktion für:', websiteUrl);
+    
     const extractedData = {
       companyName: '',
       street: '',
@@ -818,6 +821,75 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
 
     // HTML-Tags entfernen für bessere Text-Analyse
     const cleanText = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // NEUE FUNKTIONALITÄT: Versuche KI-Extraktion zuerst
+    try {
+      console.log('🤖 Starte KI-Extraktion (Option 1: Pattern-Matching)...');
+      const aiExtractedData = await extractContactsFromHtml(htmlContent, websiteUrl);
+      console.log('✓ KI-Extraktion erfolgreich:', aiExtractedData);
+      
+      // Wenn KI erfolgreich war, verwende die Daten
+      if (aiExtractedData.success) {
+        // E-Mail
+        if (aiExtractedData.emails.length > 0) {
+          extractedData.email = aiExtractedData.emails[0];
+          extractedData.confidence.email = 95;
+          console.log('✓ E-Mail gefunden:', extractedData.email);
+        }
+        
+        // Telefon
+        if (aiExtractedData.phones.length > 0) {
+          extractedData.phone = aiExtractedData.phones[0];
+          extractedData.confidence.phone = 95;
+          console.log('✓ Telefon gefunden:', extractedData.phone);
+        }
+        
+        // Firmenname
+        if (aiExtractedData.companyName) {
+          extractedData.companyName = aiExtractedData.companyName;
+          extractedData.confidence.companyName = 90;
+          console.log('✓ Firmenname gefunden:', extractedData.companyName);
+        }
+        
+        // Adressen parsen
+        if (aiExtractedData.addresses.length > 0) {
+          const addressText = aiExtractedData.addresses[0];
+          console.log('✓ Adresse gefunden:', addressText);
+          
+          // Parse Adresse
+          const addressMatch = addressText.match(/(\d+)\s*([A-ZÄÖÜ][a-zäöüß\s-]+(?:straße|str\.|weg|platz|allee|gasse|ring)?)\s*(\d+[a-z]?)?\s*(\d{5})?\s*([A-ZÄÖÜ][a-zäöüß\s-]+)?/i);
+          
+          if (addressMatch) {
+            if (addressMatch[2]) {
+              extractedData.street = addressMatch[2].trim();
+              extractedData.confidence.street = 90;
+            }
+            if (addressMatch[4]) {
+              extractedData.zipCode = addressMatch[4];
+              extractedData.confidence.zipCode = 90;
+            }
+            if (addressMatch[5]) {
+              extractedData.city = addressMatch[5].trim();
+              extractedData.confidence.city = 90;
+            }
+          }
+        }
+      }
+      
+      // Wenn KI genug Daten gefunden hat, verwende sie direkt
+      const hasEnoughData = aiExtractedData.emails.length > 0 || 
+                           aiExtractedData.phones.length > 0 || 
+                           aiExtractedData.companyName.length > 0;
+      
+      if (hasEnoughData) {
+        console.log('✓ KI-Extraktion lieferte ausreichend Daten, verwende diese');
+        return extractedData;
+      } else {
+        console.log('⚠️ KI-Extraktion lieferte zu wenige Daten, fahre fort mit Regex...');
+      }
+    } catch (error) {
+      console.log('⚠️ KI-Extraktion fehlgeschlagen, verwende Fallback:', error);
+    }
 
     // 1. Firmenname extrahieren
     const companyNamePatterns = [
@@ -944,161 +1016,156 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   const colors = getCurrentColors();
 
   return (
-    <div className="position-fixed top-0 start-0 w-100 h-100" style={{
-      background: 'rgba(0,0,0,0.5)',
-      zIndex: 3000,
-      top: 56
-    }}>
-      <div className="container-fluid h-100 p-4">
-        <div className="row justify-content-center h-100">
-          <div className="col-12 col-xl-6">
+    <div 
+      className="fixed top-0 left-0 w-full h-full" 
+      style={{
+        background: 'rgba(0,0,0,0.5)',
+        zIndex: 3000,
+        top: 56
+      }}
+    >
+      <div className="container-fluid h-full p-4">
+        <div className="flex justify-center h-full">
+          <div className="w-full xl:w-1/2">
             <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
-                             <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                 <div className="d-flex align-items-center">
-                   <h5 className="mb-0" style={{ color: colors.text }}>
-                     {editingSupplier ? 'Lieferant bearbeiten' : 'Neuen Lieferanten anlegen'}
-                   </h5>
-                   {isSearching && (
-                     <div className="ms-3 d-flex align-items-center">
-                       <div className="spinner-border spinner-border-sm me-2" style={{ color: colors.accent }}></div>
-                       <small style={{ color: colors.text }}>Suche Firmendaten...</small>
-                     </div>
-                   )}
-                   {isEvaluatingClipboard && (
-                     <div className="ms-3 d-flex align-items-center">
-                       <div className="spinner-border spinner-border-sm me-2" style={{ color: colors.accent }}></div>
-                       <small style={{ color: colors.text }}>Werte Zwischenablage aus...</small>
-                     </div>
-                   )}
-                   {shouldEvaluateClipboard && !isEvaluatingClipboard && (
-                     <div className="ms-3 d-flex align-items-center">
-                       <div className="badge bg-info me-2">
-                         <small style={{ color: 'white' }}>📋</small>
-                       </div>
-                       <small style={{ color: colors.text }}>Zwischenablage-Auswertung aktiviert</small>
-                     </div>
-                   )}
-                 </div>
-                 <button
-                   className="btn btn-link p-0"
-                   onClick={handleCloseForm}
-                   style={{ color: colors.text, textDecoration: 'none' }}
-                 >
-                   <FaClose />
-                 </button>
-               </div>
-              <div className="card-body" style={{ 
-                overflowY: 'auto', 
-                maxHeight: 'calc(100vh - 180px)',
-                paddingBottom: '0',
-                borderBottom: 'none'
-              }}>
+              <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
+                <div className="flex items-center">
+                  <h5 className="mb-0 form-label-themed">
+                    {editingSupplier ? 'Lieferant bearbeiten' : 'Neuen Lieferanten anlegen'}
+                  </h5>
+                  {isSearching && (
+                    <div className="ml-3 flex items-center">
+                      <div className="spinner-border spinner-border-sm mr-2" style={{ color: colors.accent }}></div>
+                      <small className="form-label-themed">Suche Firmendaten...</small>
+                    </div>
+                  )}
+                  {isEvaluatingClipboard && (
+                    <div className="ml-3 flex items-center">
+                      <div className="spinner-border spinner-border-sm mr-2" style={{ color: colors.accent }}></div>
+                      <small className="form-label-themed">Werte Zwischenablage aus...</small>
+                    </div>
+                  )}
+                  {shouldEvaluateClipboard && !isEvaluatingClipboard && (
+                    <div className="ml-3 flex items-center">
+                      <div className="badge bg-info mr-2">
+                        <small style={{ color: 'white' }}>📋</small>
+                      </div>
+                      <small className="form-label-themed">Zwischenablage-Auswertung aktiviert</small>
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="btn btn-link p-0"
+                  onClick={handleCloseForm}
+                  style={{ color: colors.text, textDecoration: 'none' }}
+                >
+                  <FaClose />
+                </button>
+              </div>
+              <div 
+                className="card-body" 
+                style={{ 
+                  overflowY: 'auto', 
+                  maxHeight: 'calc(100vh - 180px)',
+                  paddingBottom: '0',
+                  borderBottom: 'none'
+                }}
+              >
                 <form onFocus={handleFormFocus}>
                   {/* Grunddaten */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Grunddaten
                       </h6>
                     </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Firmenname *
-                      </label>
-                      <div className="input-group">
+                    <div className="flex flex-wrap -mx-2">
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Firmenname *
+                        </label>
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className="form-control form-control-themed"
+                            value={supplierForm.name}
+                            onChange={(e) => setSupplierForm(prev => ({ ...prev, name: e.target.value }))}
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-outline-input"
+                            onClick={handleSearchCompany}
+                            disabled={!supplierForm.name.trim()}
+                            title="Firmenname im Web suchen"
+                          >
+                            <FaSearch />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Ansprechpartner
+                        </label>
                         <input
                           type="text"
-                          className="form-control"
-                          value={supplierForm.name}
-                          onChange={(e) => setSupplierForm(prev => ({ ...prev, name: e.target.value }))}
-                          style={{ borderColor: colors.cardBorder, color: colors.text }}
-                          required
+                          className="form-control form-control-themed"
+                          value={supplierForm.contactPerson}
+                          onChange={(e) => setSupplierForm(prev => ({ ...prev, contactPerson: e.target.value }))}
                         />
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary"
-                          onClick={handleSearchCompany}
-                          disabled={!supplierForm.name.trim()}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.accent
-                          }}
-                          title="Firmenname im Web suchen"
-                        >
-                          <FaSearch />
-                        </button>
                       </div>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Ansprechpartner
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={supplierForm.contactPerson}
-                        onChange={(e) => setSupplierForm(prev => ({ ...prev, contactPerson: e.target.value }))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        E-Mail
-                      </label>
-                      <input
-                        type="email"
-                        className="form-control"
-                        value={supplierForm.email}
-                        onChange={(e) => setSupplierForm(prev => ({ ...prev, email: e.target.value }))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Website
-                      </label>
-                      <div className="input-group">
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          E-Mail
+                        </label>
                         <input
-                          type="url"
-                          className="form-control"
-                          value={supplierForm.website}
-                          onChange={(e) => setSupplierForm(prev => ({ ...prev, website: e.target.value }))}
-                          style={{ borderColor: colors.cardBorder, color: colors.text }}
-                          placeholder="https://www.lieferant.de"
+                          type="email"
+                          className="form-control form-control-themed"
+                          value={supplierForm.email}
+                          onChange={(e) => setSupplierForm(prev => ({ ...prev, email: e.target.value }))}
                         />
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary"
-                          onClick={() => openWebsite(supplierForm.website)}
-                          disabled={!isValidUrl(supplierForm.website)}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.accent
-                          }}
-                          title="Website in neuem Fenster öffnen"
-                        >
-                          <FaGlobe />
-                        </button>
+                      </div>
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Website
+                        </label>
+                        <div className="input-group">
+                          <input
+                            type="url"
+                            className="form-control form-control-themed"
+                            value={supplierForm.website}
+                            onChange={(e) => setSupplierForm(prev => ({ ...prev, website: e.target.value }))}
+                            placeholder="https://www.lieferant.de"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-outline-input"
+                            onClick={() => openWebsite(supplierForm.website)}
+                            disabled={!isValidUrl(supplierForm.website)}
+                            title="Website in neuem Fenster öffnen"
+                          >
+                            <FaGlobe />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Telefonnummern */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Telefonnummern
                       </h6>
                     </div>
                     {supplierForm.phoneNumbers.map((phone, index) => (
-                      <div key={`phone-${index}-${phone.type}-${phone.number}`} className="col-12 mb-3">
-                        <div className="row">
-                          <div className="col-md-3">
+                      <div key={`phone-${index}-${phone.type}-${phone.number}`} className="w-full mb-3">
+                        <div className="flex gap-3">
+                          <div className="md:w-1/4">
                             <select
-                              className="form-select"
+                              className="form-select form-control-themed"
                               value={phone.type}
                               onChange={(e) => updatePhoneNumber(index, 'type', e.target.value)}
-                              style={{ borderColor: colors.cardBorder, color: colors.text }}
                             >
                               <option value="Geschäft">Geschäft</option>
                               <option value="Mobil">Mobil</option>
@@ -1107,23 +1174,22 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                               <option value="Notfall">Notfall</option>
                             </select>
                           </div>
-                          <div className="col-md-7">
+                          <div className="md:w-2/3">
                             <input
                               type="tel"
-                              className="form-control"
+                              className="form-control form-control-themed"
                               value={phone.number}
                               onChange={(e) => updatePhoneNumber(index, 'number', e.target.value)}
                               placeholder="Telefonnummer"
-                              style={{ borderColor: colors.cardBorder, color: colors.text }}
                             />
                           </div>
-                          <div className="col-md-2">
+                          <div className="md:w-1/6">
                             {supplierForm.phoneNumbers.length > 1 && (
                               <button
                                 type="button"
-                                className="btn btn-outline-danger w-100"
+                                className="btn btn-link btn-action btn-danger"
+                                title="Telefonnummer entfernen"
                                 onClick={() => removePhoneNumber(index)}
-                                style={{ borderColor: '#dc3545', color: '#dc3545' }}
                               >
                                 <FaClose />
                               </button>
@@ -1132,136 +1198,128 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                         </div>
                       </div>
                     ))}
-                    <div className="col-12">
+                    <div className="w-full">
                       <button
                         type="button"
                         className="btn btn-outline-secondary"
                         onClick={addPhoneNumber}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
                       >
-                        <FaPlus className="me-2" />
+                        <FaPlus className="mr-2" />
                         Telefonnummer hinzufügen
                       </button>
                     </div>
                   </div>
 
                   {/* Adresse */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Adresse
                       </h6>
                     </div>
-                    <div className="col-12 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Straße & Hausnummer
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={supplierForm.address.street}
-                        onChange={(e) => setSupplierForm(prev => ({
-                          ...prev,
-                          address: { ...prev.address, street: e.target.value }
-                        }))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-4 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        PLZ
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={supplierForm.address.zipCode}
-                        onChange={(e) => setSupplierForm(prev => ({
-                          ...prev,
-                          address: { ...prev.address, zipCode: e.target.value }
-                        }))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-4 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Stadt
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={supplierForm.address.city}
-                        onChange={(e) => setSupplierForm(prev => ({
-                          ...prev,
-                          address: { ...prev.address, city: e.target.value }
-                        }))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-4 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Land
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={supplierForm.address.country}
-                        onChange={(e) => setSupplierForm(prev => ({
-                          ...prev,
-                          address: { ...prev.address, country: e.target.value }
-                        }))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
+                    <div className="flex flex-wrap -mx-2">
+                      <div className="w-full px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Straße & Hausnummer
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control form-control-themed"
+                          value={supplierForm.address.street}
+                          onChange={(e) => setSupplierForm(prev => ({
+                            ...prev,
+                            address: { ...prev.address, street: e.target.value }
+                          }))}
+                        />
+                      </div>
+                      <div className="w-full md:w-1/3 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          PLZ
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control form-control-themed"
+                          value={supplierForm.address.zipCode}
+                          onChange={(e) => setSupplierForm(prev => ({
+                            ...prev,
+                            address: { ...prev.address, zipCode: e.target.value }
+                          }))}
+                        />
+                      </div>
+                      <div className="w-full md:w-1/3 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Stadt
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control form-control-themed"
+                          value={supplierForm.address.city}
+                          onChange={(e) => setSupplierForm(prev => ({
+                            ...prev,
+                            address: { ...prev.address, city: e.target.value }
+                          }))}
+                        />
+                      </div>
+                      <div className="w-full md:w-1/3 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Land
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control form-control-themed"
+                          value={supplierForm.address.country}
+                          onChange={(e) => setSupplierForm(prev => ({
+                            ...prev,
+                            address: { ...prev.address, country: e.target.value }
+                          }))}
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* Notizen */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Notizen
                       </h6>
                     </div>
-                    <div className="col-12">
+                    <div className="w-full">
                       <textarea
-                        className="form-control"
+                        className="form-control form-control-themed"
                         rows={3}
                         value={supplierForm.notes}
                         onChange={(e) => setSupplierForm(prev => ({ ...prev, notes: e.target.value }))}
                         placeholder="Zusätzliche Informationen, Lieferzeiten, Mindestbestellmengen, etc."
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
                       />
                     </div>
-                                     </div>
+                  </div>
 
-                   {/* Debug-Informationen */}
-                   {/* Removed debugInfo state and its usage */}
-                 </form>
+                </form>
               </div>
-              <div className="card-footer d-flex justify-content-between" style={{ 
-                backgroundColor: colors.secondary,
-                borderTop: 'none',
-                position: 'sticky',
-                bottom: 0,
-                zIndex: 10
-              }}>
+              <div 
+                className="card-footer flex justify-between" 
+                style={{ 
+                  backgroundColor: colors.secondary,
+                  borderTop: 'none',
+                  position: 'sticky',
+                  bottom: 0,
+                  zIndex: 10
+                }}
+              >
                 <button
-                  className="btn btn-secondary"
+                  className="btn btn-outline-secondary"
                   onClick={handleCloseForm}
-                  style={{ borderColor: colors.cardBorder }}
                 >
-                  <FaArrowLeft className="me-2" />
+                  <FaArrowLeft className="mr-2" />
                   Abbrechen
                 </button>
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-outline-primary"
                   onClick={handleSaveAndClose}
                   disabled={!supplierForm.name}
-                  style={{
-                    backgroundColor: colors.accent,
-                    borderColor: colors.accent
-                  }}
                 >
-                  <FaSave className="me-2" />
+                  <FaSave className="mr-2" />
                   {editingSupplier ? 'Änderungen speichern' : 'Lieferant speichern'}
                 </button>
               </div>

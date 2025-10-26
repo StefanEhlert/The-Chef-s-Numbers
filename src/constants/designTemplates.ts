@@ -17,58 +17,94 @@ export const designTemplates = {
       paperShadow: "0 4px 12px rgba(44, 62, 80, 0.1)"
     }
   },
-  dark: {
-    name: "Dark Theme",
-    description: "Dunkles Design mit Akzentfarben",
-    colors: {
-      primary: "#1a1a1a",
-      secondary: "#2d2d2d",
-      accent: "#00d4aa",
-      background: "#121212",
-      sidebar: "#1e1e1e",
-      text: "#ffffff",
-      textSecondary: "#b0b0b0",
-      card: "#2d2d2d",
-      cardBorder: "#404040",
-      input: "#3d3d3d",
-      paper: "#2d2d2d",
-      paperShadow: "0 4px 12px rgba(0, 0, 0, 0.3)"
-    }
-  },
   warm: {
     name: "Warm & Gastronomisch",
     description: "Braun/Beige Töne, gemütlich",
     colors: {
       primary: "#8B4513",
       secondary: "#F5DEB3",
-      accent: "#D2691E",
+      accent: "#c45f2a",
       background: "#FFF8DC",
-      sidebar: "#DEB887",
+      sidebar: "#CD853F",
       text: "#654321",
       textSecondary: "#8B7355",
       card: "#FDF5E6",
       cardBorder: "#D2B48C",
-      input: "#FFFFFF",
-      paper: "#FFFFFF",
+      input: "#FFFAF0",
+      paper: "#FAF0E6",
       paperShadow: "0 4px 12px rgba(139, 69, 19, 0.15)"
     }
   },
-  professional: {
-    name: "Professional Blue",
-    description: "Business-Look mit Blau",
+  dracula: {
+    name: "Dracula (DaisyUI)",
+    description: "Dunkles Design mit violetten Akzenten",
     colors: {
-      primary: "#1e3a8a",
-      secondary: "#dbeafe",
-      accent: "#3b82f6",
-      background: "#f8fafc",
-      sidebar: "#1e40af",
-      text: "#1e293b",
-      textSecondary: "#64748b",
+      primary: "#ff79c6",
+      secondary: "#282a36",
+      accent: "#bd93f9",
+      background: "#282a36",
+      sidebar: "#44475a",
+      text: "#f8f8f2",
+      textSecondary: "#6272a4",
+      card: "#44475a",
+      cardBorder: "#6272a4",
+      input: "#282a36",
+      paper: "#44475a",
+      paperShadow: "0 4px 12px rgba(255, 121, 198, 0.2)"
+    }
+  },
+  autumn: {
+    name: "Autumn (DaisyUI)",
+    description: "Herbstliche warme Farben",
+    colors: {
+      primary: "#ea580c",
+      secondary: "#fef3c7",
+      accent: "#f59e0b",
+      background: "#ffffff",
+      sidebar: "#fef7ed",
+      text: "#1f2937",
+      textSecondary: "#6b7280",
       card: "#ffffff",
-      cardBorder: "#e2e8f0",
+      cardBorder: "#e5e7eb",
       input: "#ffffff",
       paper: "#ffffff",
-      paperShadow: "0 4px 12px rgba(30, 58, 138, 0.1)"
+      paperShadow: "0 4px 12px rgba(234, 88, 12, 0.15)"
+    }
+  },
+  aqua: {
+    name: "Aqua (DaisyUI)",
+    description: "Frische Aqua-Farben",
+    colors: {
+      primary: "#0891b2",
+      secondary: "#f0f9ff",
+      accent: "#06b6d4",
+      background: "#ffffff",
+      sidebar: "#f0f9ff",
+      text: "#1f2937",
+      textSecondary: "#6b7280",
+      card: "#ffffff",
+      cardBorder: "#e5e7eb",
+      input: "#ffffff",
+      paper: "#ffffff",
+      paperShadow: "0 4px 12px rgba(8, 145, 178, 0.15)"
+    }
+  },
+  cyberpunk: {
+    name: "Cyberpunk (DaisyUI)",
+    description: "Futuristisches Neon-Design",
+    colors: {
+      primary: "#ff7598",
+      secondary: "#0c0c0c",
+      accent: "#75d1f0",
+      background: "#0c0c0c",
+      sidebar: "#1a1a1a",
+      text: "#ffffff",
+      textSecondary: "#a0a0a0",
+      card: "#1a1a1a",
+      cardBorder: "#333333",
+      input: "#0c0c0c",
+      paper: "#1a1a1a",
+      paperShadow: "0 4px 12px rgba(255, 117, 152, 0.3)"
     }
   }
 };

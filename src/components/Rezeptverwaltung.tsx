@@ -77,7 +77,7 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
 
   return (
     <div className="container-fluid p-4 pt-0">
-      <div style={{
+      <div className="rezeptverwaltung" style={{
         backgroundColor: colors.paper || colors.card,
         borderRadius: '12px',
         boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
@@ -90,128 +90,120 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
           <h1 style={{ color: colors.text, margin: 0 }}>Rezeptverwaltung</h1>
         </div>
 
-        {/* Suchleiste und Ansichtswechsel */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
-          <div className="md:col-span-7">
-            <div className="input-group">
-              <span className="input-group-text" style={{
-                backgroundColor: colors.secondary,
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}>
-                <FaSearch />
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Rezepte suchen..."
-                value={recipeSearchTerm}
-                onChange={(e) => setRecipeSearchTerm(e.target.value)}
-                style={{
-                  borderColor: colors.cardBorder,
-                  color: colors.text
-                }}
-              />
-              <button
-                className="btn btn-primary"
-                style={{
-                  backgroundColor: colors.accent,
-                  borderColor: colors.accent,
-                  color: 'white'
-                }}
-                title="Neues Rezept"
-                onClick={handleNewRecipe}
-              >
-                <FaPlus />
-              </button>
+        {/* Suchleiste und Filter */}
+        <div className="card mb-3">
+          <div className="card-body">
+            {/* Suchleiste und Ansichtswechsel */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
+              <div className="md:col-span-7">
+                <div className="input-group">
+                  <span className="input-group-text">
+                    <FaSearch />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Rezepte suchen..."
+                    value={recipeSearchTerm}
+                    onChange={(e) => setRecipeSearchTerm(e.target.value)}
+                  />
+                  <button
+                    className="btn btn-outline-input"
+                    title="Neues Rezept"
+                    onClick={handleNewRecipe}
+                  >
+                    <FaPlus />
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-3">
+                <div className="btn-group w-full" role="group">
+                  <button
+                    type="button"
+                    className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setRecipeViewMode('list')}
+                    style={{
+                      backgroundColor: recipeViewMode === 'list' ? colors.accent : 'transparent',
+                      borderColor: recipeViewMode === 'list' ? colors.accent : colors.cardBorder,
+                      color: recipeViewMode === 'list' ? 'white' : colors.text,
+                      borderRadius: '0.375rem 0 0 0.375rem'
+                    }}
+                  >
+                    <FaList className="me-1" />
+                    Liste
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setRecipeViewMode('grid')}
+                    style={{
+                      backgroundColor: recipeViewMode === 'grid' ? colors.accent : 'transparent',
+                      borderColor: recipeViewMode === 'grid' ? colors.accent : colors.cardBorder,
+                      color: recipeViewMode === 'grid' ? 'white' : colors.text,
+                      borderRadius: '0 0.375rem 0.375rem 0'
+                    }}
+                  >
+                    <FaTh className="me-1" />
+                    Kacheln
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary w-full"
+                  onClick={() => setShowImportExportModal(true)}
+                  style={{
+                    borderColor: colors.accent,
+                    color: colors.accent
+                  }}
+                >
+                  <FaSave className="me-1" />
+                  Import/Export
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="md:col-span-3">
-            <div className="btn-group w-full" role="group">
-              <button
-                type="button"
-                className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => setRecipeViewMode('list')}
-                style={{
-                  backgroundColor: recipeViewMode === 'list' ? colors.accent : 'transparent',
-                  borderColor: recipeViewMode === 'list' ? colors.accent : colors.cardBorder,
-                  color: recipeViewMode === 'list' ? 'white' : colors.text,
-                  borderRadius: '0.375rem 0 0 0.375rem'
-                }}
-              >
-                <FaList className="me-1" />
-                Liste
-              </button>
-              <button
-                type="button"
-                className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => setRecipeViewMode('grid')}
-                style={{
-                  backgroundColor: recipeViewMode === 'grid' ? colors.accent : 'transparent',
-                  borderColor: recipeViewMode === 'grid' ? colors.accent : colors.cardBorder,
-                  color: recipeViewMode === 'grid' ? 'white' : colors.text,
-                  borderRadius: '0 0.375rem 0.375rem 0'
-                }}
-              >
-                <FaTh className="me-1" />
-                Kacheln
-              </button>
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            <button
-              type="button"
-              className="btn btn-outline-primary w-full"
-              onClick={() => setShowImportExportModal(true)}
-              style={{
-                borderColor: colors.accent,
-                color: colors.accent
-              }}
-            >
-              <FaSave className="me-1" />
-              Import/Export
-            </button>
-          </div>
-        </div>
 
-        {/* Filter und Sortierung */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
-          <div>
-            <select
-              className="form-select"
-              value={recipeSortBy}
-              onChange={(e) => setRecipeSortBy(e.target.value as any)}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <option value="name">Name</option>
-              <option value="portions">Portionen</option>
-              <option value="costPerPortion">Kosten/Portion</option>
-              <option value="sellingPrice">Verkaufspreis</option>
-              <option value="energy">Kalorien</option>
-              <option value="timestamp">Zeitstempel</option>
-            </select>
-          </div>
-          <div>
-            <button
-              type="button"
-              className="btn btn-outline-secondary no-hover w-full"
-              onClick={() => setRecipeSortOrder(recipeSortOrder === 'asc' ? 'desc' : 'asc')}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <FaSort className="me-1" />
-              {recipeSortOrder === 'asc' ? 'A-Z' : 'Z-A'}
-            </button>
-          </div>
-          <div className="md:col-span-2 text-end">
-            <span style={{ color: colors.text }}>
-              {filteredRecipes.length} Rezept{filteredRecipes.length !== 1 ? 'e' : ''} gefunden
-            </span>
+            {/* Filter und Sortierung */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <select
+                  className="form-select"
+                  value={recipeSortBy}
+                  onChange={(e) => setRecipeSortBy(e.target.value as any)}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <option value="name">Name</option>
+                  <option value="portions">Portionen</option>
+                  <option value="costPerPortion">Kosten/Portion</option>
+                  <option value="sellingPrice">Verkaufspreis</option>
+                  <option value="energy">Kalorien</option>
+                  <option value="timestamp">Zeitstempel</option>
+                </select>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary no-hover w-full"
+                  onClick={() => setRecipeSortOrder(recipeSortOrder === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <FaSort className="me-1" />
+                  {recipeSortOrder === 'asc' ? 'A-Z' : 'Z-A'}
+                </button>
+              </div>
+              <div className="md:col-span-2 text-end">
+                <span style={{ color: colors.text }}>
+                  {filteredRecipes.length} Rezept{filteredRecipes.length !== 1 ? 'e' : ''} gefunden
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -284,121 +276,104 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
 
         {/* Rezept-Liste */}
         {recipeViewMode === 'list' ? (
-          <div className="overflow-x-auto">
-            <table className="table table-hover" style={{
-              backgroundColor: colors.card,
-              borderColor: colors.cardBorder
-            }}>
-              <thead style={{ backgroundColor: colors.secondary }}>
-                <tr>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedRecipes.length === filteredRecipes.length && filteredRecipes.length > 0}
-                      onChange={handleSelectAllRecipes}
-                      style={{ accentColor: colors.accent }}
-                    />
-                  </th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Rezept</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Portionen</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Kosten/Portion</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Verkaufspreis</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Kalorien</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRecipes.map(recipe => (
-                  <tr 
-                    key={recipe.id} 
-                    style={{ 
-                      borderColor: colors.cardBorder,
-                      cursor: 'pointer'
-                    }}
-                    onDoubleClick={() => handleEditRecipe(recipe)}
-                    title="Doppelklick zum Bearbeiten"
-                  >
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedRecipes.includes(recipe.id)}
-                        onChange={() => handleSelectRecipe(recipe.id)}
-                        style={{ accentColor: colors.accent }}
-                      />
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <div>
-                        <strong>{recipe.name}</strong>
-                        <br />
-                        <small style={{ color: colors.accent }}>{recipe.description}</small>
-                        {(recipe.updatedAt || recipe.createdAt) && (() => {
-                          const timestamp = recipe.updatedAt || recipe.createdAt;
-                          if (!timestamp) return null;
-                          const date = new Date(timestamp);
-                          return (
-                            <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
-                              {recipe.updatedAt ? 'zuletzt geändert' : 'erstellt'} am {date.toLocaleDateString('de-DE')} um {date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} von {recipe.lastModifiedBy || 'Benutzer'}
-                            </small>
-                          );
-                        })()}
-                      </div>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      {recipe.portions}
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <strong>{formatPrice(recipe.materialCosts / recipe.portions)}</strong>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <strong>{formatPrice(recipe.sellingPrice)}</strong>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <strong>{recipe.totalNutritionInfo?.calories || 0}</strong>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      <div className="flex gap-2">
-                        <button
-                          className="btn btn-link p-0"
-                          onClick={() => handleEditRecipe(recipe)}
-                          title="Bearbeiten"
-                          style={{
-                            color: colors.accent,
-                            textDecoration: 'none',
-                            fontSize: '14px'
-                          }}
-                        >
-                          <FaPencilAlt />
-                        </button>
-                        <button
-                          className="btn btn-link p-0"
-                          title="Drucken"
-                          style={{
-                            color: colors.accent,
-                            textDecoration: 'none',
-                            fontSize: '14px'
-                          }}
-                          onClick={() => {/* TODO: Druckfunktion */}}
-                        >
-                          <FaPrint />
-                        </button>
-                        <button
-                          className="btn btn-link p-0"
-                          title="Löschen"
-                          style={{
-                            color: colors.accent,
-                            textDecoration: 'none',
-                            fontSize: '14px'
-                          }}
-                          onClick={() => handleDeleteSingleRecipe(recipe.id, recipe.name)}
-                        >
-                          <FaTimes />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="card">
+            <div className="card-body p-0">
+              <div className="overflow-x-auto">
+                <table className="table table-hover modern-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={selectedRecipes.length === filteredRecipes.length && filteredRecipes.length > 0}
+                          onChange={handleSelectAllRecipes}
+                          className="form-check-input"
+                        />
+                      </th>
+                      <th>Rezept</th>
+                      <th>Portionen</th>
+                      <th>Kosten/Portion</th>
+                      <th>Verkaufspreis</th>
+                      <th>Kalorien</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRecipes.map(recipe => (
+                      <tr 
+                        key={recipe.id} 
+                        className="table-row-clickable"
+                        onDoubleClick={() => handleEditRecipe(recipe)}
+                        title="Doppelklick zum Bearbeiten"
+                      >
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedRecipes.includes(recipe.id)}
+                            onChange={() => handleSelectRecipe(recipe.id)}
+                            className="form-check-input"
+                          />
+                        </td>
+                        <td>
+                          <div className="recipe-info">
+                            <div className="recipe-name">{recipe.name}</div>
+                            {recipe.description && (
+                              <div className="recipe-description">{recipe.description}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="recipe-portions">{recipe.portions}</div>
+                        </td>
+                        <td>
+                          <div className="recipe-cost">
+                            <div className="price-main">{formatPrice(recipe.materialCosts / recipe.portions)}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="recipe-price">
+                            <div className="price-main price-highlight">{formatPrice(recipe.sellingPrice)}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="recipe-calories">
+                            <div className="calories-value">{recipe.totalNutritionInfo?.calories || 0}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              className="btn btn-link btn-action"
+                              onClick={() => handleEditRecipe(recipe)}
+                              title="Bearbeiten"
+                            >
+                              <FaPencilAlt />
+                            </button>
+                            <button
+                              className="btn btn-link btn-action"
+                              title="Drucken"
+                              onClick={() => {
+                                // TODO: Druckfunktionalität implementieren
+                                console.log('Drucken für Rezept:', recipe.name);
+                              }}
+                            >
+                              <FaPrint />
+                            </button>
+                            <button
+                              className="btn btn-link btn-action btn-danger"
+                              title="Löschen"
+                              onClick={() => handleDeleteSingleRecipe(recipe.id, recipe.name)}
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         ) : (
           // Grid-Ansicht
@@ -456,9 +431,11 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                     <h6 className="card-title" style={{ color: colors.text }}>
                       {recipe.name}
                     </h6>
-                    <p className="card-text small" style={{ color: colors.accent }}>
-                      {recipe.description}
-                    </p>
+                    {recipe.description && (
+                      <p className="card-text small" style={{ color: colors.accent }}>
+                        {recipe.description}
+                      </p>
+                    )}
                     {(recipe.updatedAt || recipe.createdAt) && (() => {
                       const timestamp = recipe.updatedAt || recipe.createdAt;
                       if (!timestamp) return null;

@@ -20,41 +20,35 @@ const DuplicateArticleModal: React.FC<DuplicateArticleModalProps> = ({
 
   return (
     <div 
-      className="position-fixed top-0 start-0 w-100 h-100" 
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center" 
       style={{
-        background: 'rgba(0,0,0,0.6)',
         zIndex: 5000,
-        top: 56,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        top: 56
       }}
     >
       <div className="container">
-        <div className="row justify-content-center">
+        <div className="row justify-center">
           <div className="col-12 col-md-6 col-lg-4">
             <div className="card shadow-lg" style={{ 
               backgroundColor: colors.card,
               border: `2px solid ${colors.accent}`,
               borderRadius: '12px'
             }}>
-              <div className="card-header text-center" style={{ 
-                backgroundColor: colors.accent + '20',
-                borderBottom: `1px solid ${colors.cardBorder}`,
-                borderRadius: '10px 10px 0 0'
+              <div className="card-header flex justify-between items-center" style={{ 
+                backgroundColor: colors.secondary,
+                borderBottomColor: colors.cardBorder
               }}>
-                <div className="d-flex justify-content-center align-items-center mb-2">
-                  <FaExclamationTriangle 
-                    style={{ 
-                      color: colors.accent, 
-                      fontSize: '2rem',
-                      marginRight: '0.5rem'
-                    }} 
-                  />
-                  <h5 className="mb-0" style={{ color: colors.text }}>
-                    Duplikat gefunden
-                  </h5>
-                </div>
+                <h5 className="mb-0" style={{ color: colors.text }}>
+                  <FaExclamationTriangle className="mr-2" style={{ color: colors.accent }} />
+                  Duplikat gefunden
+                </h5>
+                <button
+                  className="btn btn-link p-0"
+                  onClick={onClose}
+                  style={{ color: colors.text, textDecoration: 'none' }}
+                >
+                  <FaTimes size={16} />
+                </button>
               </div>
               
               <div className="card-body text-center" style={{ padding: '1.5rem' }}>
@@ -78,46 +72,24 @@ const DuplicateArticleModal: React.FC<DuplicateArticleModalProps> = ({
                 </div>
               </div>
               
-              <div className="card-footer" style={{ 
+              <div className="card-footer flex justify-center" style={{ 
                 backgroundColor: colors.secondary,
-                borderTop: `1px solid ${colors.cardBorder}`,
-                borderRadius: '0 0 10px 10px',
-                padding: '1rem'
+                borderTopColor: colors.cardBorder
               }}>
-                <div className="d-flex justify-content-between gap-3">
+                <div className="flex gap-3">
                   <button
-                    className="btn btn-secondary"
+                    className="btn-outline-secondary px-4 py-2 rounded"
                     onClick={onClose}
-                    style={{
-                      borderColor: colors.cardBorder,
-                      backgroundColor: colors.card,
-                      color: colors.text,
-                      minWidth: '140px',
-                      padding: '10px 20px',
-                      borderRadius: '8px',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease'
-                    }}
                   >
-                    <FaTimes className="me-2" />
+                    <FaTimes className="mr-2" />
                     Abbrechen
                   </button>
                   
                   <button
-                    className="btn btn-primary"
+                    className="btn-outline-primary px-4 py-2 rounded"
                     onClick={onEditExisting}
-                    style={{
-                      backgroundColor: colors.accent,
-                      borderColor: colors.accent,
-                      color: 'white',
-                      minWidth: '220px',
-                      padding: '10px 20px',
-                      borderRadius: '8px',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease'
-                    }}
                   >
-                    <FaEdit className="me-2" />
+                    <FaEdit className="mr-2" />
                     Bestehenden Artikel bearbeiten
                   </button>
                 </div>

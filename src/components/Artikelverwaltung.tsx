@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaPlus, FaList, FaTh, FaSave, FaSort, FaTrash, FaPencilAlt, FaTimes, FaBoxes, FaCheck } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaList, FaTh, FaSave, FaSort, FaTrash, FaPencilAlt, FaTimes, FaBoxes, FaCheck, FaPrint } from 'react-icons/fa';
 import { Article } from '../types';
 import { setButtonColors } from '../utils/cssVariables';
 
@@ -139,14 +139,7 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
 
   return (
     <div className="container-fluid p-4 pt-0">
-      <div style={{
-        backgroundColor: colors.paper || colors.card,
-        borderRadius: '12px',
-        boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
-        padding: '2rem',
-        minHeight: 'calc(100vh - 120px)',
-        border: `1px solid ${colors.cardBorder}`
-      }}>
+      <div className="page artikelverwaltung">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h1 style={{ color: colors.text, margin: 0 }}>Artikelverwaltung</h1>
@@ -154,156 +147,148 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
           </div>
         </div>
 
-        {/* Suchleiste und Ansichtswechsel */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
-          <div className="md:col-span-7">
-            <div className="input-group">
-              <span className="input-group-text" style={{
-                backgroundColor: colors.secondary,
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}>
-                <FaSearch />
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Artikel suchen..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  borderColor: colors.cardBorder,
-                  color: colors.text
-                }}
-              />
-              <button
-                className="btn btn-primary"
-                style={{
-                  backgroundColor: colors.accent,
-                  borderColor: colors.accent,
-                  color: 'white'
-                }}
-                title="Neuer Artikel"
-                onClick={() => {
-                  resetArticleForm();
-                  setShowArticleForm(true);
-                }}
-              >
-                <FaPlus />
-              </button>
+        {/* Suchleiste und Filter */}
+        <div className="card mb-3">
+          <div className="card-body">
+            {/* Suchleiste und Ansichtswechsel */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
+              <div className="md:col-span-7">
+                <div className="input-group">
+                  <span className="input-group-text">
+                    <FaSearch />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Artikel suchen..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <button
+                    className="btn btn-outline-input"
+                    title="Neuer Artikel"
+                    onClick={() => {
+                      resetArticleForm();
+                      setShowArticleForm(true);
+                    }}
+                  >
+                    <FaPlus />
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-3">
+                <div className="btn-group w-full" role="group">
+                  <button
+                    type="button"
+                    className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setViewMode('list')}
+                    style={{
+                      backgroundColor: viewMode === 'list' ? colors.accent : 'transparent',
+                      borderColor: viewMode === 'list' ? colors.accent : colors.cardBorder,
+                      color: viewMode === 'list' ? 'white' : colors.text,
+                      borderRadius: '0.375rem 0 0 0.375rem'
+                    }}
+                  >
+                    <FaList className="me-1" />
+                    Liste
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setViewMode('grid')}
+                    style={{
+                      backgroundColor: viewMode === 'grid' ? colors.accent : 'transparent',
+                      borderColor: viewMode === 'grid' ? colors.accent : colors.cardBorder,
+                      color: viewMode === 'grid' ? 'white' : colors.text,
+                      borderRadius: '0 0.375rem 0.375rem 0'
+                    }}
+                  >
+                    <FaTh className="me-1" />
+                    Kacheln
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary w-full"
+                  onClick={() => setShowImportExportModal(true)}
+                  style={{
+                    borderColor: colors.accent,
+                    color: colors.accent
+                  }}
+                >
+                  <FaSave className="me-1" />
+                  Import/Export
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="md:col-span-3">
-            <div className="btn-group w-full" role="group">
-              <button
-                type="button"
-                className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => setViewMode('list')}
-                style={{
-                  backgroundColor: viewMode === 'list' ? colors.accent : 'transparent',
-                  borderColor: viewMode === 'list' ? colors.accent : colors.cardBorder,
-                  color: viewMode === 'list' ? 'white' : colors.text,
-                  borderRadius: '0.375rem 0 0 0.375rem'
-                }}
-              >
-                <FaList className="me-1" />
-                Liste
-              </button>
-              <button
-                type="button"
-                className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => setViewMode('grid')}
-                style={{
-                  backgroundColor: viewMode === 'grid' ? colors.accent : 'transparent',
-                  borderColor: viewMode === 'grid' ? colors.accent : colors.cardBorder,
-                  color: viewMode === 'grid' ? 'white' : colors.text,
-                  borderRadius: '0 0.375rem 0.375rem 0'
-                }}
-              >
-                <FaTh className="me-1" />
-                Kacheln
-              </button>
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            <button
-              type="button"
-              className="btn btn-outline-primary w-full"
-              onClick={() => setShowImportExportModal(true)}
-              style={{
-                borderColor: colors.accent,
-                color: colors.accent
-              }}
-            >
-              <FaSave className="me-1" />
-              Import/Export
-            </button>
-          </div>
-        </div>
 
-        {/* Filter und Sortierung */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
-          <div>
-            <select
-              className="form-select"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <option value="">Alle Kategorien</option>
-              {categories.map((category, index) => (
-                <option key={`category-${index}-${category}`} value={category}>{category}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-select"
-              value={selectedSupplier}
-              onChange={(e) => setSelectedSupplier(e.target.value)}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <option value="">Alle Lieferanten</option>
-              {uniqueSuppliers.map((supplier, index) => (
-                <option key={`supplier-${index}-${supplier}`} value={supplier}>{supplier}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-select"
-              value={sortField}
-              onChange={(e) => setSortField(e.target.value)}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <option value="name">Artikel</option>
-              <option value="supplier">Lieferant</option>
-              <option value="category">Kategorie</option>
-              <option value="bundlePrice">Gebindepreis</option>
-                                      <option value="pricePerUnit">Inhaltspreis</option>
-            </select>
-          </div>
-          <div>
-            <button
-              className="btn btn-outline-secondary no-hover w-full"
-              onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-              style={{
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
-            >
-              <FaSort className="me-1" />
-              {sortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
-            </button>
+            {/* Filter und Sortierung */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <select
+                  className="form-select bg-color-input"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <option value="">Alle Kategorien</option>
+                  {categories.map((category, index) => (
+                    <option key={`category-${index}-${category}`} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  className="form-select bg-color-input"
+                  value={selectedSupplier}
+                  onChange={(e) => setSelectedSupplier(e.target.value)}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <option value="">Alle Lieferanten</option>
+                  {uniqueSuppliers.map((supplier, index) => (
+                    <option key={`supplier-${index}-${supplier}`} value={supplier}>{supplier}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  className="form-select bg-color-input"
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value)}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <option value="name">Artikel</option>
+                  <option value="supplier">Lieferant</option>
+                  <option value="category">Kategorie</option>
+                  <option value="bundlePrice">Gebindepreis</option>
+                  <option value="pricePerUnit">Inhaltspreis</option>
+                </select>
+              </div>
+              <div>
+                <button
+                  className="btn btn-outline-secondary no-hover w-full bg-color-input"
+                  onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    borderColor: colors.cardBorder,
+                    color: colors.text
+                  }}
+                >
+                  <FaSort className="me-1" />
+                  {sortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -407,116 +392,114 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
 
         {/* Artikel-Liste */}
         {viewMode === 'list' ? (
-          <div className="overflow-x-auto">
-            <table className="table table-hover" style={{
-              backgroundColor: colors.card,
-              borderColor: colors.cardBorder
-            }}>
-              <thead style={{ backgroundColor: colors.secondary }}>
-                <tr>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedArticles.length === filteredArticles.length && filteredArticles.length > 0}
-                      onChange={handleSelectAll}
-                      style={{ accentColor: colors.accent }}
-                    />
-                  </th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Artikel</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Lieferant</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Gebindepreis</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Inhalt</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Preis/Einheit</th>
-                  <th style={{ borderColor: colors.cardBorder, color: colors.text }}>Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredArticles.map((article, index) => (
-                  <tr 
-                    key={article.id || `article-${index}`} 
-                    style={{ 
-                      borderColor: colors.cardBorder,
-                      cursor: 'pointer'
-                    }}
-                    onDoubleClick={() => handleEditArticle(article)}
-                    title="Doppelklick zum Bearbeiten"
-                  >
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedArticles.includes(article.id)}
-                        onChange={() => handleSelectArticle(article.id)}
-                        style={{ accentColor: colors.accent }}
-                      />
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <strong>{article.name}</strong>
-                      <br />
-                        <div className="flex justify-between items-center">
-                        <small style={{ color: colors.accent }}>{article.category}</small>
-                        {formatNutritionInfo(article) && (
-                          <small style={{ color: colors.accent }}>{formatNutritionInfo(article)}</small>
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      {getSupplierName(article.supplierId)}
-                      {article.supplierArticleNumber && (
-                        <>
-                          <br />
-                          <small style={{ color: colors.accent }}>
-                            {article.supplierArticleNumber}
-                          </small>
-                        </>
-                      )}
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      {formatPrice(article.bundlePrice)}
-                      <br />
-                      <small style={{ color: colors.accent }}>
-                        pro {article.bundleUnit}
-                      </small>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      {article.content} {article.contentUnit}
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder, color: colors.text }}>
-                      <strong>{formatPrice(article.pricePerUnit)}</strong>
-                      <br />
-                      <small style={{ color: colors.accent }}>pro {article.contentUnit}</small>
-                    </td>
-                    <td style={{ borderColor: colors.cardBorder }}>
-                      <div className="flex gap-2">
-                        <button
-                          className="btn btn-link p-0"
-                          title="Bearbeiten"
-                          style={{
-                            color: colors.accent,
-                            textDecoration: 'none',
-                            fontSize: '14px'
-                          }}
-                          onClick={() => handleEditArticle(article)}
-                        >
-                          <FaPencilAlt />
-                        </button>
-                        <button
-                          className="btn btn-link p-0"
-                          title="Löschen"
-                          style={{
-                            color: '#dc3545',
-                            textDecoration: 'none',
-                            fontSize: '14px'
-                          }}
-                          onClick={() => handleDeleteSingleArticle(article.id, article.name)}
-                        >
-                          <FaTimes />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="card">
+            <div className="card-body p-0">
+              <div className="overflow-x-auto">
+                <table className="table table-hover modern-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={selectedArticles.length === filteredArticles.length && filteredArticles.length > 0}
+                          onChange={handleSelectAll}
+                          className="form-check-input"
+                        />
+                      </th>
+                      <th>Artikel</th>
+                      <th>Lieferant</th>
+                      <th>Gebindepreis</th>
+                      <th>Inhalt</th>
+                      <th>Preis/Einheit</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredArticles.map((article, index) => (
+                      <tr 
+                        key={article.id || `article-${index}`} 
+                        className="table-row-clickable"
+                        onDoubleClick={() => handleEditArticle(article)}
+                        title="Doppelklick zum Bearbeiten"
+                      >
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedArticles.includes(article.id)}
+                            onChange={() => handleSelectArticle(article.id)}
+                            className="form-check-input"
+                          />
+                        </td>
+                        <td>
+                          <div className="article-info">
+                            <div className="article-name">{article.name}</div>
+                            <div className="article-meta">
+                              <span className="article-category">{article.category}</span>
+                              {formatNutritionInfo(article) && (
+                                <span className="article-nutrition">{formatNutritionInfo(article)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="supplier-info">
+                            <div className="supplier-name">{getSupplierName(article.supplierId)}</div>
+                            {article.supplierArticleNumber && (
+                              <div className="supplier-number">{article.supplierArticleNumber}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="price-info">
+                            <div className="price-main">{formatPrice(article.bundlePrice)}</div>
+                            <div className="price-unit">pro {article.bundleUnit}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="content-info">
+                            {article.content} {article.contentUnit}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="price-info">
+                            <div className="price-main price-highlight">{formatPrice(article.pricePerUnit)}</div>
+                            <div className="price-unit">pro {article.contentUnit}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              className="btn btn-link btn-action"
+                              title="Bearbeiten"
+                              onClick={() => handleEditArticle(article)}
+                            >
+                              <FaPencilAlt />
+                            </button>
+                            <button
+                              className="btn btn-link btn-action"
+                              title="Drucken"
+                              onClick={() => {
+                                // TODO: Druckfunktionalität implementieren
+                                console.log('Drucken für Artikel:', article.name);
+                              }}
+                            >
+                              <FaPrint />
+                            </button>
+                            <button
+                              className="btn btn-link btn-action btn-danger"
+                              title="Löschen"
+                              onClick={() => handleDeleteSingleArticle(article.id, article.name)}
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         ) : (
           /* Kachel-Ansicht */

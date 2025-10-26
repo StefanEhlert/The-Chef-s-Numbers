@@ -21,6 +21,7 @@ import Lieferantenformular from './Lieferantenformular';
 import Lieferantenverwaltung from './Lieferantenverwaltung';
 import Artikelformular from './Artikelformular';
 import ArtikelDataExchange from './ArtikelDataExchange';
+import ThemeColorTest from './ThemeColorTest';
 
 // Import der ausgelagerten Module
 import { designTemplates, DesignTemplateKey } from '../constants/designTemplates';
@@ -921,6 +922,9 @@ function AppContent() {
       case 'development':
         return <DevelopmentPage />;
 
+      case 'theme-test':
+        return <ThemeColorTest />;
+
       case 'kalkulation':
         return (
           <Kalkulation
@@ -1187,6 +1191,22 @@ function AppContent() {
         <div className="drawer" style={{ backgroundColor: colors.background, minHeight: '100vh' }}>
           <style>
             {`
+              :root {
+                --theme-primary: ${colors.primary};
+                --theme-secondary: ${colors.secondary};
+                --theme-accent: ${colors.accent};
+                --theme-text: ${colors.text};
+                --theme-text-secondary: ${colors.textSecondary};
+                --theme-card: ${colors.card};
+                --theme-card-border: ${colors.cardBorder};
+                --theme-card-bg: ${colors.card};
+                --theme-card-bg-dark: ${colors.card}cc;
+                --theme-background: ${colors.background};
+                --theme-sidebar: ${colors.sidebar};
+                --theme-input: ${colors.input};
+                --theme-paper: ${colors.paper};
+                --theme-paper-shadow: ${colors.paperShadow};
+              }
               .sidebar-icon {
                 display: block !important;
                 visibility: visible !important;
@@ -1306,7 +1326,7 @@ function AppContent() {
                       <div className="card-header" style={{ backgroundColor: colors.secondary }}>
                         <h5 className="mb-0" style={{ color: colors.text }}>Design auswählen</h5>
                       </div>
-                      <div className="card-body">
+                      <div className="card-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                         <div className="row">
                           {Object.entries(designTemplates).map(([key, template]) => (
                             <div key={key} className="col-md-6 mb-3">
@@ -1320,13 +1340,20 @@ function AppContent() {
                                 onClick={() => {
                                   dispatch({ type: 'SET_CURRENT_DESIGN', payload: key });
                                   dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false });
+                                  
+                                  // DaisyUI-Theme wechseln
+                                  if (['cupcake', 'corporate', 'retro', 'light'].includes(key)) {
+                                    document.documentElement.setAttribute('data-theme', key);
+                                  } else {
+                                    document.documentElement.removeAttribute('data-theme');
+                                  }
                                 }}
                               >
-                                <div className="card-body">
-                                  <h6 className="card-title" style={{ color: template.colors.text }}>
+                                <div className="card-body" style={{ color: template.colors.text }}>
+                                  <h6 className="card-title">
                                     {template.name}
                                   </h6>
-                                  <p className="card-text small" style={{ color: template.colors.text }}>
+                                  <p className="card-text small">
                                     {template.description}
                                   </p>
                                   <div className="d-flex gap-2">

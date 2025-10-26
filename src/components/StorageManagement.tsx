@@ -8,6 +8,7 @@ import DockerSetupModal from './DockerSetupModal';
 // StorageContext wird nicht mehr benötigt - StorageLayer lädt Konfiguration direkt
 import { designTemplates } from '../constants/designTemplates';
 import { SignJWT } from 'jose';
+import { setComponentColors } from '../utils/cssVariables';
 
 // Interfaces
 interface CloudStorageTypeConfig {
@@ -143,6 +144,10 @@ const StorageManagement: React.FC = () => {
   };
 
   const colors = getCurrentColors();
+
+  useEffect(() => {
+    setComponentColors(colors);
+  }, [colors]);
 
   // Hosting-Erkennung: Prüfe ob App lokal oder cloud-gehostet ist
   const detectHostingEnvironment = (): 'local' | 'cloud' => {
@@ -6136,7 +6141,7 @@ const StorageManagement: React.FC = () => {
           }
         `}
       </style>
-      <div className="container-fluid p-4">
+      <div className="container-fluid p-4 pt-0">
         <div style={{
           backgroundColor: colors.paper || colors.card,
           borderRadius: '12px',
@@ -6160,16 +6165,16 @@ const StorageManagement: React.FC = () => {
             borderRadius: '8px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+            <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+              <FaInfoCircle className="me-2" style={{ color: colors.text }} />
               <h5 className="mb-0" style={{ color: colors.text }}>
-                <FaInfoCircle className="me-2" />
                 Aktueller Status
               </h5>
             </div>
             <div className="card-body" style={{ padding: '20px' }}>
-              <div className="row">
-                <div className="col-md-6">
-                  <div className="d-flex align-items-center mb-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center mb-3">
                     <strong className="me-3" style={{ color: colors.text, fontWeight: '600' }}>Speichermodus:</strong>
                     <span style={{
                       color: colors.text,
@@ -6181,7 +6186,7 @@ const StorageManagement: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="d-flex align-items-center mb-3">
+                  <div className="flex items-center mb-3">
                     <strong className="me-3" style={{ color: colors.text, fontWeight: '600' }}>Cloud:</strong>
                     <span style={{
                       color: colors.text,
@@ -6196,9 +6201,9 @@ const StorageManagement: React.FC = () => {
 
                   {/* Docker-Dienste Details (nur anzeigen wenn Docker Container gewählt sind) */}
                   {storageManagement.currentStorage.currentStorageMode !== 'local' && storageManagement.currentStorage.currentCloudType === 'docker' && (
-                    <div className="d-flex align-items-center mb-3">
+                    <div className="flex items-center mb-3">
                       <strong className="me-3" style={{ color: colors.text, fontWeight: '600' }}>Dienste:</strong>
-                      <div className="d-flex gap-3">
+                      <div className="flex gap-3">
                         {/* Datenbank-Dienst */}
                         <span style={{
                           color: colors.text,
@@ -6234,8 +6239,8 @@ const StorageManagement: React.FC = () => {
                   )}
                 </div>
 
-                <div className="col-md-6">
-                  <div className="d-flex align-items-center mb-3">
+                <div>
+                  <div className="flex items-center mb-3">
                     <strong className="me-3" style={{ color: colors.text, fontWeight: '600' }}>Datenbank:</strong>
                     <span style={{
                       color: colors.text,
@@ -6246,7 +6251,7 @@ const StorageManagement: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="d-flex align-items-center">
+                  <div className="flex items-center">
                     <strong className="me-3" style={{ color: colors.text, fontWeight: '600' }}>Bildspeicher:</strong>
                     <span style={{
                       color: colors.text,
@@ -6268,15 +6273,15 @@ const StorageManagement: React.FC = () => {
             borderRadius: '8px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+            <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+              <FaDatabase className="me-2" style={{ color: colors.text }} />
               <h5 className="mb-0" style={{ color: colors.text }}>
-                <FaDatabase className="me-2" />
                 Speichermodus auswählen
               </h5>
             </div>
             <div className="card-body" style={{ padding: '20px' }}>
-              <div className="row">
-                <div className="col-md-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
                   <div className="form-check storage-mode-option" style={{
                     padding: '16px',
                     border: `1px solid ${colors.cardBorder}`,
@@ -6306,7 +6311,7 @@ const StorageManagement: React.FC = () => {
                       style={{ marginTop: '4px' }}
                     />
                     <label className="form-check-label" htmlFor="local" style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
-                      <div className="d-flex align-items-center">
+                      <div className="flex items-center">
                         <FaDatabase className="me-2" style={{ color: '#28a745', fontSize: '20px' }} />
                         <div>
                           <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Lokaler Speicher</strong>
@@ -6317,7 +6322,7 @@ const StorageManagement: React.FC = () => {
                     </label>
                   </div>
                 </div>
-                <div className="col-md-6">
+                <div>
                   <div className="form-check storage-mode-option" style={{
                     padding: '16px',
                     border: `1px solid ${colors.cardBorder}`,
@@ -6344,7 +6349,7 @@ const StorageManagement: React.FC = () => {
                       style={{ marginTop: '4px' }}
                     />
                     <label className="form-check-label" htmlFor="cloud" style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
-                      <div className="d-flex align-items-center">
+                      <div className="flex items-center">
                         <FaCloud className="me-2" style={{ color: '#17a2b8', fontSize: '20px' }} />
                         <div>
                           <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Cloud-Speicher</strong>
@@ -6367,18 +6372,18 @@ const StorageManagement: React.FC = () => {
               borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaCloud className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaCloud className="me-2" />
                   Cloud-Speicher-Typ
                 </h5>
               </div>
-              <div className="card-body" style={{ padding: '20px' }}>
-                <div className="row">
+              <div className="card-body" style={{ padding: '12px 16px' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {cloudStorageTypes.map((type) => (
-                    <div key={type.id} className="col-md-4">
+                    <div key={type.id}>
                       <div className="form-check cloud-option" style={{
-                        padding: '16px',
+                        padding: window.innerWidth < 640 ? '12px' : '16px',
                         border: `1px solid ${colors.cardBorder}`,
                         borderRadius: '6px',
                         marginBottom: '16px',
@@ -6416,14 +6421,14 @@ const StorageManagement: React.FC = () => {
                           style={{ marginTop: '4px' }}
                         />
                         <label className="form-check-label" htmlFor={type.id} style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
-                          <div className="d-flex align-items-center">
-                            <div style={{ color: type.color, fontSize: '20px', marginRight: '12px' }}>
+                          <div className="flex items-center">
+                            <div className="me-2" style={{ color: type.color, fontSize: '20px' }}>
                               {type.icon}
                             </div>
                             <div>
-                              <strong style={{ color: colors.text, fontSize: '1.1rem' }}>{type.name}</strong>
+                              <strong style={{ color: colors.text, fontSize: window.innerWidth < 640 ? '1rem' : '1.1rem' }}>{type.name}</strong>
                               <br />
-                              <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>{type.description}</small>
+                              <small style={{ color: colors.textSecondary, fontSize: window.innerWidth < 640 ? '0.8rem' : '0.9rem' }}>{type.description}</small>
                             </div>
                           </div>
                         </label>
@@ -6443,19 +6448,19 @@ const StorageManagement: React.FC = () => {
               borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaDatabase className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaDatabase className="me-2" />
                   Datenbank-Typ
                 </h5>
               </div>
-              <div className="card-body" style={{ padding: '20px' }}>
-                <div className="row">
+              <div className="card-body" style={{ padding: '12px 16px' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {/* Cloud-Datenbank-Optionen */}
                   {['PostgreSQL', 'MariaDB', 'MySQL', 'CouchDB'].map((dbType) => (
-                    <div key={dbType} className="col-md-3">
+                    <div key={dbType}>
                       <div className="form-check database-option" style={{
-                        padding: '16px',
+                        padding: window.innerWidth < 640 ? '12px' : '16px',
                         border: `1px solid ${colors.cardBorder}`,
                         borderRadius: '6px',
                         marginBottom: '16px',
@@ -6481,12 +6486,12 @@ const StorageManagement: React.FC = () => {
                           style={{ marginTop: '4px' }}
                         />
                         <label className="form-check-label" htmlFor={dbType} style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
-                          <div className="d-flex align-items-center">
+                          <div className="flex items-center">
                             <FaDatabase className="me-2" style={{ color: dbType === 'CouchDB' ? '#e42528' : '#336791', fontSize: '20px' }} />
                             <div>
-                              <strong style={{ color: colors.text, fontSize: '1.1rem' }}>{dbType}</strong>
+                              <strong style={{ color: colors.text, fontSize: window.innerWidth < 640 ? '1rem' : '1.1rem' }}>{dbType}</strong>
                               <br />
-                              <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
+                              <small style={{ color: colors.textSecondary, fontSize: window.innerWidth < 640 ? '0.8rem' : '0.9rem' }}>
                                 {dbType === 'PostgreSQL' ? 'Erweiterte SQL-Datenbank' :
                                   dbType === 'MariaDB' ? 'MySQL-kompatible Datenbank' :
                                     dbType === 'MySQL' ? 'Beliebte Web-Datenbank' :
@@ -6511,9 +6516,9 @@ const StorageManagement: React.FC = () => {
               borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaServer className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaServer className="me-2" />
                   The Chef's Numbers - Selfhosting
                 </h5>
               </div>
@@ -6524,7 +6529,7 @@ const StorageManagement: React.FC = () => {
                   borderColor: '#17a2b8',
                   borderLeft: `4px solid #17a2b8` 
                 }}>
-                  <div className="d-flex align-items-start">
+                  <div className="flex items-start">
                     <FaInfoCircle className="me-3 mt-1" style={{ color: '#17a2b8', fontSize: '20px', flexShrink: 0 }} />
                     <div>
                       <strong style={{ color: colors.text }}>Docker-Datenbanken sind aus der Cloud nicht erreichbar</strong>
@@ -6540,8 +6545,8 @@ const StorageManagement: React.FC = () => {
                 </div>
 
                 {/* Selfhosting-Optionen */}
-                <div className="row">
-                  <div className="col-12">
+                <div className="grid grid-cols-1">
+                  <div>
                     <div className="card" style={{ 
                       backgroundColor: colors.card,
                       border: `2px solid ${colors.primary}`,
@@ -6549,7 +6554,7 @@ const StorageManagement: React.FC = () => {
                     }}>
                       <div className="card-body" style={{ padding: '24px' }}>
                         {/* Header mit Icon und Vorteilen */}
-                        <div className="d-flex align-items-start mb-3">
+                        <div className="flex items-start mb-3">
                           <div className="me-3" style={{ 
                             backgroundColor: colors.primary,
                             borderRadius: '50%',
@@ -6562,12 +6567,12 @@ const StorageManagement: React.FC = () => {
                           }}>
                             <FaDocker style={{ color: '#ffffff', fontSize: '30px' }} />
                           </div>
-                          <div className="flex-grow-1">
-                            <div className="d-flex align-items-center flex-wrap mb-2">
+                          <div className="flex-grow">
+                            <div className="flex items-center flex-wrap mb-2">
                               <h5 style={{ color: colors.text, marginBottom: 0, marginRight: '16px' }}>
                                 Vollständig selbst-gehostete Lösung
                               </h5>
-                              <div className="d-flex align-items-center" style={{ gap: '12px' }}>
+                              <div className="flex items-center" style={{ gap: '12px' }}>
                                 <span style={{ color: colors.text, fontSize: '0.85rem', display: 'flex', alignItems: 'center' }}>
                                   <FaCheck className="me-1" style={{ color: '#28a745', fontSize: '0.9em' }} />
                                   Volle Datenhoheit
@@ -6585,52 +6590,26 @@ const StorageManagement: React.FC = () => {
                         </div>
 
                             {/* Konfigurationsfelder und Button in einer Zeile */}
-                            <div className="row align-items-start">
-                              <div className="col-md-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+                              <div>
                                 <div className="mb-0">
-                                  <label className="form-label" style={{ color: colors.text, fontWeight: '500', fontSize: '0.9rem' }}>
+                                  <label className="form-label">
                                     Docker Host/IP
                                   </label>
                                   <div className="input-group">
                                     <input
                                       type="text"
-                                      className={`form-control ${storageManagement.connections.frontend.host && !validateHostname(storageManagement.connections.frontend.host).isValid ? 'is-invalid' : ''}`}
+                                      className={`form-control ${!storageManagement.connections.frontend.host ? 'is-empty' : ''} ${storageManagement.connections.frontend.host && !validateHostname(storageManagement.connections.frontend.host).isValid ? 'is-invalid' : ''}`}
                                       value={storageManagement.connections.frontend.host}
                                       onChange={(e) => updateConnection('frontend', { host: e.target.value })}
                                       placeholder="localhost"
-                                      style={{
-                                        borderColor: colors.cardBorder,
-                                        color: colors.text,
-                                        backgroundColor: !storageManagement.connections.frontend.host ? colors.accent + '20' : undefined,
-                                        transition: 'all 0.2s ease'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = colors.accent;
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = colors.cardBorder;
-                                      }}
                                     />
                                     <button
                                       type="button"
-                                      className="btn btn-outline-secondary"
+                                      className="btn btn-outline-input"
                                       onClick={() => handlePingHost(storageManagement.connections.frontend.host, 'frontend-host')}
                                       disabled={!storageManagement.connections.frontend.host}
                                       title="Host-Erreichbarkeit testen (Ping)"
-                                      style={{
-                                        borderColor: colors.cardBorder,
-                                        transition: 'all 0.2s ease'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        if (!e.currentTarget.disabled) {
-                                          e.currentTarget.style.borderColor = colors.accent;
-                                          e.currentTarget.style.backgroundColor = colors.accent + '20';
-                                        }
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = colors.cardBorder;
-                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                      }}
                                     >
                                       <FaWifi style={{ fontSize: '1.1em' }} />
                                     </button>
@@ -6658,34 +6637,22 @@ const StorageManagement: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div className="col-md-4">
+                              <div>
                                 <div className="mb-0">
-                                  <label className="form-label" style={{ color: colors.text, fontWeight: '500', fontSize: '0.9rem' }}>
+                                  <label className="form-label">
                                     Frontend-Port
                                   </label>
                                   <div className="input-group">
                                     <input
                                       type="text"
-                                      className={`form-control ${storageManagement.connections.frontend.port && !isValidPort(storageManagement.connections.frontend.port) ? 'is-invalid' : ''}`}
+                                      className={`form-control ${!storageManagement.connections.frontend.port ? 'is-empty' : ''} ${storageManagement.connections.frontend.port && !isValidPort(storageManagement.connections.frontend.port) ? 'is-invalid' : ''}`}
                                       value={storageManagement.connections.frontend.port}
                                       onChange={(e) => updateConnection('frontend', { port: e.target.value })}
                                       placeholder="3000"
-                                      style={{
-                                        borderColor: colors.cardBorder,
-                                        color: colors.text,
-                                        backgroundColor: !storageManagement.connections.frontend.port ? colors.accent + '20' : undefined,
-                                        transition: 'all 0.2s ease'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = colors.accent;
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = colors.cardBorder;
-                                      }}
                                     />
                                     <button
                                       type="button"
-                                      className="btn btn-outline-secondary"
+                                      className="btn btn-outline-input"
                                       onClick={() => handleCheckFreePort(
                                         storageManagement.connections.frontend.host,
                                         storageManagement.connections.frontend.port,
@@ -6693,20 +6660,6 @@ const StorageManagement: React.FC = () => {
                                       )}
                                       disabled={!storageManagement.connections.frontend.host || !storageManagement.connections.frontend.port}
                                       title="Port-Verfügbarkeit testen (prüft ob Port frei ist)"
-                                      style={{
-                                        borderColor: colors.cardBorder,
-                                        transition: 'all 0.2s ease'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        if (!e.currentTarget.disabled) {
-                                          e.currentTarget.style.borderColor = colors.accent;
-                                          e.currentTarget.style.backgroundColor = colors.accent + '20';
-                                        }
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = colors.cardBorder;
-                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                      }}
                                     >
                                       <FaNetworkWired style={{ fontSize: '1.1em' }} />
                                     </button>
@@ -6734,7 +6687,7 @@ const StorageManagement: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div className="col-md-4">
+                              <div>
                                 <div className="mb-0">
                                   <label className="form-label" style={{ color: colors.text, fontWeight: '500', fontSize: '0.9rem', visibility: 'hidden' }}>
                                     Platzhalter
@@ -6798,11 +6751,15 @@ const StorageManagement: React.FC = () => {
                              storageManagement.connections.frontend.port && 
                              validateHostname(storageManagement.connections.frontend.host).isValid && 
                              isValidPort(storageManagement.connections.frontend.port) && (
-                              <div className="row">
-                                <div className="col-12">
+                              <div className="grid grid-cols-1">
+                                <div>
                                   <small style={{ color: colors.textSecondary, fontSize: '0.85rem' }}>
-                                    <FaInfoCircle className="me-1" style={{ fontSize: '0.9em' }} />
-                                    Frontend wird auf <strong>http://{storageManagement.connections.frontend.host}:{storageManagement.connections.frontend.port}</strong> erreichbar sein
+                                    <div className="d-flex align-items-start">
+                                      <FaInfoCircle className="me-1 flex-shrink-0" style={{ fontSize: '0.9em', marginTop: '2px' }} />
+                                      <span>
+                                        Frontend wird auf <strong>http://{storageManagement.connections.frontend.host}:{storageManagement.connections.frontend.port}</strong> erreichbar sein
+                                      </span>
+                                    </div>
                                   </small>
                                 </div>
                               </div>
@@ -6818,56 +6775,31 @@ const StorageManagement: React.FC = () => {
           {/* PostgreSQL-Konfiguration - nur anzeigen wenn lokal gehostet */}
           {hostingEnvironment === 'local' && postgresSectionVisible && (
             <div className={`card mb-4 storage-section ${postgresSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaDatabase className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaDatabase className="me-2" />
                   PostgreSQL-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ padding: '20px' }}>
-                <div className="row">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Gruppe 1: Netzwerk/Verbindung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Host/IP-Adresse</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.postgres.host && !validateHostname(storageManagement.connections.postgres.host).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.postgres.host ? 'is-empty' : ''} ${storageManagement.connections.postgres.host && !validateHostname(storageManagement.connections.postgres.host).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.postgres.host}
                           onChange={(e) => updateConnection('postgres', { host: e.target.value })}
                           placeholder="localhost"
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            backgroundColor: !storageManagement.connections.postgres.host ? colors.accent + '20' : undefined,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={() => handlePingHost(storageManagement.connections.postgres.host, 'postgres-host')}
                           disabled={!storageManagement.connections.postgres.host || pingingHosts['postgres-host']}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                            e.currentTarget.style.backgroundColor = colors.accent + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
                           title="Ping testen"
                         >
                           {pingingHosts['postgres-host'] ? (
@@ -6903,32 +6835,20 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* PostgreSQL und PostgREST Ports nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">PostgreSQL Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.postgres.port && !validatePort(storageManagement.connections.postgres.port).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.postgres.port ? 'is-empty' : ''} ${storageManagement.connections.postgres.port && !validatePort(storageManagement.connections.postgres.port).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.postgres.port}
                               onChange={(e) => updateConnection('postgres', { port: e.target.value })}
                               placeholder="5432"
-                              style={{
-                                backgroundColor: !storageManagement.connections.postgres.port ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => handleCheckPort(
                                 storageManagement.connections.postgres.host,
@@ -6936,11 +6856,6 @@ const StorageManagement: React.FC = () => {
                                 'postgres-port'
                               )}
                               disabled={checkingPorts['postgres-port'] || !storageManagement.connections.postgres.host || !storageManagement.connections.postgres.port}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                             >
                               {checkingPorts['postgres-port'] ? (
                                 <FaSpinner className="fa-spin" />
@@ -6973,31 +6888,19 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">PostgREST Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.postgres.postgrestPort && !validatePort(storageManagement.connections.postgres.postgrestPort).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.postgres.postgrestPort ? 'is-empty' : ''} ${storageManagement.connections.postgres.postgrestPort && !validatePort(storageManagement.connections.postgres.postgrestPort).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.postgres.postgrestPort}
                               onChange={(e) => updateConnection('postgres', { postgrestPort: e.target.value })}
                               placeholder="3000"
-                              style={{
-                                backgroundColor: !storageManagement.connections.postgres.postgrestPort ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => handleCheckPort(
                                 storageManagement.connections.postgres.host,
@@ -7005,11 +6908,6 @@ const StorageManagement: React.FC = () => {
                                 'postgrest-port'
                               )}
                               disabled={checkingPorts['postgrest-port'] || !storageManagement.connections.postgres.host || !storageManagement.connections.postgres.postgrestPort}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                             >
                               {checkingPorts['postgrest-port'] ? (
                                 <FaSpinner className="fa-spin" />
@@ -7046,27 +6944,16 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Gruppe 2: Authentifizierung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Datenbank</label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.postgres.database && !validatePostgreSQLDatabaseName(storageManagement.connections.postgres.database).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.postgres.database ? 'is-empty' : ''} ${storageManagement.connections.postgres.database && !validatePostgreSQLDatabaseName(storageManagement.connections.postgres.database).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.postgres.database}
                         onChange={(e) => updateConnection('postgres', { database: e.target.value })}
                         placeholder="chef_numbers"
-                        style={{
-                          backgroundColor: !storageManagement.connections.postgres.database ? colors.accent + '20' : undefined,
-                          borderColor: colors.cardBorder,
-                          color: colors.text,
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
-                        }}
+                        
                       />
 
                       {/* Datenbank-Validierung */}
@@ -7083,28 +6970,17 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* Benutzername und Passwort nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Benutzername</label>
                           <input
                             type="text"
-                            className={`form-control ${storageManagement.connections.postgres.username && !validatePostgreSQLUsername(storageManagement.connections.postgres.username).isValid ? 'is-invalid' : ''}`}
+                            className={`form-control ${!storageManagement.connections.postgres.username ? 'is-empty' : ''} ${storageManagement.connections.postgres.username && !validatePostgreSQLUsername(storageManagement.connections.postgres.username).isValid ? 'is-invalid' : ''}`}
                             value={storageManagement.connections.postgres.username}
                             onChange={(e) => updateConnection('postgres', { username: e.target.value })}
                             placeholder="postgres"
-                            style={{
-                              backgroundColor: !storageManagement.connections.postgres.username ? colors.accent + '20' : undefined,
-                              borderColor: colors.cardBorder,
-                              color: colors.text,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
+                            
                           />
 
                           {/* Benutzername-Validierung */}
@@ -7120,7 +6996,7 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Passwort</label>
                           <div className="input-group">
@@ -7130,44 +7006,24 @@ const StorageManagement: React.FC = () => {
                               value={storageManagement.connections.postgres.password}
                               onChange={(e) => updateConnection('postgres', { password: e.target.value })}
                               placeholder="Passwort"
-                              style={{
-                                backgroundColor: !storageManagement.connections.postgres.password ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
+                              autoComplete="new-password"
+                              data-form-type="other"
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => {
                                 const newPassword = generateSecurePassword();
                                 updateConnection('postgres', { password: newPassword });
-                              }}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
                               }}
                               title="Sicheres Passwort generieren"
                             >
                               <FaKey />
                             </button>
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => togglePasswordVisibility('postgres')}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                               title={showPasswords.postgres ? 'Passwort verbergen' : 'Passwort anzeigen'}
                             >
                               {showPasswords.postgres ? <FaEyeSlash /> : <FaEye />}
@@ -7293,22 +7149,22 @@ const StorageManagement: React.FC = () => {
           {/* MariaDB-Konfiguration - nur anzeigen wenn lokal gehostet */}
           {hostingEnvironment === 'local' && mariadbSectionVisible && (
             <div className={`card mb-4 storage-section ${mariadbSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaDatabase className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaDatabase className="me-2" />
                   MariaDB-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ padding: '20px' }}>
-                <div className="row">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Gruppe 1: Netzwerk/Verbindung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Host/IP-Adresse</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.mariadb.host && !validateHostname(storageManagement.connections.mariadb.host).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.mariadb.host ? 'is-empty' : ''} ${storageManagement.connections.mariadb.host && !validateHostname(storageManagement.connections.mariadb.host).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.mariadb.host}
                           onChange={(e) => updateConnection('mariadb', { host: e.target.value })}
                           placeholder="localhost"
@@ -7318,31 +7174,12 @@ const StorageManagement: React.FC = () => {
                             backgroundColor: !storageManagement.connections.mariadb.host ? colors.accent + '20' : undefined,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={() => handlePingHost(storageManagement.connections.mariadb.host, 'mariadb-host')}
                           disabled={!storageManagement.connections.mariadb.host || pingingHosts['mariadb-host']}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                            e.currentTarget.style.backgroundColor = colors.accent + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
                           title="Ping testen"
                         >
                           {pingingHosts['mariadb-host'] ? (
@@ -7378,32 +7215,20 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* MariaDB Port und Prisma API Port nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">MariaDB Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.mariadb.port && !validatePort(storageManagement.connections.mariadb.port).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.mariadb.port ? 'is-empty' : ''} ${storageManagement.connections.mariadb.port && !validatePort(storageManagement.connections.mariadb.port).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.mariadb.port}
                               onChange={(e) => updateConnection('mariadb', { port: e.target.value })}
                               placeholder="3306"
-                              style={{
-                                backgroundColor: !storageManagement.connections.mariadb.port ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => handleCheckPort(
                                 storageManagement.connections.mariadb.host,
@@ -7411,11 +7236,6 @@ const StorageManagement: React.FC = () => {
                                 'mariadb-port'
                               )}
                               disabled={checkingPorts['mariadb-port'] || !storageManagement.connections.mariadb.host || !storageManagement.connections.mariadb.port}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                             >
                               {checkingPorts['mariadb-port'] ? (
                                 <FaSpinner className="fa-spin" />
@@ -7449,13 +7269,13 @@ const StorageManagement: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Prisma API Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.mariadb.prismaPort && !validatePort(storageManagement.connections.mariadb.prismaPort).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.mariadb.prismaPort ? 'is-empty' : ''} ${storageManagement.connections.mariadb.prismaPort && !validatePort(storageManagement.connections.mariadb.prismaPort).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.mariadb.prismaPort}
                               onChange={(e) => updateConnection('mariadb', { prismaPort: e.target.value })}
                               placeholder="3001"
@@ -7465,15 +7285,9 @@ const StorageManagement: React.FC = () => {
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => handleCheckPort(
                                 storageManagement.connections.mariadb.host,
@@ -7481,11 +7295,6 @@ const StorageManagement: React.FC = () => {
                                 'mariadb-prisma-port'
                               )}
                               disabled={checkingPorts['mariadb-prisma-port'] || !storageManagement.connections.mariadb.host || !storageManagement.connections.mariadb.prismaPort}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                               title="Port-Verfügbarkeit testen"
                             >
                               {checkingPorts['mariadb-prisma-port'] ? (
@@ -7525,12 +7334,12 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Gruppe 2: Authentifizierung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Datenbank</label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.mariadb.database && !validateMariaDBDatabaseName(storageManagement.connections.mariadb.database).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.mariadb.database ? 'is-empty' : ''} ${storageManagement.connections.mariadb.database && !validateMariaDBDatabaseName(storageManagement.connections.mariadb.database).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.mariadb.database}
                         onChange={(e) => updateConnection('mariadb', { database: e.target.value })}
                         placeholder="chef_numbers"
@@ -7539,12 +7348,6 @@ const StorageManagement: React.FC = () => {
                           borderColor: colors.cardBorder,
                           color: colors.text,
                           transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
 
@@ -7562,13 +7365,13 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* Benutzername und Passwort nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Benutzername</label>
                           <input
                             type="text"
-                            className={`form-control ${storageManagement.connections.mariadb.username && !validateMariaDBUsername(storageManagement.connections.mariadb.username).isValid ? 'is-invalid' : ''}`}
+                            className={`form-control ${!storageManagement.connections.mariadb.username ? 'is-empty' : ''} ${storageManagement.connections.mariadb.username && !validateMariaDBUsername(storageManagement.connections.mariadb.username).isValid ? 'is-invalid' : ''}`}
                             value={storageManagement.connections.mariadb.username}
                             onChange={(e) => updateConnection('mariadb', { username: e.target.value })}
                             placeholder="chef_user"
@@ -7577,12 +7380,6 @@ const StorageManagement: React.FC = () => {
                               borderColor: colors.cardBorder,
                               color: colors.text,
                               transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
                             }}
                           />
 
@@ -7599,7 +7396,7 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Passwort</label>
                           <div className="input-group">
@@ -7609,44 +7406,24 @@ const StorageManagement: React.FC = () => {
                               value={storageManagement.connections.mariadb.password}
                               onChange={(e) => updateConnection('mariadb', { password: e.target.value })}
                               placeholder="Passwort"
-                              style={{
-                                backgroundColor: !storageManagement.connections.mariadb.password ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
+                              autoComplete="new-password"
+                              data-form-type="other"
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => {
                                 const newPassword = generateSecurePassword();
                                 updateConnection('mariadb', { password: newPassword });
-                              }}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
                               }}
                               title="Sicheres Passwort generieren"
                             >
                               <FaKey />
                             </button>
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => togglePasswordVisibility('mariadb')}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                               title={showPasswords.mariadb ? 'Passwort verbergen' : 'Passwort anzeigen'}
                             >
                               {showPasswords.mariadb ? <FaEyeSlash /> : <FaEye />}
@@ -7772,22 +7549,22 @@ const StorageManagement: React.FC = () => {
           {/* MySQL-Konfiguration - nur anzeigen wenn lokal gehostet */}
           {hostingEnvironment === 'local' && mysqlSectionVisible && (
             <div className={`card mb-4 storage-section ${mysqlSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaDatabase className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaDatabase className="me-2" />
                   MySQL-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ padding: '20px' }}>
-                <div className="row">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Gruppe 1: Netzwerk/Verbindung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Host/IP-Adresse</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.mysql.host && !validateHostname(storageManagement.connections.mysql.host).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.mysql.host ? 'is-empty' : ''} ${storageManagement.connections.mysql.host && !validateHostname(storageManagement.connections.mysql.host).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.mysql.host}
                           onChange={(e) => updateConnection('mysql', { host: e.target.value })}
                           placeholder="localhost"
@@ -7797,31 +7574,12 @@ const StorageManagement: React.FC = () => {
                             backgroundColor: !storageManagement.connections.mysql.host ? colors.accent + '20' : undefined,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={() => handlePingHost(storageManagement.connections.mysql.host, 'mysql-host')}
                           disabled={!storageManagement.connections.mysql.host || pingingHosts['mysql-host']}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                            e.currentTarget.style.backgroundColor = colors.accent + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
                           title="Ping testen"
                         >
                           {pingingHosts['mysql-host'] ? (
@@ -7856,14 +7614,14 @@ const StorageManagement: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="row">
-                      <div className="col-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">MySQL Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.mysql.port && !validatePort(storageManagement.connections.mysql.port).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.mysql.port ? 'is-empty' : ''} ${storageManagement.connections.mysql.port && !validatePort(storageManagement.connections.mysql.port).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.mysql.port}
                               onChange={(e) => updateConnection('mysql', { port: e.target.value })}
                               placeholder="3306"
@@ -7873,15 +7631,9 @@ const StorageManagement: React.FC = () => {
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => handleCheckPort(
                                 storageManagement.connections.mysql.host,
@@ -7889,11 +7641,6 @@ const StorageManagement: React.FC = () => {
                                 'mysql-port'
                               )}
                               disabled={checkingPorts['mysql-port'] || !storageManagement.connections.mysql.host || !storageManagement.connections.mysql.port}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                             >
                               {checkingPorts['mysql-port'] ? (
                                 <FaSpinner className="fa-spin" />
@@ -7904,13 +7651,13 @@ const StorageManagement: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="col-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Prisma API Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.mysql.prismaPort && !validatePort(storageManagement.connections.mysql.prismaPort).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.mysql.prismaPort ? 'is-empty' : ''} ${storageManagement.connections.mysql.prismaPort && !validatePort(storageManagement.connections.mysql.prismaPort).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.mysql.prismaPort}
                               onChange={(e) => updateConnection('mysql', { prismaPort: e.target.value })}
                               placeholder="3001"
@@ -7920,15 +7667,9 @@ const StorageManagement: React.FC = () => {
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => handleCheckPort(
                                 storageManagement.connections.mysql.host,
@@ -7936,11 +7677,6 @@ const StorageManagement: React.FC = () => {
                                 'mysql-prisma-port'
                               )}
                               disabled={checkingPorts['mysql-prisma-port'] || !storageManagement.connections.mysql.host || !storageManagement.connections.mysql.prismaPort}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                             >
                               {checkingPorts['mysql-prisma-port'] ? (
                                 <FaSpinner className="fa-spin" />
@@ -7998,12 +7734,12 @@ const StorageManagement: React.FC = () => {
                     )}
                   </div>
                   {/* Gruppe 2: Authentifizierung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Datenbank</label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.mysql.database && !validatePostgreSQLDatabaseName(storageManagement.connections.mysql.database).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.mysql.database ? 'is-empty' : ''} ${storageManagement.connections.mysql.database && !validatePostgreSQLDatabaseName(storageManagement.connections.mysql.database).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.mysql.database}
                         onChange={(e) => updateConnection('mysql', { database: e.target.value })}
                         placeholder="chef_numbers"
@@ -8012,12 +7748,6 @@ const StorageManagement: React.FC = () => {
                           borderColor: colors.cardBorder,
                           color: colors.text,
                           transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
 
@@ -8035,13 +7765,13 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* Benutzername und Passwort nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Benutzername</label>
                           <input
                             type="text"
-                            className={`form-control ${storageManagement.connections.mysql.username && !validateMySQLUsername(storageManagement.connections.mysql.username).isValid ? 'is-invalid' : ''}`}
+                            className={`form-control ${!storageManagement.connections.mysql.username ? 'is-empty' : ''} ${storageManagement.connections.mysql.username && !validateMySQLUsername(storageManagement.connections.mysql.username).isValid ? 'is-invalid' : ''}`}
                             value={storageManagement.connections.mysql.username}
                             onChange={(e) => updateConnection('mysql', { username: e.target.value })}
                             placeholder="chef_user"
@@ -8050,12 +7780,6 @@ const StorageManagement: React.FC = () => {
                               borderColor: colors.cardBorder,
                               color: colors.text,
                               transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
                             }}
                           />
 
@@ -8072,7 +7796,7 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Passwort</label>
                           <div className="input-group">
@@ -8082,44 +7806,24 @@ const StorageManagement: React.FC = () => {
                               value={storageManagement.connections.mysql.password}
                               onChange={(e) => updateConnection('mysql', { password: e.target.value })}
                               placeholder="Passwort"
-                              style={{
-                                backgroundColor: !storageManagement.connections.mysql.password ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
+                              autoComplete="new-password"
+                              data-form-type="other"
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => {
                                 const newPassword = generateSecurePassword();
                                 updateConnection('mysql', { password: newPassword });
-                              }}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
                               }}
                               title="Sicheres Passwort generieren"
                             >
                               <FaKey />
                             </button>
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => togglePasswordVisibility('mysql')}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                               title={showPasswords.mysql ? 'Passwort verbergen' : 'Passwort anzeigen'}
                             >
                               {showPasswords.mysql ? <FaEyeSlash /> : <FaEye />}
@@ -8248,22 +7952,22 @@ const StorageManagement: React.FC = () => {
           {/* CouchDB-Konfiguration - nur anzeigen wenn lokal gehostet */}
           {hostingEnvironment === 'local' && couchdbSectionVisible && (
             <div className={`card mb-4 storage-section ${couchdbSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaDatabase className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaDatabase className="me-2" />
                   CouchDB-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ padding: '20px' }}>
-                <div className="row">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Gruppe 1: Netzwerk/Verbindung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Host/IP-Adresse</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.couchdb.host && !validateHostname(storageManagement.connections.couchdb.host).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.couchdb.host ? 'is-empty' : ''} ${storageManagement.connections.couchdb.host && !validateHostname(storageManagement.connections.couchdb.host).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.couchdb.host}
                           onChange={(e) => updateConnection('couchdb', { host: e.target.value })}
                           placeholder="localhost"
@@ -8273,31 +7977,12 @@ const StorageManagement: React.FC = () => {
                             backgroundColor: !storageManagement.connections.couchdb.host ? colors.accent + '20' : undefined,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={() => handlePingHost(storageManagement.connections.couchdb.host, 'couchdb-host')}
                           disabled={!storageManagement.connections.couchdb.host || pingingHosts['couchdb-host']}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                            e.currentTarget.style.backgroundColor = colors.accent + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
                           title="Ping testen"
                         >
                           {pingingHosts['couchdb-host'] ? (
@@ -8338,7 +8023,7 @@ const StorageManagement: React.FC = () => {
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.couchdb.port && !validatePort(storageManagement.connections.couchdb.port).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.couchdb.port ? 'is-empty' : ''} ${storageManagement.connections.couchdb.port && !validatePort(storageManagement.connections.couchdb.port).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.couchdb.port}
                           onChange={(e) => updateConnection('couchdb', { port: e.target.value })}
                           placeholder="5984"
@@ -8348,15 +8033,9 @@ const StorageManagement: React.FC = () => {
                             color: colors.text,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           type="button"
                           onClick={() => handleCheckPort(
                             storageManagement.connections.couchdb.host,
@@ -8364,11 +8043,6 @@ const StorageManagement: React.FC = () => {
                             'couchdb-port'
                           )}
                           disabled={checkingPorts['couchdb-port'] || !storageManagement.connections.couchdb.host || !storageManagement.connections.couchdb.port}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            backgroundColor: colors.card
-                          }}
                         >
                           {checkingPorts['couchdb-port'] ? (
                             <FaSpinner className="fa-spin" />
@@ -8403,13 +8077,13 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Gruppe 2: Authentifizierung */}
-                  <div className="col-lg-6 col-md-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Datenbank</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.couchdb.database && !validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.couchdb.database ? 'is-empty' : ''} ${storageManagement.connections.couchdb.database && !validateCouchDBDatabaseName(storageManagement.connections.couchdb.database).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.couchdb.database}
                           onChange={(e) => updateConnection('couchdb', { database: e.target.value })}
                           placeholder="chef_numbers"
@@ -8419,16 +8093,10 @@ const StorageManagement: React.FC = () => {
                             color: colors.text,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={() => {
                             const host = storageManagement.connections.couchdb.host;
                             const port = storageManagement.connections.couchdb.port || '5984';
@@ -8448,16 +8116,6 @@ const StorageManagement: React.FC = () => {
                             transition: 'all 0.2s ease',
                             opacity: storageManagement.connections.couchdb.connectionStatus ? 1 : 0.6,
                             cursor: storageManagement.connections.couchdb.connectionStatus ? 'pointer' : 'not-allowed'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (storageManagement.connections.couchdb.connectionStatus) {
-                              e.currentTarget.style.borderColor = colors.accent;
-                              e.currentTarget.style.backgroundColor = colors.accent + '20';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
                           }}
                           title={storageManagement.connections.couchdb.connectionStatus ? 'CouchDB Fauxton Web-Interface öffnen' : 'Verbindungstest muss erfolgreich sein'}
                         >
@@ -8479,13 +8137,13 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* Benutzername und Passwort nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Benutzername</label>
                           <input
                             type="text"
-                            className={`form-control ${storageManagement.connections.couchdb.username && !validateCouchDBUsername(storageManagement.connections.couchdb.username).isValid ? 'is-invalid' : ''}`}
+                            className={`form-control ${!storageManagement.connections.couchdb.username ? 'is-empty' : ''} ${storageManagement.connections.couchdb.username && !validateCouchDBUsername(storageManagement.connections.couchdb.username).isValid ? 'is-invalid' : ''}`}
                             value={storageManagement.connections.couchdb.username}
                             onChange={(e) => updateConnection('couchdb', { username: e.target.value })}
                             placeholder="admin"
@@ -8494,12 +8152,6 @@ const StorageManagement: React.FC = () => {
                               borderColor: colors.cardBorder,
                               color: colors.text,
                               transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
                             }}
                           />
 
@@ -8516,7 +8168,7 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Passwort</label>
                           <div className="input-group">
@@ -8526,44 +8178,24 @@ const StorageManagement: React.FC = () => {
                               value={storageManagement.connections.couchdb.password}
                               onChange={(e) => updateConnection('couchdb', { password: e.target.value })}
                               placeholder="Passwort"
-                              style={{
-                                backgroundColor: !storageManagement.connections.couchdb.password ? colors.accent + '20' : undefined,
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
+                              autoComplete="new-password"
+                              data-form-type="other"
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => {
                                 const newPassword = generateSecurePassword();
                                 updateConnection('couchdb', { password: newPassword });
-                              }}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
                               }}
                               title="Sicheres Passwort generieren"
                             >
                               <FaKey />
                             </button>
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => togglePasswordVisibility('couchdb')}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                backgroundColor: colors.card
-                              }}
                               title={showPasswords.couchdb ? 'Passwort verbergen' : 'Passwort anzeigen'}
                             >
                               {showPasswords.couchdb ? <FaEyeSlash /> : <FaEye />}
@@ -8689,45 +8321,51 @@ const StorageManagement: React.FC = () => {
           {/* Supabase-Konfiguration */}
           {supabaseSectionVisible && (
             <div className={`card mb-4 storage-section ${supabaseSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaCloud className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaCloud className="me-2" />
                   Supabase-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ padding: '20px' }}>
                 {/* Info-Banner */}
-                <div className="alert alert-info mb-4" style={{ backgroundColor: '#3ecf8e20', borderColor: '#3ecf8e' }}>
-                  <FaInfoCircle className="me-2" />
-                  <strong>Supabase Cloud:</strong> Vollständig verwaltete PostgreSQL-Datenbank und Object Storage.
-                  <br />
-                  <small>
-                    Erstellen Sie ein kostenloses Projekt auf <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" style={{ color: '#3ecf8e' }}>supabase.com</a>
-                    {' '} · {' '}
-                    <a 
-                      href="#" 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setShowSupabaseSetupModal(true);
-                      }} 
-                      style={{ color: '#ff9800', cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      Setup-Anleitung anzeigen
-                    </a>
-                  </small>
+                <div className="alert alert-info alert-info-supabase mb-4">
+                  <div className="d-flex align-items-start">
+                    <FaInfoCircle className="me-2 flex-shrink-0" style={{ marginTop: '2px' }} />
+                    <div>
+                      <strong>Supabase Cloud:</strong> Vollständig verwaltete PostgreSQL-Datenbank und Object Storage.
+                      <br />
+                      <small>
+                        Erstellen Sie ein kostenloses Projekt auf <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'underline' }}>supabase.com</a>
+                        {' '} · {' '}
+                        <a 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setShowSupabaseSetupModal(true);
+                          }}
+                          style={{ color: '#10b981', textDecoration: 'underline' }}
+                        >
+                          Setup-Anleitung anzeigen
+                        </a>
+                      </small>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="row">
+                <div className="grid grid-cols-1 gap-4">
                   {/* Gruppe 1: URL */}
-                  <div className="col-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaCloud className="me-2" style={{ color: '#3ecf8e' }} />
-                        Supabase Project URL
+                        <div className="d-flex align-items-center">
+                          <FaCloud className="me-2 flex-shrink-0" style={{ color: '#3ecf8e' }} />
+                          <span>Supabase Project URL</span>
+                        </div>
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.supabase.url && !validateSupabaseURL(storageManagement.connections.supabase.url).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.supabase.url ? 'is-empty' : ''} ${storageManagement.connections.supabase.url && !validateSupabaseURL(storageManagement.connections.supabase.url).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.supabase.url}
                         onChange={(e) => updateConnection('supabase', { url: e.target.value })}
                         placeholder="https://xxxxx.supabase.co"
@@ -8738,12 +8376,6 @@ const StorageManagement: React.FC = () => {
                           transition: 'all 0.2s ease',
                           fontFamily: 'monospace',
                           fontSize: '0.9rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
                       {/* URL-Validierung */}
@@ -8761,19 +8393,23 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Gruppe 2: API Keys */}
-                  <div className="col-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaKey className="me-2" style={{ color: '#3ecf8e' }} />
-                        Anon (Public) Key
+                        <div className="d-flex align-items-center">
+                          <FaKey className="me-2 flex-shrink-0" style={{ color: '#3ecf8e' }} />
+                          <span>Anon (Public) Key</span>
+                        </div>
                       </label>
                       <div className="input-group">
                         <input
                           type={showPasswords.supabaseAnon ? 'text' : 'password'}
-                          className={`form-control ${storageManagement.connections.supabase.anonKey && !validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.supabase.anonKey ? 'is-empty' : ''} ${storageManagement.connections.supabase.anonKey && !validateSupabaseKey(storageManagement.connections.supabase.anonKey, 'anon').isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.supabase.anonKey}
                           onChange={(e) => updateConnection('supabase', { anonKey: e.target.value })}
                           placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          autoComplete="new-password"
+                          data-form-type="other"
                           style={{
                             backgroundColor: !storageManagement.connections.supabase.anonKey ? colors.accent + '20' : undefined,
                             borderColor: colors.cardBorder,
@@ -8782,22 +8418,11 @@ const StorageManagement: React.FC = () => {
                             fontFamily: 'monospace',
                             fontSize: '0.85rem'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           type="button"
                           onClick={() => togglePasswordVisibility('supabaseAnon')}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            backgroundColor: colors.card
-                          }}
                           title={showPasswords.supabaseAnon ? 'Key verbergen' : 'Key anzeigen'}
                         >
                           {showPasswords.supabaseAnon ? <FaEyeSlash /> : <FaEye />}
@@ -8816,18 +8441,22 @@ const StorageManagement: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="mb-3">
+                    <div className="mb-3" style={{ marginBottom: '0' }}>
                       <label className="form-label">
-                        <FaShieldAlt className="me-2" style={{ color: '#3ecf8e' }} />
-                        Service Role Key
+                        <div className="d-flex align-items-center">
+                          <FaShieldAlt className="me-2 flex-shrink-0" style={{ color: '#3ecf8e' }} />
+                          <span>Service Role Key</span>
+                        </div>
                       </label>
                       <div className="input-group">
                         <input
                           type={showPasswords.supabaseService ? 'text' : 'password'}
-                          className={`form-control ${storageManagement.connections.supabase.serviceRoleKey && !validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.supabase.serviceRoleKey ? 'is-empty' : ''} ${storageManagement.connections.supabase.serviceRoleKey && !validateSupabaseKey(storageManagement.connections.supabase.serviceRoleKey, 'service').isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.supabase.serviceRoleKey}
                           onChange={(e) => updateConnection('supabase', { serviceRoleKey: e.target.value })}
                           placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          autoComplete="new-password"
+                          data-form-type="other"
                           style={{
                             backgroundColor: !storageManagement.connections.supabase.serviceRoleKey ? colors.accent + '20' : undefined,
                             borderColor: colors.cardBorder,
@@ -8836,22 +8465,11 @@ const StorageManagement: React.FC = () => {
                             fontFamily: 'monospace',
                             fontSize: '0.85rem'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           type="button"
                           onClick={() => togglePasswordVisibility('supabaseService')}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            backgroundColor: colors.card
-                          }}
                           title={showPasswords.supabaseService ? 'Key verbergen' : 'Key anzeigen'}
                         >
                           {showPasswords.supabaseService ? <FaEyeSlash /> : <FaEye />}
@@ -8870,9 +8488,13 @@ const StorageManagement: React.FC = () => {
                       )}
                       
                       {/* Sicherheitshinweis */}
-                      <div className="alert alert-warning mt-2 mb-0" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', fontSize: '0.85rem' }}>
-                        <FaExclamationTriangle className="me-2" />
-                        <strong>Wichtig:</strong> Der Service Role Key hat vollständigen Zugriff. Behandeln Sie ihn wie ein Passwort!
+                      <div className="alert alert-warning alert-warning-service-role">
+                        <div className="d-flex align-items-start">
+                          <FaExclamationTriangle className="me-2 flex-shrink-0" style={{ marginTop: '2px' }} />
+                          <div>
+                            <strong>Wichtig:</strong> Der Service Role Key hat vollständigen Zugriff. Behandeln Sie ihn wie ein Passwort!
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -8918,10 +8540,6 @@ const StorageManagement: React.FC = () => {
                       <button
                         className="btn btn-outline-secondary"
                         onClick={() => window.open('https://supabase.com/dashboard', '_blank')}
-                        style={{
-                          borderColor: '#3ecf8e',
-                          color: '#3ecf8e'
-                        }}
                         title="Supabase Dashboard öffnen"
                       >
                         <FaExternalLinkAlt className="me-1" />
@@ -9147,75 +8765,63 @@ const StorageManagement: React.FC = () => {
           {/* Firebase-Konfiguration */}
           {firebaseSectionVisible && (
             <div className={`card mb-4 storage-section ${firebaseSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaCloud className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaCloud className="me-2" />
                   Firebase-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ padding: '20px' }}>
                 {/* Info-Banner */}
-                <div className="alert alert-info mb-4" style={{ backgroundColor: '#FF980020', borderColor: '#FF9800' }}>
-                  <FaInfoCircle className="me-2" />
-                  <strong>Firebase Cloud:</strong> Vollständig verwaltete Firestore NoSQL-Datenbank und Cloud Storage.
-                  <br />
-                  <small>
-                    Erstellen Sie ein kostenloses Projekt auf <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#FF9800' }}>console.firebase.google.com</a>
-                    {' '} · {' '}
-                    <a 
-                      href="#" 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setShowFirebaseSetupModal(true);
-                      }} 
-                      style={{ color: '#ff5722', cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      Setup-Anleitung anzeigen
-                    </a>
-                  </small>
+                <div className="alert alert-info alert-info-firebase mb-4">
+                  <div className="d-flex align-items-start">
+                    <FaInfoCircle className="me-2 flex-shrink-0" style={{ marginTop: '2px' }} />
+                    <div>
+                      <strong>Firebase Cloud:</strong> Vollständig verwaltete Firestore NoSQL-Datenbank und Cloud Storage.
+                      <br />
+                      <small>
+                        Erstellen Sie ein kostenloses Projekt auf <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#FF9800' }}>console.firebase.google.com</a>
+                        {' '} · {' '}
+                        <a 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setShowFirebaseSetupModal(true);
+                          }} 
+                          style={{ color: '#ff5722', cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                          Setup-Anleitung anzeigen
+                        </a>
+                      </small>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="row">
+                <div className="grid grid-cols-1 gap-4">
                   {/* API Key */}
-                  <div className="col-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaKey className="me-2" style={{ color: '#FF9800' }} />
-                        API Key
+                        <div className="d-flex align-items-center">
+                          <FaKey className="me-2 flex-shrink-0" style={{ color: '#FF9800' }} />
+                          <span>API Key</span>
+                        </div>
                       </label>
                       <div className="input-group">
                         <input
                           type={showPasswords.firebaseApiKey ? 'text' : 'password'}
-                          className={`form-control ${storageManagement.connections.firebase.apiKey && !validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.firebase.apiKey ? 'is-empty' : ''} ${storageManagement.connections.firebase.apiKey && !validateFirebaseApiKey(storageManagement.connections.firebase.apiKey).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.firebase.apiKey}
                           onChange={(e) => updateConnection('firebase', { apiKey: e.target.value })}
                           placeholder="AIzaSy..."
                           autoComplete="new-password"
+                          data-form-type="other"
                           name="firebase-api-key-unique"
-                          style={{
-                            backgroundColor: !storageManagement.connections.firebase.apiKey ? colors.accent + '20' : undefined,
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            transition: 'all 0.2s ease',
-                            fontFamily: 'monospace',
-                            fontSize: '0.9rem'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           type="button"
                           onClick={() => togglePasswordVisibility('firebaseApiKey')}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            backgroundColor: colors.card
-                          }}
                           title={showPasswords.firebaseApiKey ? 'Key verbergen' : 'Key anzeigen'}
                         >
                           {showPasswords.firebaseApiKey ? <FaEyeSlash /> : <FaEye />}
@@ -9235,15 +8841,17 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Auth Domain */}
-                  <div className="col-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaCloud className="me-2" style={{ color: '#FF9800' }} />
-                        Auth Domain
+                        <div className="d-flex align-items-center">
+                          <FaCloud className="me-2 flex-shrink-0" style={{ color: '#FF9800' }} />
+                          <span>Auth Domain</span>
+                        </div>
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.firebase.authDomain && !validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.firebase.authDomain ? 'is-empty' : ''} ${storageManagement.connections.firebase.authDomain && !validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.firebase.authDomain}
                         onChange={(e) => updateConnection('firebase', { authDomain: e.target.value })}
                         placeholder="your-app.firebaseapp.com"
@@ -9254,12 +8862,6 @@ const StorageManagement: React.FC = () => {
                           transition: 'all 0.2s ease',
                           fontFamily: 'monospace',
                           fontSize: '0.9rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
                       {storageManagement.connections.firebase.authDomain && validationMessages['firebase-authDomain'] && !validateFirebaseAuthDomain(storageManagement.connections.firebase.authDomain).isValid && (
@@ -9276,15 +8878,17 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Project ID */}
-                  <div className="col-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaDatabase className="me-2" style={{ color: '#FF9800' }} />
-                        Project ID
+                        <div className="d-flex align-items-center">
+                          <FaDatabase className="me-2 flex-shrink-0" style={{ color: '#FF9800' }} />
+                          <span>Project ID</span>
+                        </div>
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.firebase.projectId && !validateFirebaseProjectId(storageManagement.connections.firebase.projectId).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.firebase.projectId ? 'is-empty' : ''} ${storageManagement.connections.firebase.projectId && !validateFirebaseProjectId(storageManagement.connections.firebase.projectId).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.firebase.projectId}
                         onChange={(e) => updateConnection('firebase', { projectId: e.target.value })}
                         placeholder="your-project-id"
@@ -9295,12 +8899,6 @@ const StorageManagement: React.FC = () => {
                           transition: 'all 0.2s ease',
                           fontFamily: 'monospace',
                           fontSize: '0.9rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
                       {storageManagement.connections.firebase.projectId && validationMessages['firebase-projectId'] && !validateFirebaseProjectId(storageManagement.connections.firebase.projectId).isValid && (
@@ -9317,15 +8915,17 @@ const StorageManagement: React.FC = () => {
                   </div>
 
                   {/* Storage Bucket */}
-                  <div className="col-12">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaFolder className="me-2" style={{ color: '#FF9800' }} />
-                        Storage Bucket
+                        <div className="d-flex align-items-center">
+                          <FaFolder className="me-2 flex-shrink-0" style={{ color: '#FF9800' }} />
+                          <span>Storage Bucket</span>
+                        </div>
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.firebase.storageBucket && !validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.firebase.storageBucket ? 'is-empty' : ''} ${storageManagement.connections.firebase.storageBucket && !validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.firebase.storageBucket}
                         onChange={(e) => updateConnection('firebase', { storageBucket: e.target.value })}
                         placeholder="your-app.appspot.com"
@@ -9336,12 +8936,6 @@ const StorageManagement: React.FC = () => {
                           transition: 'all 0.2s ease',
                           fontFamily: 'monospace',
                           fontSize: '0.9rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
                       {storageManagement.connections.firebase.storageBucket && validationMessages['firebase-storageBucket'] && !validateFirebaseStorageBucket(storageManagement.connections.firebase.storageBucket).isValid && (
@@ -9361,12 +8955,14 @@ const StorageManagement: React.FC = () => {
                   <div className="col-12">
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaNetworkWired className="me-2" style={{ color: '#FF9800' }} />
-                        Messaging Sender ID
+                        <div className="d-flex align-items-center">
+                          <FaNetworkWired className="me-2 flex-shrink-0" style={{ color: '#FF9800' }} />
+                          <span>Messaging Sender ID</span>
+                        </div>
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.firebase.messagingSenderId && !validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.firebase.messagingSenderId ? 'is-empty' : ''} ${storageManagement.connections.firebase.messagingSenderId && !validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.firebase.messagingSenderId}
                         onChange={(e) => updateConnection('firebase', { messagingSenderId: e.target.value })}
                         placeholder="123456789012"
@@ -9377,12 +8973,6 @@ const StorageManagement: React.FC = () => {
                           transition: 'all 0.2s ease',
                           fontFamily: 'monospace',
                           fontSize: '0.9rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
                         }}
                       />
                       {storageManagement.connections.firebase.messagingSenderId && validationMessages['firebase-messagingSenderId'] && !validateFirebaseMessagingSenderId(storageManagement.connections.firebase.messagingSenderId).isValid && (
@@ -9402,29 +8992,17 @@ const StorageManagement: React.FC = () => {
                   <div className="col-12">
                     <div className="mb-3">
                       <label className="form-label">
-                        <FaKey className="me-2" style={{ color: '#FF9800' }} />
-                        App ID
+                        <div className="d-flex align-items-center">
+                          <FaKey className="me-2 flex-shrink-0" style={{ color: '#FF9800' }} />
+                          <span>App ID</span>
+                        </div>
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${storageManagement.connections.firebase.appId && !validateFirebaseAppId(storageManagement.connections.firebase.appId).isValid ? 'is-invalid' : ''}`}
+                        className={`form-control ${!storageManagement.connections.firebase.appId ? 'is-empty' : ''} ${storageManagement.connections.firebase.appId && !validateFirebaseAppId(storageManagement.connections.firebase.appId).isValid ? 'is-invalid' : ''}`}
                         value={storageManagement.connections.firebase.appId}
                         onChange={(e) => updateConnection('firebase', { appId: e.target.value })}
                         placeholder="1:123456789:web:abcdef123456"
-                        style={{
-                          backgroundColor: !storageManagement.connections.firebase.appId ? colors.accent + '20' : undefined,
-                          borderColor: colors.cardBorder,
-                          color: colors.text,
-                          transition: 'all 0.2s ease',
-                          fontFamily: 'monospace',
-                          fontSize: '0.9rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = colors.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = colors.cardBorder;
-                        }}
                       />
                       {storageManagement.connections.firebase.appId && validationMessages['firebase-appId'] && !validateFirebaseAppId(storageManagement.connections.firebase.appId).isValid && (
                         <div style={{ color: '#dc3545', fontSize: '0.875em', marginTop: '2px' }}>
@@ -9460,10 +9038,6 @@ const StorageManagement: React.FC = () => {
                       <button
                         className="btn btn-outline-secondary"
                         onClick={() => window.open('https://console.firebase.google.com', '_blank')}
-                        style={{
-                          borderColor: '#FF9800',
-                          color: '#FF9800'
-                        }}
                         title="Firebase Console öffnen"
                       >
                         <FaExternalLinkAlt className="me-1" />
@@ -9533,21 +9107,21 @@ const StorageManagement: React.FC = () => {
           {/* MinIO-Konfiguration - nur anzeigen wenn lokal gehostet */}
           {hostingEnvironment === 'local' && minioSectionVisible && (
             <div className={`card mb-4 storage-section ${minioSectionAnimating ? 'slide-out-down' : 'slide-up'}`} style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaServer className="me-2" style={{ color: colors.text }} />
                 <h5 className="mb-0" style={{ color: colors.text }}>
-                  <FaServer className="me-2" />
                   MinIO-Konfiguration
                 </h5>
               </div>
               <div className="card-body" style={{ color: colors.text }}>
-                <div className="row">
-                  <div className="col-md-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Host/IP-Adresse</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className={`form-control ${storageManagement.connections.minio.host && !validateHostname(storageManagement.connections.minio.host).isValid ? 'is-invalid' : ''}`}
+                          className={`form-control ${!storageManagement.connections.minio.host ? 'is-empty' : ''} ${storageManagement.connections.minio.host && !validateHostname(storageManagement.connections.minio.host).isValid ? 'is-invalid' : ''}`}
                           value={storageManagement.connections.minio.host}
                           onChange={(e) => {
                             updateConnection('minio', { host: e.target.value });
@@ -9560,12 +9134,6 @@ const StorageManagement: React.FC = () => {
                             backgroundColor: !storageManagement.connections.minio.host ? colors.accent + '20' : undefined,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
@@ -9576,14 +9144,6 @@ const StorageManagement: React.FC = () => {
                             borderColor: colors.cardBorder,
                             color: colors.text,
                             transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                            e.currentTarget.style.backgroundColor = colors.accent + '20';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
                           }}
                           title="Ping testen"
                         >
@@ -9619,14 +9179,14 @@ const StorageManagement: React.FC = () => {
                       )}
                     </div>
                     {/* MinIO und Console Ports nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">MinIO Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.minio.port && !validatePort(storageManagement.connections.minio.port).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.minio.port ? 'is-empty' : ''} ${storageManagement.connections.minio.port && !validatePort(storageManagement.connections.minio.port).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.minio.port}
                               onChange={(e) => {
                                 updateConnection('minio', { port: e.target.value });
@@ -9639,30 +9199,16 @@ const StorageManagement: React.FC = () => {
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
                               type="button"
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               onClick={() => handleCheckPort(storageManagement.connections.minio.host, storageManagement.connections.minio.port, 'minio-port')}
                               disabled={!storageManagement.connections.minio.host || !storageManagement.connections.minio.port || checkingPorts['minio-port']}
                               style={{
                                 borderColor: colors.cardBorder,
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                                e.currentTarget.style.backgroundColor = colors.accent + '20';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                                e.currentTarget.style.backgroundColor = 'transparent';
                               }}
                               title="Port testen"
                             >
@@ -9698,13 +9244,13 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Console Port</label>
                           <div className="input-group">
                             <input
                               type="text"
-                              className={`form-control ${storageManagement.connections.minio.consolePort && !validatePort(storageManagement.connections.minio.consolePort).isValid ? 'is-invalid' : ''}`}
+                              className={`form-control ${!storageManagement.connections.minio.consolePort ? 'is-empty' : ''} ${storageManagement.connections.minio.consolePort && !validatePort(storageManagement.connections.minio.consolePort).isValid ? 'is-invalid' : ''}`}
                               value={storageManagement.connections.minio.consolePort}
                               onChange={(e) => {
                                 updateConnection('minio', { consolePort: e.target.value });
@@ -9716,30 +9262,16 @@ const StorageManagement: React.FC = () => {
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
                               type="button"
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               onClick={() => handleCheckPort(storageManagement.connections.minio.host, storageManagement.connections.minio.consolePort, 'minio-console-port')}
                               disabled={!storageManagement.connections.minio.host || !storageManagement.connections.minio.consolePort || checkingPorts['minio-console-port']}
                               style={{
                                 borderColor: colors.cardBorder,
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                                e.currentTarget.style.backgroundColor = colors.accent + '20';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                                e.currentTarget.style.backgroundColor = 'transparent';
                               }}
                               title="Port testen"
                             >
@@ -9776,13 +9308,13 @@ const StorageManagement: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-6">
+                  <div>
                     <div className="mb-3">
                       <label className="form-label">Bucket</label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className="form-control"
+                          className={`form-control ${!storageManagement.connections.minio.bucket ? 'is-empty' : ''}`}
                           value={storageManagement.connections.minio.bucket}
                           onChange={(e) => updateConnection('minio', { bucket: e.target.value })}
                           placeholder="chef-numbers"
@@ -9792,16 +9324,10 @@ const StorageManagement: React.FC = () => {
                             color: colors.text,
                             transition: 'all 0.2s ease'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={async () => {
                             const host = storageManagement.connections.minio.host;
                             const consolePort = storageManagement.connections.minio.consolePort || '9001';
@@ -9850,16 +9376,6 @@ const StorageManagement: React.FC = () => {
                             opacity: storageManagement.connections.minio.connectionStatus ? 1 : 0.6,
                             cursor: storageManagement.connections.minio.connectionStatus ? 'pointer' : 'not-allowed'
                           }}
-                          onMouseEnter={(e) => {
-                            if (storageManagement.connections.minio.connectionStatus) {
-                              e.currentTarget.style.borderColor = colors.accent;
-                              e.currentTarget.style.backgroundColor = colors.accent + '20';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
                           title={storageManagement.connections.minio.connectionStatus ? 'MinIO-Konsole öffnen' : 'Verbindungstest muss erfolgreich sein'}
                         >
                           <FaExternalLinkAlt />
@@ -9881,13 +9397,13 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* Access Key und Secret Key nebeneinander */}
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Access Key</label>
                           <input
                             type="text"
-                            className="form-control"
+                            className={`form-control ${!storageManagement.connections.minio.accessKey ? 'is-empty' : ''}`}
                             value={storageManagement.connections.minio.accessKey}
                             onChange={(e) => updateConnection('minio', { accessKey: e.target.value })}
                             placeholder="minioadmin"
@@ -9896,12 +9412,6 @@ const StorageManagement: React.FC = () => {
                               borderColor: colors.cardBorder,
                               color: colors.text,
                               transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
                             }}
                           />
                           {/* Access Key Validierung */}
@@ -9912,70 +9422,40 @@ const StorageManagement: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <div className="mb-3">
                           <label className="form-label">Secret Key</label>
                           <div className="input-group">
                             <input
                               type={showPasswords.minio ? 'text' : 'password'}
-                              className="form-control"
+                              className={`form-control ${!storageManagement.connections.minio.secretKey ? 'is-empty' : ''}`}
                               value={storageManagement.connections.minio.secretKey}
                               onChange={(e) => updateConnection('minio', { secretKey: e.target.value })}
                               placeholder="Secret Key"
+                              autoComplete="new-password"
+                              data-form-type="other"
                               style={{
                                 backgroundColor: !storageManagement.connections.minio.secretKey ? colors.accent + '20' : undefined,
                                 borderColor: colors.cardBorder,
                                 color: colors.text,
                                 transition: 'all 0.2s ease'
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                              }}
                             />
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => {
                                 const newPassword = generateMinIOSecurePassword();
                                 updateConnection('minio', { secretKey: newPassword });
-                              }}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                                e.currentTarget.style.backgroundColor = colors.accent + '20';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                                e.currentTarget.style.backgroundColor = 'transparent';
                               }}
                               title="Sicheren Secret Key generieren"
                             >
                               <FaKey />
                             </button>
                             <button
-                              className="btn btn-outline-secondary"
+                              className="btn btn-outline-input"
                               type="button"
                               onClick={() => togglePasswordVisibility('minio')}
-                              style={{
-                                borderColor: colors.cardBorder,
-                                color: colors.text,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                                e.currentTarget.style.backgroundColor = colors.accent + '20';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.cardBorder;
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                              }}
                               title={showPasswords.minio ? 'Secret Key verbergen' : 'Secret Key anzeigen'}
                             >
                               {showPasswords.minio ? <FaEyeSlash /> : <FaEye />}
@@ -10093,9 +9573,9 @@ const StorageManagement: React.FC = () => {
 
           {/* Aktions-Buttons */}
           <div className="card" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-            <div className="card-header" style={{ backgroundColor: colors.secondary }}>
+            <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+              <FaCog className="me-2" style={{ color: colors.text }} />
               <h5 className="mb-0" style={{ color: colors.text }}>
-                <FaCog className="me-2" />
                 Aktionen
               </h5>
             </div>
@@ -10105,11 +9585,6 @@ const StorageManagement: React.FC = () => {
                 <button
                   className="btn btn-outline-info"
                   onClick={() => setShowBackupModal(true)}
-                  style={{
-                    backgroundColor: colors.card,
-                    borderColor: '#17a2b8',
-                    color: '#17a2b8'
-                  }}
                   title="Backup erstellen oder wiederherstellen"
                 >
                   <FaDownload className="me-2" />
@@ -10245,8 +9720,8 @@ const StorageManagement: React.FC = () => {
                     ></button>
                   </div>
                   <div className="modal-body" style={{ color: colors.text }}>
-                    <div className="row">
-                      <div className="col-md-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
                         <h6 style={{ color: colors.text, marginBottom: '15px' }}>
                           <FaDatabase className="me-2" />
                           Aktuelle Konfiguration
@@ -10257,7 +9732,7 @@ const StorageManagement: React.FC = () => {
                           <strong>Bildspeicher:</strong> {storageManagement.currentStorage.currentPictureStorage}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div>
                         <h6 style={{ color: colors.text, marginBottom: '15px' }}>
                           <FaCloud className="me-2" />
                           Neue Konfiguration
@@ -11144,7 +10619,7 @@ const StorageManagement: React.FC = () => {
                   >
                     <button
                       type="button"
-                      className="btn btn-outline-secondary"
+                      className="btn btn-outline-input"
                       onClick={() => {
                         setShowSupabaseSQLModal(false);
                         setSupabaseSQLEditorUrl('');
@@ -11361,6 +10836,8 @@ const StorageManagement: React.FC = () => {
                           value={supabaseSetupData.anonKey}
                           onChange={(e) => setSupabaseSetupData({ ...supabaseSetupData, anonKey: e.target.value })}
                           placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          autoComplete="new-password"
+                          data-form-type="other"
                           rows={3}
                           style={{
                             backgroundColor: colors.card,
@@ -11394,6 +10871,8 @@ const StorageManagement: React.FC = () => {
                           value={supabaseSetupData.serviceRoleKey}
                           onChange={(e) => setSupabaseSetupData({ ...supabaseSetupData, serviceRoleKey: e.target.value })}
                           placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          autoComplete="new-password"
+                          data-form-type="other"
                           rows={3}
                           style={{
                             backgroundColor: colors.card,
@@ -11561,7 +11040,7 @@ const StorageManagement: React.FC = () => {
                     )}
                     <button
                       type="button"
-                      className="btn btn-outline-secondary"
+                      className="btn btn-outline-input"
                       onClick={() => {
                         setShowSupabaseSetupModal(false);
                         setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
@@ -11806,6 +11285,8 @@ const StorageManagement: React.FC = () => {
                           value={firebaseSetupData.apiKey}
                           onChange={(e) => setFirebaseSetupData({ ...firebaseSetupData, apiKey: e.target.value })}
                           placeholder="AIzaSy..."
+                          autoComplete="new-password"
+                          data-form-type="other"
                           style={{
                             backgroundColor: colors.card,
                             borderColor: colors.cardBorder,
@@ -12363,7 +11844,7 @@ allow read, write: if request.auth != null;`}</pre>
                     )}
                     <button
                       type="button"
-                      className="btn btn-outline-secondary"
+                      className="btn btn-outline-input"
                       onClick={() => {
                         setShowFirebaseSetupModal(false);
                         setFirebaseSetupData({ 

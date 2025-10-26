@@ -125,6 +125,22 @@ const Dashboard: React.FC<DashboardProps> = ({
     };
   }, [articles, suppliers, recipes]);
 
+  // Berechne Gesamtumsatz für alle Lieferanten
+  const suppliersWithRevenue = useMemo(() => {
+    return statistics.topSuppliers.map(item => {
+      const supplierArticles = articles.filter(article => {
+        const supplier = suppliers.find(s => s.name === item.supplier);
+        return supplier && article.supplierId === supplier.id;
+      });
+      const totalRevenue = supplierArticles.reduce((sum, article) => sum + (article.bundlePrice || 0), 0);
+      
+      return {
+        ...item,
+        totalRevenue
+      };
+    });
+  }, [statistics.topSuppliers, articles, suppliers]);
+
   // Formatierungshilfsfunktionen
   const formatPrice = (price: number | undefined | null) => {
     if (price === undefined || price === null || isNaN(price)) {
@@ -148,52 +164,19 @@ const Dashboard: React.FC<DashboardProps> = ({
   ) => (
     <div className="mb-4">
       <div 
-        className="card h-full w-full" 
-        style={{ 
-          backgroundColor: colors.card, 
-          borderColor: colors.cardBorder,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          borderRadius: '8px',
-          cursor: onClick ? 'pointer' : 'default',
-          transition: 'all 0.2s ease'
-        }}
+        className="card h-full w-full card-button"
         onClick={onClick}
-        onMouseEnter={(e) => {
-          if (onClick) {
-            e.currentTarget.style.transform = 'translateY(-4px)';
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
-            e.currentTarget.style.borderColor = colors.accent;
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (onClick) {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
-            e.currentTarget.style.borderColor = colors.cardBorder;
-          }
-        }}
       >
         <div className="card-body text-center">
-          <div style={{ 
-            width: 60, 
-            height: 60, 
-            backgroundColor: colors.accent, 
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1rem',
-            color: 'white',
-            fontSize: '1.5rem'
-          }}>
+          <div className="mb-3">
             {icon}
           </div>
-          <h5 className="card-title" style={{ color: colors.text }}>{title}</h5>
-          <h3 className="card-text" style={{ color: colors.accent, margin: 0 }}>{value}</h3>
-          <small style={{ color: colors.text }}>{subtitle}</small>
+          <h5 className="card-title">{title}</h5>
+          <h3 className="card-text">{value}</h3>
+          <small className="text-muted">{subtitle}</small>
           {additionalInfo && (
             <div className="mt-2">
-              <small style={{ color: colors.accent }}>{additionalInfo}</small>
+              <small className="text-muted">{additionalInfo}</small>
             </div>
           )}
         </div>
@@ -206,7 +189,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       key={item.id || item.category || item.supplier}
       className="list-group-item d-flex justify-content-between align-items-center"
       style={{ 
-        backgroundColor: 'transparent', 
+        backgroundColor: colors.background, 
         borderColor: colors.cardBorder,
         cursor: onClick ? 'pointer' : 'default'
       }}
@@ -221,18 +204,12 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="container-fluid p-4 pt-0">
-      <div style={{
-        backgroundColor: colors.paper || colors.card,
-        borderRadius: '12px',
-        boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
-        padding: '1rem 2rem',
-        minHeight: 'calc(100vh - 120px)',
-        border: `1px solid ${colors.cardBorder}`
-      }}>
+      <div className="page">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <h1 style={{ color: colors.text, margin: 0 }}>Dashboard</h1>
+          <h1 className="mb-0">Dashboard</h1>
           
+         
           {/* Speicher-Info mit Link */}
           <div 
             className="flex items-center gap-2 px-3 py-2 rounded"
@@ -315,32 +292,12 @@ const Dashboard: React.FC<DashboardProps> = ({
         {/* Quick Actions */}
         <div className="mt-4">
           <div className="w-full">
-            <h3 style={{ color: colors.text, marginBottom: '1rem' }}>Schnellzugriff</h3>
+            <h3 className="mb-3">Schnellzugriff</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <button 
-                  className="btn w-full p-3 border-2 transition-all duration-200" 
+                  className="btn btn-outline-primary w-full p-3 border-2 transition-all duration-200" 
                   onClick={() => setShowArticleForm(true)}
-                  style={{ 
-                    borderColor: colors.accent, 
-                    color: colors.accent, 
-                    backgroundColor: 'transparent',
-                    borderRadius: '8px',
-                    borderStyle: 'solid',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
-                    e.currentTarget.style.backgroundColor = colors.accent + '20';
-                    e.currentTarget.style.borderColor = colors.accent;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.borderColor = colors.accent;
-                  }}
                 >
                   <FaPlus className="mr-2" />
                   Neuen Artikel anlegen
@@ -348,28 +305,8 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <button 
-                  className="btn w-full p-3 border-2 transition-all duration-200" 
+                  className="btn btn-outline-primary w-full p-3 border-2 transition-all duration-200" 
                   onClick={handleNewRecipe}
-                  style={{ 
-                    borderColor: colors.accent, 
-                    color: colors.accent, 
-                    backgroundColor: 'transparent',
-                    borderRadius: '8px',
-                    borderStyle: 'solid',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
-                    e.currentTarget.style.backgroundColor = colors.accent + '20';
-                    e.currentTarget.style.borderColor = colors.accent;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.borderColor = colors.accent;
-                  }}
                 >
                   <FaUtensils className="mr-2" />
                   Neues Rezept erstellen
@@ -383,60 +320,44 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           {/* Neueste Artikel */}
           <div>
-            <div className="card" style={{ 
-              backgroundColor: colors.card, 
-              borderColor: colors.cardBorder,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              borderRadius: '8px'
-            }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
-                <h5 className="mb-0" style={{ color: colors.text }}>
+            <div className="card">
+              <div className="card-header">
+                <h5 className="mb-0">
                   <FaClock className="mr-2" />
                   Neueste Artikel
                 </h5>
               </div>
               <div className="card-body">
                 {statistics.newestArticles.length > 0 ? (
-                  <div>
+                  <div className="card-list">
                     {statistics.newestArticles.map((article, index) => (
                       <div 
                         key={article.id || `newest-article-${index}`} 
-                        className="flex justify-between items-center"
+                        className="flex justify-between items-center list-group-item"
                         style={{ 
-                          backgroundColor: 'transparent', 
-                          padding: '0.75rem 1.25rem',
-                          borderBottom: index < statistics.newestArticles.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s ease'
+                          borderBottom: index < statistics.newestArticles.length - 1 ? `1px solid ${colors.cardBorder}` : 'none'
                         }}
                         onClick={() => handleEditArticle(article)}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = colors.accent + '10';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
                       >
                         <div className="flex-1 min-w-0">
                           <div 
-                            className="font-semibold truncate" 
-                            style={{ color: colors.text }}
+                            className="font-semibold text-truncate" 
                             title={article.name}
                           >
                             {article.name}
                           </div>
-                          <div className="text-sm" style={{ color: colors.accent }}>
+                          <div className="text-sm text-muted">
                             {article.category} • {formatDate(article.timestamp)}
                           </div>
                         </div>
-                        <span className="badge" style={{ backgroundColor: colors.accent }}>
+                        <span className="badge">
                           {formatPrice(article.bundlePrice)}
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: colors.text, textAlign: 'center', margin: 0 }}>
+                  <p className="text-muted">
                     Keine Artikel vorhanden
                   </p>
                 )}
@@ -446,60 +367,44 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           {/* Teuerste Artikel */}
           <div>
-            <div className="card" style={{ 
-              backgroundColor: colors.card, 
-              borderColor: colors.cardBorder,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              borderRadius: '8px'
-            }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
-                <h5 className="mb-0" style={{ color: colors.text }}>
+            <div className="card">
+              <div className="card-header">
+                <h5 className="mb-0">
                   <FaStar className="mr-2" />
                   Teuerste Artikel
                 </h5>
               </div>
               <div className="card-body">
                 {statistics.mostExpensiveArticles.length > 0 ? (
-                  <div>
+                  <div className="card-list">
                     {statistics.mostExpensiveArticles.map((article, index) => (
                       <div 
                         key={article.id || `expensive-article-${index}`} 
-                        className="flex justify-between items-center"
+                        className="flex justify-between items-center list-group-item"
                         style={{ 
-                          backgroundColor: 'transparent', 
-                          padding: '0.75rem 1.25rem',
-                          borderBottom: index < statistics.mostExpensiveArticles.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s ease'
+                          borderBottom: index < statistics.mostExpensiveArticles.length - 1 ? `1px solid ${colors.cardBorder}` : 'none'
                         }}
                         onClick={() => handleEditArticle(article)}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = colors.accent + '10';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
                       >
                         <div className="flex-1 min-w-0">
                           <div 
-                            className="font-semibold truncate" 
-                            style={{ color: colors.text }}
+                            className="font-semibold text-truncate" 
                             title={article.name}
                           >
                             {article.name}
                           </div>
-                          <div className="text-sm" style={{ color: colors.accent }}>
+                          <div className="text-sm text-muted">
                             {article.category} • {getSupplierName(article.supplierId)}
                           </div>
                         </div>
-                        <span className="badge" style={{ backgroundColor: colors.accent }}>
+                        <span className="badge">
                           {formatPrice(article.bundlePrice)}
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: colors.text, textAlign: 'center', margin: 0 }}>
+                  <p className="text-muted">
                     Keine Artikel vorhanden
                   </p>
                 )}
@@ -511,53 +416,51 @@ const Dashboard: React.FC<DashboardProps> = ({
         {/* Top-Lieferanten */}
         <div className="row mt-4">
           <div className="col-md-12 mb-4">
-            <div className="card" style={{ 
-              backgroundColor: colors.card, 
-              borderColor: colors.cardBorder,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              borderRadius: '8px'
-            }}>
-              <div className="card-header" style={{ backgroundColor: colors.secondary }}>
-                <h5 className="mb-0" style={{ color: colors.text }}>
+            <div className="card">
+              <div className="card-header">
+                <h5 className="mb-0">
                   Top-Lieferanten
                 </h5>
               </div>
               <div className="card-body">
-                {statistics.topSuppliers.length > 0 ? (
-                  <div className="list-group list-group-flush">
-                    {statistics.topSuppliers.map((item, index) => (
-                      <div
-                        key={`top-supplier-${index}-${item.supplier}`}
+                {suppliersWithRevenue.length > 0 ? (
+                  <div className="card-list">
+                    {suppliersWithRevenue.map((item, index) => (
+                      <div 
+                        key={`top-supplier-${index}-${item.supplier}`} 
+                        className="flex justify-between items-center list-group-item"
                         style={{ 
-                          backgroundColor: 'transparent', 
-                          borderColor: colors.cardBorder,
-                          padding: '0.75rem 1.25rem',
-                          borderBottom: index < statistics.topSuppliers.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s ease'
+                          borderBottom: index < suppliersWithRevenue.length - 1 ? `1px solid ${colors.cardBorder}` : 'none'
                         }}
                         onClick={() => {
                           const supplier = suppliers.find(s => s.name === item.supplier);
                           if (supplier) handleEditSupplier(supplier);
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = colors.secondary;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
                       >
-                        <span style={{ color: colors.text }}>
-                          {item.supplier} - {String(item.count)} Artikel
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div 
+                            className="font-semibold text-truncate" 
+                            title={item.supplier}
+                          >
+                            {item.supplier}
+                          </div>
+                          <div className="text-sm text-muted">
+                            {String(item.count)} Artikel
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-theme-accent">
+                            {formatPrice(item.totalRevenue)}
+                          </div>
+                          <div className="text-sm text-muted">
+                            Gesamtumsatz
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: colors.text, textAlign: 'center', margin: 0 }}>
+                  <p className="text-muted">
                     Keine Lieferanten vorhanden
                   </p>
                 )}
@@ -565,35 +468,20 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Version Footer - dezent unten rechts */}
-      <div style={{
-        position: 'fixed',
-        bottom: '16px',
-        right: '16px',
-        padding: '8px 12px',
-        backgroundColor: colors.card,
-        border: `1px solid ${colors.cardBorder}`,
-        borderRadius: '6px',
-        fontSize: '0.75rem',
-        color: colors.textSecondary,
-        opacity: 0.7,
-        transition: 'opacity 0.3s ease',
-        cursor: 'pointer',
-        zIndex: 1000
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-      onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-      title={`Build: ${process.env.REACT_APP_BUILD_DATE || new Date().toLocaleDateString('de-DE')}\nHosting: ${window.location.hostname}`}
-      >
-        <div className="d-flex align-items-center">
-          <FaInfoCircle className="me-2" style={{ fontSize: '0.9rem' }} />
-          <span>v{require('../../package.json').version}</span>
+        {/* Version Footer - schwebendes Schildchen */}
+        <div 
+          className="version-badge"
+          title={`Build: ${process.env.REACT_APP_BUILD_DATE || new Date().toLocaleDateString('de-DE')}\nHosting: ${window.location.hostname}`}
+        >
+          <div className="d-flex align-items-center">
+            <FaInfoCircle className="me-2" style={{ fontSize: '0.9rem' }} />
+            <span>v{process.env.REACT_APP_VERSION || '2.3.0'}</span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

@@ -30,6 +30,7 @@ export interface ArticleForm {
     fiber: number;
     sugar: number;
     salt: number;
+    alcohol?: number; // % Alkoholgehalt
   };
   openFoodFactsCode?: string; // Open Food Facts Produkt-Code für Rückverfolgbarkeit
   notes: string;
@@ -226,7 +227,8 @@ const initialArticleForm: ArticleForm = {
     carbohydrates: 0,
     fiber: 0,
     sugar: 0,
-    salt: 0
+    salt: 0,
+    alcohol: undefined
   },
   openFoodFactsCode: '',
   notes: ''
@@ -260,6 +262,10 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   // Preisumrechnungs-State
   const [showPriceConverter, setShowPriceConverter] = useState(false);
   const [selectedVatRate, setSelectedVatRate] = useState(19);
+  
+  // MwSt-Dropdown-State
+  const [showVatRateDropdown, setShowVatRateDropdown] = useState(false);
+  const [selectedVatRateIndex, setSelectedVatRateIndex] = useState(-1);
   
   // Taschenrechner-State
   const [showCalculator, setShowCalculator] = useState(false);
@@ -741,37 +747,45 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
 
   const handleApplyGrossPrice = useCallback(() => {
     const grossPrice = calculateGrossPrice(articleForm.bundlePrice, selectedVatRate);
-    const newPricePerUnit = calculatePricePerUnit(grossPrice, articleForm.content);
-    setArticleForm(prev => ({ 
-      ...prev, 
-      bundlePrice: grossPrice,
-      vatRate: selectedVatRate,
-      pricePerUnit: newPricePerUnit
-    }));
+    setArticleForm(prev => {
+      const newPricePerUnit = calculatePricePerUnit(grossPrice, prev.content);
+      // Aktualisiere auch pricePerUnitInput
+      setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
+      return { 
+        ...prev, 
+        bundlePrice: grossPrice,
+        vatRate: selectedVatRate,
+        pricePerUnit: newPricePerUnit
+      };
+    });
     setBundlePriceInput(() => {
       console.log('🔍 Debug - grossPrice:', grossPrice, 'Typ:', typeof grossPrice);
       // Formatiere als deutsche Zahl mit Komma
       return (grossPrice || 0).toFixed(2).replace('.', ',');
     });
     setShowPriceConverter(false);
-  }, [articleForm.bundlePrice, articleForm.content, selectedVatRate, calculateGrossPrice, calculatePricePerUnit]);
+  }, [articleForm.bundlePrice, articleForm.content, selectedVatRate, calculateGrossPrice, calculatePricePerUnit, setPricePerUnitInput]);
 
   const handleApplyNetPrice = useCallback(() => {
     const netPrice = calculateNetPrice(articleForm.bundlePrice, selectedVatRate);
-    const newPricePerUnit = calculatePricePerUnit(netPrice, articleForm.content);
-    setArticleForm(prev => ({ 
-      ...prev, 
-      bundlePrice: netPrice,
-      vatRate: selectedVatRate,
-      pricePerUnit: newPricePerUnit
-    }));
+    setArticleForm(prev => {
+      const newPricePerUnit = calculatePricePerUnit(netPrice, prev.content);
+      // Aktualisiere auch pricePerUnitInput
+      setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
+      return { 
+        ...prev, 
+        bundlePrice: netPrice,
+        vatRate: selectedVatRate,
+        pricePerUnit: newPricePerUnit
+      };
+    });
     setBundlePriceInput(() => {
       console.log('🔍 Debug - netPrice:', netPrice, 'Typ:', typeof netPrice);
       // Formatiere als deutsche Zahl mit Komma
       return (netPrice || 0).toFixed(2).replace('.', ',');
     });
     setShowPriceConverter(false);
-  }, [articleForm.bundlePrice, articleForm.content, selectedVatRate, calculateNetPrice, calculatePricePerUnit]);
+  }, [articleForm.bundlePrice, articleForm.content, selectedVatRate, calculateNetPrice, calculatePricePerUnit, setPricePerUnitInput]);
 
   // Taschenrechner-Funktionen
   const handleCalculatorResult = useCallback((result: number) => {
@@ -786,13 +800,14 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
         pricePerUnit: calculatePricePerUnit(prev.bundlePrice, result) // Berechne pricePerUnit neu
       };
       console.log('🔍 Aktualisierter articleForm:', updated);
+      
+      // Aktualisiere auch contentInput sofort mit deutschem Format
+      setContentInput((result || 0).toFixed(2).replace('.', ','));
+      // Aktualisiere auch pricePerUnitInput sofort mit deutschem Format
+      setPricePerUnitInput((calculatePricePerUnit(prev.bundlePrice, result) || 0).toFixed(2).replace('.', ','));
+      
       return updated;
     });
-    
-    // Aktualisiere auch contentInput sofort mit deutschem Format
-    setContentInput((result || 0).toFixed(2).replace('.', ','));
-    // Aktualisiere auch pricePerUnitInput sofort mit deutschem Format
-    setPricePerUnitInput((calculatePricePerUnit(articleForm.bundlePrice, result) || 0).toFixed(2).replace('.', ','));
     
     setShowCalculator(false);
   }, [articleForm, calculatePricePerUnit]);
@@ -870,7 +885,7 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
       allergens: Array.isArray(article.allergens) ? article.allergens : [],
       ingredients: article.ingredients || '', // ingredients hinzufügen
       nutrition: article.nutritionInfo || {
-        calories: 0, kilojoules: 0, protein: 0, fat: 0, carbohydrates: 0, fiber: 0, sugar: 0, salt: 0
+        calories: 0, kilojoules: 0, protein: 0, fat: 0, carbohydrates: 0, fiber: 0, sugar: 0, salt: 0, alcohol: undefined
       },
       openFoodFactsCode: article.openFoodFactsCode || '', // Open Food Facts Code laden
       notes: article.notes || ''
@@ -903,6 +918,8 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     showAllergensDropdown,
     showPriceConverter,
     selectedVatRate,
+    showVatRateDropdown,
+    selectedVatRateIndex,
     showCalculator,
     bundlePriceInput,
     contentInput,
@@ -915,6 +932,8 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     setPricePerUnitInput,
     setShowPriceConverter,
     setSelectedVatRate,
+    setShowVatRateDropdown,
+    setSelectedVatRateIndex,
     setShowCalculator,
     setShowCategoryDropdown,
     setSelectedCategoryIndex,

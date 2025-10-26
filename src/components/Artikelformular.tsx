@@ -12,7 +12,10 @@ import {
   FaImage,
   FaUpload,
   FaTrash,
-  FaSpinner
+  FaSpinner,
+  FaPercentage,
+  FaCoins,
+  FaCamera
 } from 'react-icons/fa';
 import { useArticleForm, Supplier } from '../hooks/useArticleForm';
 import { useAppContext } from '../contexts/AppContext';
@@ -24,6 +27,7 @@ import NutritionSearch from './NutritionSearch';
 import { searchByEANCode } from '../services/nutritionAPI';
 import Calculator from './Calculator';
 import DuplicateArticleModal from './ui/DuplicateArticleModal';
+import BarcodeScanner from './BarcodeScanner';
 import { NutritionData, ExtendedProductData } from '../services/nutritionAPI';
 import { storageLayer } from '../services/storageLayer';
 import { Article, ArticleCategory, Unit } from '../types';
@@ -57,6 +61,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const [articleImage, setArticleImage] = useState<string | null>(null);
   const [eanSearchResult, setEanSearchResult] = useState<any>(null);
   const [isSearchingEAN, setIsSearchingEAN] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [scannerTargetField, setScannerTargetField] = useState<'bundle' | 'content'>('bundle');
   
   const articleNameRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +126,30 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
       console.log('🗑️ Artikelbild aus Speicherung gelöscht');
     } catch (error) {
       console.error('❌ Fehler beim Löschen des Artikelbildes aus Speicherung:', error);
+    }
+  };
+
+  // Barcode-Scanner Handler
+  const handleBarcodeDetected = (code: string) => {
+    console.log('📷 EAN-Code gescannt:', code);
+    
+    if (scannerTargetField === 'bundle') {
+      setArticleForm(prev => ({ ...prev, bundleEanCode: code }));
+    } else {
+      setArticleForm(prev => ({ ...prev, contentEanCode: code }));
+    }
+    
+    setShowBarcodeScanner(false);
+    
+    // Automatische Validierung und Suche
+    const validation = validateEANCode(code);
+    if (validation.isValid && validation.normalizedCode) {
+      if (scannerTargetField === 'bundle') {
+        setArticleForm(prev => ({ ...prev, bundleEanCode: validation.normalizedCode }));
+      } else {
+        setArticleForm(prev => ({ ...prev, contentEanCode: validation.normalizedCode }));
+      }
+      searchEANCode(validation.normalizedCode);
     }
   };
 
@@ -279,6 +309,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     showAllergensDropdown,
     showPriceConverter,
     selectedVatRate,
+    showVatRateDropdown,
+    selectedVatRateIndex,
     showCalculator,
     bundlePriceInput,
     contentInput,
@@ -291,6 +323,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     setPricePerUnitInput,
     setShowPriceConverter,
     setSelectedVatRate,
+    setShowVatRateDropdown,
+    setSelectedVatRateIndex,
     setShowCalculator,
     setShowCategoryDropdown,
     setSelectedCategoryIndex,
@@ -415,6 +449,27 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
 
   const handleSave = async () => {
     try {
+      // Duplikat-Prüfung VOR dem Speichern
+      const duplicateCheck = articles.find(existingArticle => {
+        // Gleicher Name beim gleichen Lieferanten (case-insensitive)
+        const sameNameSameSupplier = existingArticle.name.toLowerCase() === articleForm.name.toLowerCase() && 
+                                   existingArticle.supplierId === articleForm.supplierId;
+        
+        // Nicht der gleiche Artikel (wenn wir bearbeiten)
+        const notSameArticle = !editingArticle || existingArticle.id !== editingArticle.id;
+        
+        return sameNameSameSupplier && notSameArticle;
+      });
+
+      if (duplicateCheck) {
+        // Duplikat gefunden - zeige Modal
+        const supplierName = suppliers.find(s => s.id === duplicateCheck.supplierId)?.name || 'Unbekannt';
+        setDuplicateMessage(`Ein Artikel mit dem Namen "${duplicateCheck.name}" existiert bereits beim Lieferanten "${supplierName}".`);
+        setExistingArticle(duplicateCheck);
+        setShowDuplicateModal(true);
+        return;
+      }
+
       // Erstelle Artikel mit Hybrid-ID-System
       const articleToSave: Article = {
         ...articleForm,
@@ -495,14 +550,6 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
       
     } catch (error: any) {
       console.error('❌ Fehler beim Speichern des Artikels:', error);
-      
-      // Duplikat-Prüfung
-      if (error.message && error.message.includes('Duplikat')) {
-        setDuplicateMessage(error.message);
-        setExistingArticle(error.existingArticle);
-        setShowDuplicateModal(true);
-        return;
-      }
       
       // Andere Fehler
       alert(`Fehler beim Speichern: ${error.message || 'Unbekannter Fehler'}`);
@@ -592,20 +639,20 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   return (
     <>
       {/* Hauptmodal */}
-             <div 
-         className="position-fixed top-0 start-0 w-100 h-100" 
-         style={{
-           background: 'rgba(0,0,0,0.5)',
-           zIndex: 4000,
-           top: 56
-         }}
-       >
-        <div className="container-fluid h-100 p-4">
-          <div className="row justify-content-center h-100">
-            <div className="col-12 col-xl-6">
+      <div 
+        className="fixed top-0 left-0 w-full h-full" 
+        style={{
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 4000,
+          top: 56
+        }}
+      >
+        <div className="container-fluid h-full p-4">
+          <div className="flex justify-center h-full">
+            <div className="w-full xl:w-1/2">
               <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
-                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                  <h5 className="mb-0" style={{ color: colors.text }}>
+                <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
+                  <h5 className="mb-0 form-label-themed">
                     {editingArticle ? 'Artikel bearbeiten' : 'Neuer Artikel'}
                   </h5>
                   <button
@@ -626,70 +673,44 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                    }}
                  >
                   <form>
-                    {/* Grunddaten */}
-                    <div className="row mb-4">
-                      <div className="col-12">
-                        <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
-                          Grunddaten
-                        </h6>
-                      </div>
-                                            <div className="col-md-6 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                  {/* Grunddaten */}
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
+                        Grunddaten
+                      </h6>
+                    </div>
+                    <div className="flex flex-wrap -mx-2">
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Artikelname
                         </label>
                         <div className="input-group">
                           <input
                             ref={articleNameRef}
                             type="text"
-                            className="form-control"
+                            className="form-control form-control-themed"
                             value={articleForm.name}
                             onChange={(e) => handleArticleNameChange(e.target.value)}
                             tabIndex={1}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.name ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
                             required
                           />
                           <button
                             type="button"
-                            className="btn"
+                            className="btn btn-outline-input"
                             onClick={openImageModal}
                             tabIndex={-1}
-                            style={{
-                              backgroundColor: 'transparent',
-                              color: colors.text,
-                              border: `1px solid ${colors.cardBorder}`,
-                              borderLeft: 'none',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                              e.currentTarget.style.backgroundColor = colors.accent + '20';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
                             title="Artikelbild verwalten"
                           >
                             <FaImage />
                           </button>
                         </div>
                       </div>
-                      <div className="col-md-4 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label">
                           Kategorie
                         </label>
-                        <div className="position-relative">
+                        <div className="relative">
                           <input
                             type="text"
                             className="form-control"
@@ -700,20 +721,9 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             onKeyDown={handleCategoryKeyDown}
                             placeholder="Kategorie auswählen oder eingeben..."
                             tabIndex={2}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
                           />
                           {showCategoryDropdown && (
-                            <div className="position-absolute w-100" style={{
+                            <div className="absolute w-full" style={{
                               top: '100%',
                               left: 0,
                               zIndex: 1000,
@@ -783,39 +793,12 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           )}
                         </div>
                       </div>
-                      <div className="col-md-2 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          MwSt-Satz
-                        </label>
-                        <select
-                          className="form-select"
-                          value={articleForm.vatRate}
-                          onChange={(e) => handleVatRateChange(parseInt(e.target.value))}
-                          tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
-                        >
-                          {VAT_RATES.map((vatRate) => (
-                            <option key={vatRate.value} value={vatRate.value}>
-                              {vatRate.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-md-6 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label">
                           Lieferant
                         </label>
-                        <div className="position-relative">
+                        <div className="relative">
                           <input
                             type="text"
                             className="form-control"
@@ -826,21 +809,9 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             onKeyDown={handleSupplierKeyDown}
                             placeholder="Lieferant auswählen oder eingeben..."
                             tabIndex={3}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.supplierId ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
                           />
                           {showSupplierDropdown && (
-                            <div className="position-absolute w-100" style={{
+                            <div className="absolute w-full" style={{
                               top: '100%',
                               left: 0,
                               zIndex: 1000,
@@ -915,8 +886,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="md:w-4/12 px-2 mb-3">
+                        <label className="form-label">
                           Lieferanten-Artikelnummer
                         </label>
                         <input
@@ -925,302 +896,305 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           value={articleForm.supplierArticleNumber}
                           onChange={(e) => setArticleForm(prev => ({ ...prev, supplierArticleNumber: e.target.value }))}
                           tabIndex={4}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                    </div>
-
-                    {/* Preise und Einheiten */}
-                    <div className="row mb-4">
-                      <div className="col-12">
-                        <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
-                          Preise und Einheiten
-                        </h6>
-                      </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          Gebindeeinheit
+                      <div className="md:w-1/6 px-2 mb-3">
+                        <label className="form-label text-center block">
+                          MwSt-Satz
                         </label>
-                        <div className="position-relative">
+                        <div className="relative">
                           <input
                             type="text"
-                            className="form-control"
-                            value={articleForm.bundleUnit}
-                            onChange={(e) => handleBundleUnitInputChange(e.target.value)}
-                            onFocus={() => setShowBundleUnitDropdown(true)}
-                            onBlur={handleBundleUnitInputBlur}
-                            onKeyDown={handleBundleUnitKeyDown}
-                            placeholder="Einheit auswählen oder eingeben..."
-                            tabIndex={5}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.bundleUnit ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
+                            className="form-control form-control-themed text-center"
+                            value={`${articleForm.vatRate}%`}
+                            onClick={() => setShowVatRateDropdown(true)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setShowVatRateDropdown(!showVatRateDropdown);
+                              }
                             }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
+                            readOnly
+                            tabIndex={-1}
+                            style={{ cursor: 'pointer' }}
                           />
-                          {showBundleUnitDropdown && (
-                            <div className="position-absolute w-100" style={{
+                          {showVatRateDropdown && (
+                            <div className="absolute" style={{
                               top: '100%',
-                              left: 0,
+                              right: 0,
+                              width: '200px',
                               zIndex: 1000,
-                              maxHeight: '200px',
-                              overflowY: 'auto',
                               backgroundColor: colors.card,
                               border: `1px solid ${colors.cardBorder}`,
                               borderRadius: '0 0 0.375rem 0.375rem',
                               boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                             }}>
-                              {getFilteredBundleUnits().length > 0 ? (
-                                getFilteredBundleUnits().map((unit, index) => (
-                                  <div
-                                    key={`bundle-unit-${index}-${unit}`}
-                                    className="px-3 py-2 cursor-pointer"
-                                    onClick={() => handleBundleUnitSelect(unit)}
-                                    style={{
-                                      color: colors.text,
-                                      borderBottom: `1px solid ${colors.cardBorder}`,
-                                      cursor: 'pointer',
-                                      backgroundColor: selectedBundleUnitIndex === index ? colors.accent + '20' : 'transparent'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      if (selectedBundleUnitIndex !== index) {
-                                        e.currentTarget.style.backgroundColor = colors.secondary;
-                                      }
-                                      setSelectedBundleUnitIndex(index);
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      if (selectedBundleUnitIndex !== index) {
-                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                      }
-                                    }}
-                                  >
-                                    {unit}
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
-                                  Keine Einheit gefunden
-                                </div>
-                              )}
-                              {bundleUnitSearchTerm && !UNITS.includes(bundleUnitSearchTerm) && (
+                              {VAT_RATES.map((vatRate, index) => (
                                 <div
-                                  className="px-3 py-2 cursor-pointer"
-                                  onClick={() => handleBundleUnitSelect(bundleUnitSearchTerm)}
+                                  key={vatRate.value}
+                                  className="px-3 py-2 cursor-pointer flex justify-between items-center"
+                                  onClick={() => {
+                                    handleVatRateChange(vatRate.value);
+                                    setShowVatRateDropdown(false);
+                                  }}
                                   style={{
-                                    color: colors.accent,
-                                    borderTop: `2px solid ${colors.accent}`,
-                                    borderBottom: `1px solid ${colors.cardBorder}`,
+                                    color: colors.text,
+                                    borderBottom: index < VAT_RATES.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
                                     cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    backgroundColor: selectedBundleUnitIndex === getFilteredBundleUnits().length ? colors.accent + '20' : 'transparent'
+                                    backgroundColor: selectedVatRateIndex === index ? colors.accent + '20' : 'transparent',
+                                    minHeight: '38px'
                                   }}
                                   onMouseEnter={(e) => {
-                                    if (selectedBundleUnitIndex !== getFilteredBundleUnits().length) {
-                                      e.currentTarget.style.backgroundColor = colors.secondary;
+                                    if (selectedVatRateIndex !== index) {
+                                      e.currentTarget.style.backgroundColor = colors.accent + '10';
                                     }
-                                    setSelectedBundleUnitIndex(getFilteredBundleUnits().length);
                                   }}
                                   onMouseLeave={(e) => {
-                                    if (selectedBundleUnitIndex !== getFilteredBundleUnits().length) {
+                                    if (selectedVatRateIndex !== index) {
                                       e.currentTarget.style.backgroundColor = 'transparent';
                                     }
                                   }}
                                 >
-                                  "{bundleUnitSearchTerm}" hinzufügen
+                                  <span>{vatRate.label}</span>
                                 </div>
-                              )}
+                              ))}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="col-md-4 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          Gebindepreis
+                    </div>
+                    </div>
+
+                    {/* Preise und Einheiten */}
+                    <div className="mb-4">
+                      <div className="w-full">
+                        <h6 className="section-header">
+                          Preise und Einheiten
+                        </h6>
+                      </div>
+                      <div className="flex flex-wrap -mx-2">
+                      
+                       <div className="w-full md:w-1/2 px-2 mb-3">
+                         <label className="form-label">
+                           Gebindeeinheit & Preis
+                         </label>
+                         <div className="input-group">
+                           {/* Statisches Feld mit "1" */}
+                           <span className="input-group-text" style={{
+                             backgroundColor: colors.cardBorder,
+                             color: colors.text,
+                             borderColor: colors.cardBorder,
+                             minWidth: '40px',
+                             justifyContent: 'center'
+                           }}>
+                             1
+                           </span>
+                           
+                           {/* Gebindeeinheit Dropdown */}
+                           <div className="relative" style={{ width: '30%' }}> {/* 1/6 Breite */}
+                             <input
+                               type="text"
+                               className="form-control"
+                               value={articleForm.bundleUnit}
+                               onChange={(e) => handleBundleUnitInputChange(e.target.value)}
+                               onFocus={() => setShowBundleUnitDropdown(true)}
+                               onBlur={handleBundleUnitInputBlur}
+                               onKeyDown={handleBundleUnitKeyDown}
+                               placeholder="Einheit..."
+                               tabIndex={5}
+                               style={{ borderRadius: 0 }}
+                             />
+                             {showBundleUnitDropdown && (
+                               <div className="absolute" style={{
+                                 top: '100%',
+                                 left: 0,
+                                 width: '200%', // Doppelt so breit wie der Container
+                                 zIndex: 1000,
+                                 maxHeight: '200px',
+                                 overflowY: 'auto',
+                                 backgroundColor: colors.card,
+                                 border: `1px solid ${colors.cardBorder}`,
+                                 borderRadius: '0 0 0.375rem 0.375rem',
+                                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                               }}>
+                                 {getFilteredBundleUnits().length > 0 ? (
+                                   getFilteredBundleUnits().map((unit, index) => (
+                                     <div
+                                       key={`bundle-unit-${index}-${unit}`}
+                                       className="px-3 py-2 cursor-pointer"
+                                       onClick={() => handleBundleUnitSelect(unit)}
+                                       style={{
+                                         color: colors.text,
+                                         borderBottom: `1px solid ${colors.cardBorder}`,
+                                         cursor: 'pointer',
+                                         backgroundColor: selectedBundleUnitIndex === index ? colors.accent + '20' : 'transparent'
+                                       }}
+                                       onMouseEnter={(e) => {
+                                         if (selectedBundleUnitIndex !== index) {
+                                           e.currentTarget.style.backgroundColor = colors.secondary;
+                                         }
+                                         setSelectedBundleUnitIndex(index);
+                                       }}
+                                       onMouseLeave={(e) => {
+                                         if (selectedBundleUnitIndex !== index) {
+                                           e.currentTarget.style.backgroundColor = 'transparent';
+                                         }
+                                       }}
+                                     >
+                                       {unit}
+                                     </div>
+                                   ))
+                                 ) : (
+                                   <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
+                                     Keine Einheit gefunden
+                                   </div>
+                                 )}
+                                 {bundleUnitSearchTerm && !UNITS.includes(bundleUnitSearchTerm) && (
+                                   <div
+                                     className="px-3 py-2 cursor-pointer"
+                                     onClick={() => handleBundleUnitSelect(bundleUnitSearchTerm)}
+                                     style={{
+                                       color: colors.accent,
+                                       borderTop: `2px solid ${colors.accent}`,
+                                       borderBottom: `1px solid ${colors.cardBorder}`,
+                                       cursor: 'pointer',
+                                       fontWeight: 'bold',
+                                       backgroundColor: selectedBundleUnitIndex === getFilteredBundleUnits().length ? colors.accent + '20' : 'transparent'
+                                     }}
+                                     onMouseEnter={(e) => {
+                                       if (selectedBundleUnitIndex !== getFilteredBundleUnits().length) {
+                                         e.currentTarget.style.backgroundColor = colors.secondary;
+                                       }
+                                       setSelectedBundleUnitIndex(getFilteredBundleUnits().length);
+                                     }}
+                                     onMouseLeave={(e) => {
+                                       if (selectedBundleUnitIndex !== getFilteredBundleUnits().length) {
+                                         e.currentTarget.style.backgroundColor = 'transparent';
+                                       }
+                                     }}
+                                   >
+                                     "{bundleUnitSearchTerm}" hinzufügen
+                                   </div>
+                                 )}
+                               </div>
+                             )}
+                           </div>
+                           
+                           {/* Ist-Gleich Zeichen */}
+                           <span className="input-group-text" style={{
+                             backgroundColor: colors.cardBorder,
+                             color: colors.text,
+                             borderColor: colors.cardBorder,
+                             minWidth: '40px',
+                             justifyContent: 'center'
+                           }}>
+                             =
+                           </span>
+                           
+                           {/* Gebindepreis Input */}
+                           <input
+                             type="text"
+                             className="form-control form-control-themed text-end"
+                             value={bundlePriceInput}
+                             onChange={(e) => {
+                               setBundlePriceInput(e.target.value);
+                               const value = parseFloat(e.target.value.replace(',', '.'));
+                               if (!isNaN(value)) {
+                                 setArticleForm(prev => {
+                                   const newPricePerUnit = calculatePricePerUnit(value, prev.content);
+                                   // Aktualisiere auch pricePerUnitInput
+                                   setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
+                                   return { 
+                                     ...prev, 
+                                     bundlePrice: value,
+                                     pricePerUnit: newPricePerUnit
+                                   };
+                                 });
+                               }
+                             }}
+                             onBlur={() => {
+                               // Formatiere als deutsche Zahl mit Komma
+                               setArticleForm(prev => {
+                                 const formattedValue = (prev.bundlePrice || 0).toFixed(2).replace('.', ',');
+                                 setBundlePriceInput(formattedValue);
+                                 // Aktualisiere auch pricePerUnitInput
+                                 const newPricePerUnit = calculatePricePerUnit(prev.bundlePrice, prev.content);
+                                 setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
+                                 return prev;
+                               });
+                             }}
+                             onFocus={(e) => {
+                               // Zeige unformatierte Zahl und markiere alles
+                               setBundlePriceInput((articleForm.bundlePrice || 0).toString());
+                               setTimeout(() => e.target.select(), 0);
+                             }}
+                             onKeyDown={(e) => {
+                               // Pfeiltasten für Preis-Anpassung
+                               if (e.key === 'ArrowUp') {
+                                 e.preventDefault();
+                                 const newPrice = (articleForm.bundlePrice || 0) + 0.1;
+                                 setArticleForm(prev => ({ 
+                                   ...prev, 
+                                   bundlePrice: newPrice,
+                                   pricePerUnit: calculatePricePerUnit(newPrice, prev.content)
+                                 }));
+                                 setBundlePriceInput(newPrice.toString());
+                                 // Aktualisiere auch pricePerUnitInput
+                                 const newPricePerUnit = calculatePricePerUnit(newPrice, articleForm.content);
+                                 setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
+                               } else if (e.key === 'ArrowDown') {
+                                 e.preventDefault();
+                                 const newPrice = Math.max(0, (articleForm.bundlePrice || 0) - 0.1);
+                                 setArticleForm(prev => ({ 
+                                   ...prev, 
+                                   bundlePrice: newPrice,
+                                   pricePerUnit: calculatePricePerUnit(newPrice, prev.content)
+                                 }));
+                                 setBundlePriceInput(newPrice.toString());
+                                 // Aktualisiere auch pricePerUnitInput
+                                 const newPricePerUnit = calculatePricePerUnit(newPrice, articleForm.content);
+                                 setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
+                               }
+                             }}
+                             required
+                             tabIndex={6}
+                             style={{ borderRadius: 0 }}
+                           />
+                           
+                           {/* Euro Symbol */}
+                           <span className="input-group-text" style={{
+                             backgroundColor: colors.cardBorder,
+                             color: colors.text,
+                             borderColor: colors.cardBorder,
+                             minWidth: '40px',
+                             justifyContent: 'center'
+                           }}>
+                             <FaEuroSign />
+                           </span>
+                           
+                           {/* Price Converter Button */}
+                           <button
+                             type="button"
+                             className="btn btn-outline-input"
+                             onClick={() => setShowPriceConverter(true)}
+                             tabIndex={-1}
+                             title="Preis umrechnen"
+                           >
+                             <FaCoins />
+                           </button>
+                         </div>
+                       </div>
+                      
+                      {/* Inhalt und Einheiten */}
+                      <div className="w-full md:w-1/2 px-2 mb-3">
+                        <label className="form-label">
+                          Inhalt & Preis je Einheit
                         </label>
                         <div className="input-group">
+                          {/* Inhalt Input */}
                           <input
                             type="text"
-                            className="form-control"
-                            value={bundlePriceInput}
-                            onChange={(e) => {
-                              setBundlePriceInput(e.target.value);
-                              const value = parseFloat(e.target.value.replace(',', '.'));
-                              if (!isNaN(value)) {
-                                setArticleForm(prev => ({ 
-                                  ...prev, 
-                                  bundlePrice: value,
-                                  pricePerUnit: calculatePricePerUnit(value, prev.content)
-                                }));
-                                // Aktualisiere auch pricePerUnitInput
-                                const newPricePerUnit = calculatePricePerUnit(value, articleForm.content);
-                                setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
-                              }
-                            }}
-                            onBlur={() => {
-                              // Formatiere als deutsche Zahl mit Komma
-                              const formattedValue = (articleForm.bundlePrice || 0).toFixed(2).replace('.', ',');
-                              setBundlePriceInput(formattedValue);
-                              // Aktualisiere auch pricePerUnitInput
-                              const newPricePerUnit = calculatePricePerUnit(articleForm.bundlePrice, articleForm.content);
-                              setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
-                            }}
-                            onFocus={(e) => {
-                              // Zeige unformatierte Zahl und markiere alles
-                              setBundlePriceInput((articleForm.bundlePrice || 0).toString());
-                              setTimeout(() => e.target.select(), 0);
-                            }}
-                            onKeyDown={(e) => {
-                              // Pfeiltasten für Preis-Anpassung
-                              if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                const newPrice = (articleForm.bundlePrice || 0) + 0.1;
-                                setArticleForm(prev => ({ 
-                                  ...prev, 
-                                  bundlePrice: newPrice,
-                                  pricePerUnit: calculatePricePerUnit(newPrice, prev.content)
-                                }));
-                                setBundlePriceInput(newPrice.toString());
-                                // Aktualisiere auch pricePerUnitInput
-                                const newPricePerUnit = calculatePricePerUnit(newPrice, articleForm.content);
-                                setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
-                              } else if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                const newPrice = Math.max(0, (articleForm.bundlePrice || 0) - 0.1);
-                                setArticleForm(prev => ({ 
-                                  ...prev, 
-                                  bundlePrice: newPrice,
-                                  pricePerUnit: calculatePricePerUnit(newPrice, prev.content)
-                                }));
-                                setBundlePriceInput(newPrice.toString());
-                                // Aktualisiere auch pricePerUnitInput
-                                const newPricePerUnit = calculatePricePerUnit(newPrice, articleForm.content);
-                                setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
-                              }
-                            }}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.bundlePrice ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
-                            required
-                            tabIndex={6}
-                          />
-                          <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
-                            <FaEuroSign />
-                          </span>
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary"
-                            onClick={() => setShowPriceConverter(true)}
-                            tabIndex={-1}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                              e.currentTarget.style.backgroundColor = colors.accent + '20';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                            title="Preis umrechnen"
-                          >
-                            <FaCalculator />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="col-md-3 mb-3 ms-auto">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          Gebinde-EAN
-                        </label>
-                        <input
-                          type="text"
-                          className={`form-control ${articleForm.bundleEanCode && !validateEANCode(articleForm.bundleEanCode).isValid ? 'is-invalid' : ''}`}
-                          value={articleForm.bundleEanCode || ''}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setArticleForm(prev => ({ ...prev, bundleEanCode: value }));
-                          }}
-                          onBlur={(e) => {
-                            const value = e.target.value;
-                            if (value) {
-                              const validation = validateEANCode(value);
-                              if (validation.isValid && validation.normalizedCode) {
-                                setArticleForm(prev => ({ ...prev, bundleEanCode: validation.normalizedCode }));
-                                // Automatische Suche bei Open Food Facts
-                                searchEANCode(validation.normalizedCode);
-                              }
-                            }
-                          }}
-                          placeholder="EAN-Code für Gebinde (z.B. Karton)"
-                          maxLength={13}
-                          tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
-                        />
-                        {articleForm.bundleEanCode && !validateEANCode(articleForm.bundleEanCode).isValid && (
-                          <div className="invalid-feedback" style={{ color: '#dc3545', fontSize: '0.875em' }}>
-                            {validateEANCode(articleForm.bundleEanCode).message}
-                          </div>
-                        )}
-                        {articleForm.bundleEanCode && validateEANCode(articleForm.bundleEanCode).isValid && (
-                          <div className="valid-feedback" style={{ color: '#198754', fontSize: '0.875em' }}>
-                            {validateEANCode(articleForm.bundleEanCode).format}: {formatEANCode(articleForm.bundleEanCode)}
-                            {isSearchingEAN && (
-                              <span className="ms-2">
-                                <FaSpinner className="fa-spin" style={{ fontSize: '0.75em' }} />
-                                <span className="ms-1">Suche bei Open Food Facts...</span>
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    {/* Inhalt und Einheiten */}
-                    
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          Inhalt
-                        </label>
-                        <div className="input-group">
-                          <input
-                            type="text"
-                            className="form-control"
+                            className="form-control text-end"
                             value={contentInput}
                             onChange={(e) => {
                               setContentInput(e.target.value);
@@ -1277,156 +1251,115 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                                 setPricePerUnitInput(newPricePerUnit.toFixed(2).replace('.', ','));
                               }
                             }}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.content ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
                             required
                             tabIndex={7}
                           />
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary"
-                            onClick={() => setShowCalculator(true)}
-                            tabIndex={-1}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                              e.currentTarget.style.backgroundColor = colors.accent + '20';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                            title="Taschenrechner"
-                          >
-                            <FaCalculator />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          Inhaltseinheit
-                        </label>
-                        <div className="position-relative">
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={articleForm.contentUnit}
-                            onChange={(e) => handleContentUnitInputChange(e.target.value)}
-                            onFocus={() => setShowContentUnitDropdown(true)}
-                            onBlur={handleContentUnitInputBlur}
-                            onKeyDown={handleContentUnitKeyDown}
-                            placeholder="Einheit auswählen oder eingeben..."
-                            tabIndex={8}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.contentUnit ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
-                          />
-                          {showContentUnitDropdown && (
-                            <div className="position-absolute w-100" style={{
-                              top: '100%',
-                              left: 0,
-                              zIndex: 1000,
-                              maxHeight: '200px',
-                              overflowY: 'auto',
-                              backgroundColor: colors.card,
-                              border: `1px solid ${colors.cardBorder}`,
-                              borderRadius: '0 0 0.375rem 0.375rem',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                            }}>
-                              {getFilteredContentUnits().length > 0 ? (
-                                getFilteredContentUnits().map((unit, index) => (
+                          
+                          {/* Inhaltseinheit Dropdown */}
+                          <div className="relative" style={{ width: '25%' }}>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={articleForm.contentUnit}
+                              onChange={(e) => handleContentUnitInputChange(e.target.value)}
+                              onFocus={() => setShowContentUnitDropdown(true)}
+                              onBlur={handleContentUnitInputBlur}
+                              onKeyDown={handleContentUnitKeyDown}
+                              placeholder="Einheit..."
+                              tabIndex={8}
+                              style={{ borderRadius: 0 }}
+                            />
+                            {showContentUnitDropdown && (
+                              <div className="absolute" style={{
+                                top: '100%',
+                                left: 0,
+                                width: '200%',
+                                zIndex: 1000,
+                                maxHeight: '200px',
+                                overflowY: 'auto',
+                                backgroundColor: colors.card,
+                                border: `1px solid ${colors.cardBorder}`,
+                                borderRadius: '0 0 0.375rem 0.375rem',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                              }}>
+                                {getFilteredContentUnits().length > 0 ? (
+                                  getFilteredContentUnits().map((unit, index) => (
+                                    <div
+                                      key={`content-unit-${index}-${unit}`}
+                                      className="px-3 py-2 cursor-pointer"
+                                      onClick={() => handleContentUnitSelect(unit)}
+                                      style={{
+                                        color: colors.text,
+                                        borderBottom: `1px solid ${colors.cardBorder}`,
+                                        cursor: 'pointer',
+                                        backgroundColor: selectedContentUnitIndex === index ? colors.accent + '20' : 'transparent'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (selectedContentUnitIndex !== index) {
+                                          e.currentTarget.style.backgroundColor = colors.secondary;
+                                        }
+                                        setSelectedContentUnitIndex(index);
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (selectedContentUnitIndex !== index) {
+                                          e.currentTarget.style.backgroundColor = 'transparent';
+                                        }
+                                      }}
+                                    >
+                                      {unit}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
+                                    Keine Einheit gefunden
+                                  </div>
+                                )}
+                                {contentUnitSearchTerm && !UNITS.includes(contentUnitSearchTerm) && (
                                   <div
-                                    key={`content-unit-${index}-${unit}`}
                                     className="px-3 py-2 cursor-pointer"
-                                    onClick={() => handleContentUnitSelect(unit)}
+                                    onClick={() => handleContentUnitSelect(contentUnitSearchTerm)}
                                     style={{
-                                      color: colors.text,
+                                      color: colors.accent,
+                                      borderTop: `2px solid ${colors.accent}`,
                                       borderBottom: `1px solid ${colors.cardBorder}`,
                                       cursor: 'pointer',
-                                      backgroundColor: selectedContentUnitIndex === index ? colors.accent + '20' : 'transparent'
+                                      fontWeight: 'bold',
+                                      backgroundColor: selectedContentUnitIndex === getFilteredContentUnits().length ? colors.accent + '20' : 'transparent'
                                     }}
                                     onMouseEnter={(e) => {
-                                      if (selectedContentUnitIndex !== index) {
+                                      if (selectedContentUnitIndex !== getFilteredContentUnits().length) {
                                         e.currentTarget.style.backgroundColor = colors.secondary;
                                       }
-                                      setSelectedContentUnitIndex(index);
+                                      setSelectedContentUnitIndex(getFilteredContentUnits().length);
                                     }}
                                     onMouseLeave={(e) => {
-                                      if (selectedContentUnitIndex !== index) {
+                                      if (selectedContentUnitIndex !== getFilteredContentUnits().length) {
                                         e.currentTarget.style.backgroundColor = 'transparent';
                                       }
                                     }}
                                   >
-                                    {unit}
+                                    "{contentUnitSearchTerm}" hinzufügen
                                   </div>
-                                ))
-                              ) : (
-                                <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
-                                  Keine Einheit gefunden
-                                </div>
-                              )}
-                              {contentUnitSearchTerm && !UNITS.includes(contentUnitSearchTerm) && (
-                                <div
-                                  className="px-3 py-2 cursor-pointer"
-                                  onClick={() => handleContentUnitSelect(contentUnitSearchTerm)}
-                                  style={{
-                                    color: colors.accent,
-                                    borderTop: `2px solid ${colors.accent}`,
-                                    borderBottom: `1px solid ${colors.cardBorder}`,
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    backgroundColor: selectedContentUnitIndex === getFilteredContentUnits().length ? colors.accent + '20' : 'transparent'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (selectedContentUnitIndex !== getFilteredContentUnits().length) {
-                                      e.currentTarget.style.backgroundColor = colors.secondary;
-                                    }
-                                    setSelectedContentUnitIndex(getFilteredContentUnits().length);
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (selectedContentUnitIndex !== getFilteredContentUnits().length) {
-                                      e.currentTarget.style.backgroundColor = 'transparent';
-                                    }
-                                  }}
-                                >
-                                  "{contentUnitSearchTerm}" hinzufügen
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
-                          {articleForm.contentUnit ? `Preis je ${articleForm.contentUnit}` : 'Preis je Einheit'}
-                        </label>
-                        <div className="input-group">
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Ist-Gleich Zeichen */}
+                          <span className="input-group-text" style={{
+                            backgroundColor: colors.cardBorder,
+                            color: colors.text,
+                            borderColor: colors.cardBorder,
+                            minWidth: '40px',
+                            justifyContent: 'center'
+                          }}>
+                            =
+                          </span>
+                          
+                          {/* Preis je Einheit Input */}
                           <input
                             type="text"
-                            className="form-control"
+                            className="form-control text-end"
                             value={pricePerUnitInput}
                             onChange={(e) => {
                               setPricePerUnitInput(e.target.value);
@@ -1480,63 +1413,137 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             }}
                             placeholder="0,00"
                             required
-                            tabIndex={-1}
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              backgroundColor: !articleForm.pricePerUnit ? colors.accent + '20' : undefined,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = colors.accent;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = colors.cardBorder;
-                            }}
+                            tabIndex={9}
+                            style={{ borderRadius: 0, width: '20%' }}
                           />
-                          <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
+                          
+                          {/* Euro Symbol */}
+                          <span className="input-group-text" style={{
+                            backgroundColor: colors.cardBorder,
+                            color: colors.text,
+                            borderColor: colors.cardBorder,
+                            minWidth: '40px',
+                            justifyContent: 'center'
+                          }}>
                             €
                           </span>
+                          
+                          {/* Calculator Button */}
+                          <button
+                            type="button"
+                            className="btn btn-outline-input"
+                            onClick={() => setShowCalculator(true)}
+                            tabIndex={-1}
+                            title="Taschenrechner"
+                          >
+                            <FaCalculator />
+                          </button>
                         </div>
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      
+                      <div className="w-full md:w-1/3 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Gebinde-EAN
+                        </label>
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className={`form-control form-control-themed ${articleForm.bundleEanCode && !validateEANCode(articleForm.bundleEanCode).isValid ? 'is-invalid' : ''}`}
+                            value={articleForm.bundleEanCode || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setArticleForm(prev => ({ ...prev, bundleEanCode: value }));
+                            }}
+                            onBlur={(e) => {
+                              const value = e.target.value;
+                              if (value) {
+                                const validation = validateEANCode(value);
+                                if (validation.isValid && validation.normalizedCode) {
+                                  setArticleForm(prev => ({ ...prev, bundleEanCode: validation.normalizedCode }));
+                                  // Automatische Suche bei Open Food Facts
+                                  searchEANCode(validation.normalizedCode);
+                                }
+                              }
+                            }}
+                            placeholder="EAN-Code für Gebinde (z.B. Karton)"
+                            maxLength={13}
+                            tabIndex={-1}
+                          />
+                          
+                          {/* Camera Button */}
+                          <button
+                            type="button"
+                            className="btn btn-outline-input"
+                            onClick={() => {
+                              setScannerTargetField('bundle');
+                              setShowBarcodeScanner(true);
+                            }}
+                            tabIndex={-1}
+                            title="EAN-Code scannen"
+                          >
+                            <FaCamera />
+                          </button>
+                        </div>
+                        {articleForm.bundleEanCode && !validateEANCode(articleForm.bundleEanCode).isValid && (
+                          <div className="invalid-feedback" style={{ color: '#dc3545', fontSize: '0.875em' }}>
+                            {validateEANCode(articleForm.bundleEanCode).message}
+                          </div>
+                        )}
+                        {articleForm.bundleEanCode && validateEANCode(articleForm.bundleEanCode).isValid && (
+                          <div className="valid-feedback" style={{ color: '#198754', fontSize: '0.875em' }}>
+                            {validateEANCode(articleForm.bundleEanCode).format}: {formatEANCode(articleForm.bundleEanCode)}
+                            {isSearchingEAN && (
+                              <span className="ms-2">
+                                <FaSpinner className="fa-spin" style={{ fontSize: '0.75em' }} />
+                                <span className="ms-1">Suche bei Open Food Facts...</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-full md:w-1/3 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Inhalt-EAN
                         </label>
-                        <input
-                          type="text"
-                          className={`form-control ${articleForm.contentEanCode && !validateEANCode(articleForm.contentEanCode).isValid ? 'is-invalid' : ''}`}
-                          value={articleForm.contentEanCode || ''}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setArticleForm(prev => ({ ...prev, contentEanCode: value }));
-                          }}
-                          onBlur={(e) => {
-                            const value = e.target.value;
-                            if (value) {
-                              const validation = validateEANCode(value);
-                              if (validation.isValid && validation.normalizedCode) {
-                                setArticleForm(prev => ({ ...prev, contentEanCode: validation.normalizedCode }));
-                                // Automatische Suche bei Open Food Facts
-                                searchEANCode(validation.normalizedCode);
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className={`form-control form-control-themed ${articleForm.contentEanCode && !validateEANCode(articleForm.contentEanCode).isValid ? 'is-invalid' : ''}`}
+                            value={articleForm.contentEanCode || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setArticleForm(prev => ({ ...prev, contentEanCode: value }));
+                            }}
+                            onBlur={(e) => {
+                              const value = e.target.value;
+                              if (value) {
+                                const validation = validateEANCode(value);
+                                if (validation.isValid && validation.normalizedCode) {
+                                  setArticleForm(prev => ({ ...prev, contentEanCode: validation.normalizedCode }));
+                                  // Automatische Suche bei Open Food Facts
+                                  searchEANCode(validation.normalizedCode);
+                                }
                               }
-                            }
-                          }}
-                          placeholder="EAN-Code für Inhalt (z.B. Flaschen)"
-                          maxLength={13}
-                          tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
-                        />
+                            }}
+                            placeholder="EAN-Code für Inhalt (z.B. Flaschen)"
+                            maxLength={13}
+                            tabIndex={-1}
+                          />
+                          
+                          {/* Camera Button für Inhalts-EAN */}
+                          <button
+                            type="button"
+                            className="btn btn-outline-input"
+                            onClick={() => {
+                              setScannerTargetField('content');
+                              setShowBarcodeScanner(true);
+                            }}
+                            tabIndex={-1}
+                            title="EAN-Code scannen"
+                          >
+                            <FaCamera />
+                          </button>
+                        </div>
                         {articleForm.contentEanCode && !validateEANCode(articleForm.contentEanCode).isValid && (
                           <div className="invalid-feedback" style={{ color: '#dc3545', fontSize: '0.875em' }}>
                             {validateEANCode(articleForm.contentEanCode).message}
@@ -1554,23 +1561,40 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           </div>
                         )}
                       </div>
+                      <div className="w-full md:w-1/3 px-2 mb-3 flex justify-end items-end">
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          onClick={() => {
+                            console.log('Öffne Nährwert-Suche...');
+                            setShowNutritionSearch(true);
+                          }}
+                          tabIndex={-1}
+                        >
+                          <FaSearch className="me-1" />
+                          Nährwerte suchen
+                        </button>
+                      </div>
+                      
+                    </div>
                     </div>
 
                     
                     
 
                     {/* ZusatzstoffeInhaltsstoffe und Allergene */}
-                    <div className="row mb-4">
-                      <div className="col-12">
-                        <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                    <div className="mb-4">
+                      <div className="w-full">
+                        <h6 className="form-label-themed section-header">
                           Zusatzstoffe, Inhaltsstoffe und Allergene
                         </h6>
                       </div>
-                      <div className="col-md-6 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="flex flex-wrap -mx-2">
+                      <div className="w-full md:w-5/12 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Zusatzstoffe
                         </label>
-                        <div className="position-relative ingredients-dropdown-container">
+                        <div className="relative ingredients-dropdown-container">
                           <div
                             className="form-control"
                             onClick={handleAdditivesDropdownToggle}
@@ -1602,7 +1626,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             </span>
                           </div>
                           {showAdditivesDropdown && (
-                            <div className="position-absolute w-100" style={{
+                            <div className="absolute w-full" style={{
                               top: '100%',
                               left: 0,
                               zIndex: 1000,
@@ -1633,8 +1657,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-5/12 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Allergene
                         </label>
                         <div className="position-relative allergens-dropdown-container">
@@ -1669,7 +1693,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             </span>
                           </div>
                           {showAllergensDropdown && (
-                            <div className="position-absolute w-100" style={{
+                            <div className="absolute w-full" style={{
                               top: '100%',
                               left: 0,
                               zIndex: 1000,
@@ -1700,75 +1724,69 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           )}
                         </div>
                       </div>
+                      <div className="w-full md:w-1/6 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Alkoholgehalt
+                        </label>
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            className="form-control form-control-themed"
+                            value={articleForm.nutrition.alcohol || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              const alcoholValue = value === '' ? undefined : Math.round(parseFloat(value) * 100) / 100;
+                              setArticleForm(prev => ({
+                                ...prev,
+                                nutrition: {
+                                  ...prev.nutrition,
+                                  alcohol: alcoholValue
+                                }
+                              }));
+                            }}
+                            placeholder="0.00"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            tabIndex={-1}
+                          />
+                          <span className="input-group-text" style={{ backgroundColor: colors.secondary, color: colors.text }}>
+                            %
+                          </span>
+                        </div>
+                      </div>
                       <div className="col-12 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                        <label className="form-label form-label-themed">
                           Inhaltsstoffe
                         </label>
                         <textarea
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.ingredients || ''}
                           onChange={(e) => setArticleForm(prev => ({ ...prev, ingredients: e.target.value }))}
                           placeholder="Komplette Liste aller Zutaten (z.B. Weizenmehl, Wasser, Salz, Hefe...)"
                           rows={2}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            resize: 'none',
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
                     </div>
+                    </div>
 
                     {/* Nährwertangaben */}
-                    <div className="row mb-4">
-                      <div className="col-12">
-                                                  <div className="d-flex justify-content-between align-items-center" style={{ borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
-                            <h6 style={{ color: colors.text, margin: 0 }}>
-                              Nährwertangaben (pro 100g/100ml)
-                            </h6>
-                            <button
-                              type="button"
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => {
-                                console.log('Öffne Nährwert-Suche...');
-                                setShowNutritionSearch(true);
-                              }}
-                              tabIndex={-1}
-                              style={{
-                                borderColor: colors.primary,
-                                color: colors.primary,
-                                transition: 'all 0.2s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.accent;
-                                e.currentTarget.style.backgroundColor = colors.accent + '20';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.primary;
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                              }}
-                            >
-                              <FaSearch className="me-1" />
-                              Nährwerte suchen
-                            </button>
-                          </div>
+                    <div className="mb-4">
+                      <div className="w-full">
+                        <h6 className="form-label-themed section-header">
+                          Nährwertangaben (pro 100g/100ml)
+                        </h6>
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="flex flex-wrap -mx-2">
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Kalorien (kcal)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.calories}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
@@ -1786,212 +1804,131 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             }));
                           }}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Kilojoule (kJ)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.kilojoules}
                           readOnly
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            backgroundColor: colors.secondary
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Protein (g)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.protein}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
                             nutrition: { ...prev.nutrition, protein: parseFloat(e.target.value) || 0 }
                           }))}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Fett (g)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.fat}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
                             nutrition: { ...prev.nutrition, fat: parseFloat(e.target.value) || 0 }
                           }))}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Kohlenhydrate (g)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.carbohydrates}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
                             nutrition: { ...prev.nutrition, carbohydrates: parseFloat(e.target.value) || 0 }
                           }))}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Ballaststoffe (g)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.fiber}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
                             nutrition: { ...prev.nutrition, fiber: parseFloat(e.target.value) || 0 }
                           }))}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Zucker (g)
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.sugar}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
                             nutrition: { ...prev.nutrition, sugar: parseFloat(e.target.value) || 0 }
                           }))}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
-                      <div className="col-md-3 mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
                           Salz (g)
                         </label>
                         <input
                           type="number"
                           step="0.01"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.nutrition.salt}
                           onChange={(e) => setArticleForm(prev => ({
                             ...prev,
                             nutrition: { ...prev.nutrition, salt: parseFloat(e.target.value) || 0 }
                           }))}
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
+                    </div>
                     </div>
                     
                     {/* Notizen */}
                     <div className="mb-4">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                      <h6 className="form-label-themed section-header">
                         Notizen
                       </h6>
                       <div className="mb-3">
-                        <label className="form-label" style={{ color: colors.text }}>
+                        <label className="form-label form-label-themed">
                           Notizen
                         </label>
                         <textarea
-                          className="form-control"
+                          className="form-control form-control-themed"
                           rows={3}
                           value={articleForm.notes}
                           onChange={(e) => setArticleForm(prev => ({
@@ -2000,51 +1937,34 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           }))}
                           placeholder="Zusätzliche Notizen zum Artikel..."
                           tabIndex={-1}
-                          style={{ 
-                            borderColor: colors.cardBorder, 
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = colors.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = colors.cardBorder;
-                          }}
                         />
                       </div>
                     </div>
                   </form>
                 </div>
-                <div className="card-footer d-flex justify-content-between" style={{ 
+                <div className="card-footer flex justify-between" style={{ 
                   backgroundColor: colors.secondary,
-                  borderTop: 'none',
+                  borderTopColor: colors.cardBorder,
                   position: 'sticky',
                   bottom: 0,
                   zIndex: 10
                 }}>
                   <button
-                    className="btn btn-secondary"
+                    className="btn-outline-secondary px-4 py-2 rounded"
                     onClick={handleClose}
                     tabIndex={10}
-                    style={{ borderColor: colors.cardBorder }}
                   >
-                    <FaArrowLeft className="me-2" />
+                    <FaArrowLeft className="mr-2" />
                     Abbrechen
                   </button>
                   <button
-                    className="btn btn-primary"
+                    className="btn-outline-primary px-4 py-2 rounded"
                     onClick={handleSave}
                     disabled={!isFormValid()}
                     tabIndex={9}
-                    style={{
-                      backgroundColor: colors.accent,
-                      borderColor: colors.accent,
-                      opacity: isFormValid() ? 1 : 0.6
-                    }}
                   >
-                    <FaSave className="me-2" />
-                    {editingArticle ? 'Aktualisieren' : 'Speichern'}
+                    <FaSave className="mr-2" />
+                    {editingArticle ? 'Änderungen speichern' : 'Artikel speichern'}
                   </button>
                 </div>
               </div>
@@ -2065,13 +1985,12 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
               <div className="col-12 col-md-4 col-lg-3">
                 <div className="card" style={{ backgroundColor: colors.card }}>
                   <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                    <h5 className="mb-0" style={{ color: colors.text }}>
+                    <h5 className="mb-0 form-label-themed">
                       Taschenrechner
                     </h5>
                     <button
                       className="btn btn-link p-0"
                       onClick={() => setShowCalculator(false)}
-                      style={{ color: colors.text, textDecoration: 'none' }}
                     >
                       <FaClose />
                     </button>
@@ -2098,45 +2017,43 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
               <div className="col-12 col-md-6 col-lg-2">
                 <div className="card" style={{ backgroundColor: colors.card }}>
                   <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                    <h5 className="mb-0" style={{ color: colors.text }}>
-                      Preis umrechnen
+                    <h5 className="mb-0">
+                      Preis umrechnen in Brutto oder Netto
                     </h5>
                     <button
                       className="btn btn-link p-0"
                       onClick={() => setShowPriceConverter(false)}
-                      style={{ color: colors.text, textDecoration: 'none' }}
                     >
                       <FaClose />
                     </button>
                   </div>
                   <div className="card-body">
                     <div className="mb-4">
-                      <label className="form-label" style={{ color: colors.text }}>
+                      <label className="form-label form-label-themed">
                         Aktueller Gebindepreis
                       </label>
                       <div className="input-group">
                         <input
                           type="text"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={articleForm.bundlePrice.toFixed(2)}
                           readOnly
                           style={{ borderColor: colors.cardBorder, color: colors.text, backgroundColor: colors.secondary }}
                         />
-                        <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
+                        <span className="input-group-text">
                           <FaEuroSign />
                         </span>
                       </div>
                     </div>
 
                     <div className="mb-4">
-                      <label className="form-label" style={{ color: colors.text }}>
+                      <label className="form-label form-label-themed">
                         MwSt-Satz
                       </label>
                       <select
-                        className="form-select"
+                        className="form-select form-control-themed"
                         value={selectedVatRate}
                         onChange={(e) => setSelectedVatRate(parseFloat(e.target.value))}
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
                       >
                         <option value={7}>7% (ermäßigt)</option>
                         <option value={19}>19% (regulär)</option>
@@ -2144,29 +2061,25 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                     </div>
 
                     <div className="mb-4">
-                      <label className="form-label" style={{ color: colors.text }}>
+                      <label className="form-label form-label-themed">
                         Bruttopreis
                       </label>
                       <div className="input-group mb-2">
                         <input
                           type="number"
                           step="0.01"
-                          className="form-control"
+                          className="form-control form-control-themed"
                           value={calculateGrossPrice(articleForm.bundlePrice, selectedVatRate).toFixed(2)}
                           readOnly
                           style={{ borderColor: colors.cardBorder, color: colors.text, backgroundColor: colors.secondary }}
                         />
-                        <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
+                        <span className="input-group-text">
                           <FaEuroSign />
                         </span>
                         <button
                           type="button"
-                          className="btn btn-primary"
+                          className="btn btn-outline-input"
                           onClick={handleApplyGrossPrice}
-                          style={{
-                            backgroundColor: colors.accent,
-                            borderColor: colors.accent
-                          }}
                           title="Bruttopreis übernehmen"
                         >
                           <FaCheck />
@@ -2175,7 +2088,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                     </div>
 
                     <div className="mb-4">
-                      <label className="form-label" style={{ color: colors.text }}>
+                      <label className="form-label">
                         Nettopreis
                       </label>
                       <div className="input-group mb-2">
@@ -2187,17 +2100,13 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           readOnly
                           style={{ borderColor: colors.cardBorder, color: colors.text, backgroundColor: colors.secondary }}
                         />
-                        <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
+                        <span className="input-group-text">
                           <FaEuroSign />
                         </span>
                         <button
                           type="button"
-                          className="btn btn-primary"
+                          className="btn btn-outline-input"
                           onClick={handleApplyNetPrice}
-                          style={{
-                            backgroundColor: colors.accent,
-                            borderColor: colors.accent
-                          }}
                           title="Nettopreis übernehmen"
                         >
                           <FaCheck />
@@ -2210,9 +2119,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                     borderTop: `1px solid ${colors.cardBorder}`
                   }}>
                     <button
-                      className="btn btn-secondary"
+                      className="btn btn-outline-secondary"
                       onClick={() => setShowPriceConverter(false)}
-                      style={{ borderColor: colors.cardBorder }}
                     >
                       Abbrechen
                     </button>
@@ -2257,13 +2165,12 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
           >
             {/* Header */}
             <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-              <h5 className="mb-0" style={{ color: colors.text }}>
+              <h5 className="mb-0 form-label-themed">
                 Artikelbild verwalten
               </h5>
               <button
                 className="btn btn-link p-0"
                 onClick={closeImageModal}
-                style={{ color: colors.text, textDecoration: 'none' }}
               >
                 <FaTimes />
               </button>
@@ -2272,7 +2179,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
             {/* Body */}
             <div className="card-body" style={{ overflow: 'auto', maxHeight: 'calc(80vh - 120px)' }}>
               <div className="mb-3">
-                <label className="form-label" style={{ color: colors.text }}>
+                <label className="form-label form-label-themed">
                   Artikelbild
                 </label>
                 <div 
@@ -2322,7 +2229,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                   ) : (
                     <div className="text-center">
                       <FaImage style={{ fontSize: '2rem', color: colors.cardBorder, marginBottom: '0.5rem' }} />
-                      <div style={{ fontSize: '0.8rem', color: colors.text }}>
+                      <div className="form-label-themed" style={{ fontSize: '0.8rem' }}>
                         Bild auswählen
                       </div>
                     </div>
@@ -2340,30 +2247,24 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="card-footer d-flex justify-content-between" style={{ 
+            <div className="card-footer flex justify-between" style={{ 
               backgroundColor: colors.secondary,
-              borderTop: 'none'
+              borderTopColor: colors.cardBorder
             }}>
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn-outline-secondary px-4 py-2 rounded"
                 onClick={handleRemoveImage}
-                style={{ borderColor: colors.cardBorder }}
               >
-                <FaTrash className="me-1" />
+                <FaTrash className="mr-2" />
                 Bild entfernen
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn-outline-primary px-4 py-2 rounded"
                 onClick={closeImageModal}
-                style={{
-                  backgroundColor: colors.accent,
-                  borderColor: colors.accent,
-                  color: 'white'
-                }}
               >
-                <FaTimes className="me-1" />
+                <FaTimes className="mr-2" />
                 Schließen
               </button>
             </div>
@@ -2400,40 +2301,40 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
             position: 'relative',
             zIndex: 100000
           }}>
-                         <NutritionSearch
-               articleName={articleForm.name}
-               category={articleForm.category}
-               articleId={state.editingArticle?.id}
-               initialOpenFoodFactsCode={state.editingArticle?.openFoodFactsCode}
-               onNutritionDataFound={handleNutritionDataFound}
-               onExtendedDataFound={handleExtendedDataFound}
-               onEANCodeFound={(eanCode, type) => {
-                 if (type === 'content') {
-                   setArticleForm(prev => ({ ...prev, contentEanCode: eanCode }));
-                 } else {
-                   setArticleForm(prev => ({ ...prev, bundleEanCode: eanCode }));
-                 }
-               }}
-               onOpenFoodFactsCodeFound={(code) => {
-                 console.log(`✅ Open Food Facts Code gespeichert: ${code}`);
-                 setArticleForm(prev => ({ ...prev, openFoodFactsCode: code }));
-               }}
-               onImageDownloaded={(success) => {
-                 if (success) {
-                   console.log('✅ Produktbild erfolgreich heruntergeladen und gespeichert!');
-                   // Artikel-Bild neu laden
-                   loadArticleImage();
-                 } else {
-                   console.warn('⚠️ Produktbild konnte nicht heruntergeladen werden');
-                 }
-               }}
-               colors={colors}
-               onClose={() => {
-                 setShowNutritionSearch(false);
-                 setEanSearchResult(null);
-               }}
-               eanSearchResult={eanSearchResult}
-             />
+            <NutritionSearch
+              articleName={articleForm.name}
+              category={articleForm.category}
+              articleId={state.editingArticle?.id}
+              initialOpenFoodFactsCode={state.editingArticle?.openFoodFactsCode}
+              onNutritionDataFound={handleNutritionDataFound}
+              onExtendedDataFound={handleExtendedDataFound}
+              onEANCodeFound={(eanCode, type) => {
+                if (type === 'content') {
+                  setArticleForm(prev => ({ ...prev, contentEanCode: eanCode }));
+                } else {
+                  setArticleForm(prev => ({ ...prev, bundleEanCode: eanCode }));
+                }
+              }}
+              onOpenFoodFactsCodeFound={(code) => {
+                console.log(`✅ Open Food Facts Code gespeichert: ${code}`);
+                setArticleForm(prev => ({ ...prev, openFoodFactsCode: code }));
+              }}
+              onImageDownloaded={(success) => {
+                if (success) {
+                  console.log('✅ Produktbild erfolgreich heruntergeladen und gespeichert!');
+                  // Artikel-Bild neu laden
+                  loadArticleImage();
+                } else {
+                  console.warn('⚠️ Produktbild konnte nicht heruntergeladen werden');
+                }
+              }}
+              colors={colors}
+              onClose={() => {
+                setShowNutritionSearch(false);
+                setEanSearchResult(null);
+              }}
+              eanSearchResult={eanSearchResult}
+            />
           </div>
         </div>
       )}
@@ -2444,6 +2345,15 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
         onClose={handleDuplicateModalClose}
         onEditExisting={handleEditExistingArticle}
         duplicateMessage={duplicateMessage}
+        colors={colors}
+      />
+
+      {/* Barcode-Scanner */}
+      <BarcodeScanner
+        isOpen={showBarcodeScanner}
+        onClose={() => setShowBarcodeScanner(false)}
+        onCodeDetected={handleBarcodeDetected}
+        targetField={scannerTargetField}
         colors={colors}
       />
     </>

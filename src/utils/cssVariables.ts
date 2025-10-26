@@ -54,6 +54,14 @@ export const setComponentColors = (colors: any) => {
   if (colors.accent) {
     root.style.setProperty('--btn-primary-bg', colors.accent);
     root.style.setProperty('--btn-primary-border', colors.accent);
+    // Allgemein verfügbar machen
+    root.style.setProperty('--accent', colors.accent);
+    try {
+      // #RRGGBBAA mit ~12.5% Alpha (0x20)
+      if (colors.accent.startsWith('#') && (colors.accent.length === 7 || colors.accent.length === 4)) {
+        root.style.setProperty('--accent-20', colors.accent + '20');
+      }
+    } catch {}
   }
   
   if (colors.text) {
@@ -72,6 +80,23 @@ export const setComponentColors = (colors: any) => {
   
   if (colors.textSecondary) {
     root.style.setProperty('--text-secondary-color', colors.textSecondary);
+  }
+
+  // Card/Border-Farben
+  if (colors.cardBorder) {
+    root.style.setProperty('--card-border-color', colors.cardBorder);
+  }
+  if (colors.card) {
+    root.style.setProperty('--card-bg', colors.card);
+  }
+
+  // Input-Hintergrund: meist Papier/hell
+  if ((colors as any).paper) {
+    root.style.setProperty('--input-bg', (colors as any).paper);
+  } else if (colors.card) {
+    root.style.setProperty('--input-bg', colors.card);
+  } else {
+    root.style.setProperty('--input-bg', '#ffffff');
   }
 };
 

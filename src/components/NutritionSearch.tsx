@@ -30,7 +30,7 @@
  * />
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { FaSearch, FaDownload, FaTimes, FaSpinner, FaExclamationTriangle, FaCheckCircle, FaImage } from 'react-icons/fa';
+import { FaSearch, FaDownload, FaTimes, FaSpinner, FaExclamationTriangle, FaCheckCircle, FaImage, FaInfoCircle, FaBarcode } from 'react-icons/fa';
 import { nutritionAPI, NutritionData, ExtendedProductData } from '../services/nutritionAPI';
 import { storageLayer } from '../services/storageLayer';
 
@@ -483,18 +483,23 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
   const currentSuggestions = suggestions.length > 0 ? suggestions : extendedSuggestions;
 
   return (
-    <div className="nutrition-search-container position-relative">
+    <div className="nutrition-search-container position-fixed top-50 start-50 translate-middle" style={{ zIndex: 1050 }}>
       <div className="card" style={{ 
         backgroundColor: colors.card, 
         borderColor: colors.cardBorder,
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        borderRadius: '8px'
+        borderRadius: '8px',
+        width: '600px',
+        maxWidth: '80vw',
+        minWidth: '500px',
+        height: '600px',
+        maxHeight: '80vh'
       }}>
         {/* Header */}
-        <div className="card-header d-flex justify-content-between align-items-center" 
-             style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
+        <div className="card-header flex justify-between items-center" 
+             style={{ backgroundColor: colors.secondary, borderBottomColor: colors.cardBorder }}>
           <h5 className="mb-0" style={{ color: colors.text }}>
-            <FaSearch className="me-2" />
+            <FaSearch className="mr-2" />
             {eanSearchResult ? 'EAN-Code gefunden' : 'Nährwertdaten suchen'}
           </h5>
           <button
@@ -509,26 +514,30 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
         {/* Body */}
         <div className="card-body" style={{ overflow: 'auto', maxHeight: 'calc(80vh - 120px)' }}>
           {initialOpenFoodFactsCode && (
-            <div className="alert alert-info mb-3" style={{ 
+            <div className="alert alert-info mb-3 flex items-center" style={{ 
               backgroundColor: colors.accent + '10', 
               borderColor: colors.accent,
               color: colors.text 
             }}>
-              <FaCheckCircle className="me-2" />
-              <strong>Gespeichertes Produkt geladen!</strong> Open Food Facts Code: <strong>{initialOpenFoodFactsCode}</strong>
+              <FaCheckCircle className="mr-2" />
+              <div>
+                <strong>Gespeichertes Produkt geladen!</strong> Open Food Facts Code: <strong>{initialOpenFoodFactsCode}</strong>
+              </div>
             </div>
           )}
           {eanSearchResult && (
-            <div className="alert alert-success mb-3" style={{ 
+            <div className="alert alert-success mb-3 flex items-center" style={{ 
               backgroundColor: colors.accent + '20', 
               borderColor: colors.accent,
               color: colors.text 
             }}>
-              <FaCheckCircle className="me-2" />
-              <strong>EAN-Code gefunden!</strong> Produkt: <strong>{eanSearchResult.product_name}</strong>
-              {eanSearchResult.brands && (
-                <span className="ms-2">({eanSearchResult.brands})</span>
-              )}
+              <FaCheckCircle className="mr-2" />
+              <div>
+                <strong>EAN-Code gefunden!</strong> Produkt: <strong>{eanSearchResult.product_name}</strong>
+                {eanSearchResult.brands && (
+                  <span className="ml-2">({eanSearchResult.brands})</span>
+                )}
+              </div>
             </div>
           )}
           <div className="mb-3">
@@ -540,7 +549,7 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                 type="text"
                 className="form-control"
                 value={searchTerm}
-                onChange={(e) => handleInputChange(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => setShowSuggestions(true)}
                 placeholder={
@@ -569,21 +578,27 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                   }
                 }}
               />
-              {isLoading && (
+              {isLoading ? (
                 <span className="input-group-text">
-                  <FaSpinner className="fa-spin" />
+                  <FaSpinner style={{ 
+                    animation: 'spin 1s linear infinite',
+                    transformOrigin: 'center'
+                  }} />
                 </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-outline-input"
+                  onClick={() => handleSearch(searchTerm)}
+                  disabled={!searchTerm.trim()}
+                >
+                  <FaSearch />
+                </button>
               )}
             </div>
-            {category && !initialOpenFoodFactsCode && !eanSearchResult && (
-              <small className="text-muted" style={{ color: colors.textSecondary }}>
-                <FaSearch className="me-1" />
-                Automatische Suche nach Kategorie: "{category}"
-              </small>
-            )}
             {initialOpenFoodFactsCode && (
-              <small className="text-muted" style={{ color: colors.textSecondary }}>
-                <FaCheckCircle className="me-1" style={{ color: colors.accent }} />
+              <small className="text-muted flex items-center" style={{ color: colors.textSecondary }}>
+                <FaCheckCircle className="mr-1" style={{ color: colors.accent }} />
                 Gespeichert: Code {initialOpenFoodFactsCode} - Neue Suche möglich
               </small>
             )}
@@ -592,9 +607,9 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
           {/* Option für erweiterte Daten */}
           {onExtendedDataFound && (
             <div className="mb-3">
-              <div className="form-check">
+              <div className="form-check flex items-center">
                 <input
-                  className="form-check-input"
+                  className="form-check-input mr-2"
                   type="checkbox"
                   id="useExtendedData"
                   checked={useExtendedData}
@@ -608,18 +623,20 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                   Allergene und Zusatzstoffe mit übernehmen
                 </label>
               </div>
-              <small className="text-muted" style={{ color: colors.textSecondary }}>
-                Wenn aktiviert, werden auch Allergene und Zusatzstoffe aus der Open Food Facts Datenbank übernommen.
-              </small>
+              <div className="ml-4">
+                <small className="text-muted" style={{ color: colors.textSecondary }}>
+                  Wenn aktiviert, werden auch Allergene und Zusatzstoffe aus der Open Food Facts Datenbank übernommen.
+                </small>
+              </div>
             </div>
           )}
 
           {/* Option für Produktbild-Download */}
           {articleId && (eanSearchResult || currentSuggestions.length > 0) && (
             <div className="mb-3">
-              <div className="form-check">
+              <div className="form-check flex items-center">
                 <input
-                  className="form-check-input"
+                  className="form-check-input mr-2"
                   type="checkbox"
                   id="downloadProductImage"
                   checked={downloadProductImage}
@@ -628,12 +645,12 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                   }}
                   style={{ accentColor: colors.accent }}
                 />
-                <label className="form-check-label" htmlFor="downloadProductImage" style={{ color: colors.text }}>
-                  <FaImage className="me-1" />
+                <label className="form-check-label flex items-center" htmlFor="downloadProductImage" style={{ color: colors.text }}>
+                  <FaImage className="mr-2" style={{ color: colors.text }} />
                   Produktbild herunterladen und speichern
                 </label>
               </div>
-              <small className="text-muted" style={{ color: colors.textSecondary }}>
+              <small className="text-muted ml-4" style={{ color: colors.textSecondary }}>
                 Lädt automatisch das größte verfügbare Produktbild von Open Food Facts herunter.
               </small>
             </div>
@@ -642,9 +659,9 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
           {/* Option für EAN-Code-Übernahme */}
           {(eanSearchResult || (currentSuggestions.length > 0 && currentSuggestions.some(s => s.code))) && (
             <div className="mb-3">
-              <div className="form-check">
+              <div className="form-check flex items-center">
                 <input
-                  className="form-check-input"
+                  className="form-check-input mr-2"
                   type="checkbox"
                   id="useEANCode"
                   checked={useEANCode}
@@ -653,15 +670,16 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                   }}
                   style={{ accentColor: colors.accent }}
                 />
-                <label className="form-check-label" htmlFor="useEANCode" style={{ color: colors.text }}>
+                <label className="form-check-label flex items-center" htmlFor="useEANCode" style={{ color: colors.text }}>
+                  <FaBarcode className="mr-2" style={{ color: colors.text }} />
                   EAN-Code übernehmen
                 </label>
               </div>
               {useEANCode && (
-                <div className="ms-4 mt-2">
-                  <div className="form-check form-check-inline">
+                <div className="ml-4 mt-2">
+                  <div className="form-check form-check-inline flex items-center">
                     <input
-                      className="form-check-input"
+                      className="form-check-input mr-2"
                       type="radio"
                       name="eanCodeType"
                       id="eanCodeContent"
@@ -674,9 +692,9 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                       Als Inhalt-EAN
                     </label>
                   </div>
-                  <div className="form-check form-check-inline">
+                  <div className="form-check form-check-inline flex items-center">
                     <input
-                      className="form-check-input"
+                      className="form-check-input mr-2"
                       type="radio"
                       name="eanCodeType"
                       id="eanCodeBundle"
@@ -691,7 +709,7 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                   </div>
                 </div>
               )}
-              <small className="text-muted" style={{ color: colors.textSecondary }}>
+              <small className="text-muted ml-4" style={{ color: colors.textSecondary }}>
                 Wenn aktiviert, wird der EAN-Code "{eanSearchResult?.code || (selectedProduct?.code || (currentSuggestions.length > 0 ? currentSuggestions[0].code : ''))}" als {eanCodeType === 'content' ? 'Inhalt' : 'Gebinde'}-EAN übernommen.
               </small>
             </div>
@@ -711,7 +729,7 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                     <button
                       key={suggestion.code}
                       type="button"
-                      className="list-group-item list-group-item-action d-flex justify-content-between align-items-start"
+                      className="list-group-item list-group-item-action flex justify-between items-start"
                       onClick={() => {
                         if (isExtended) {
                           handleExtendedSuggestionSelect(suggestion as ExtendedSuggestionItem);
@@ -734,10 +752,10 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                       }}
                     >
                       <div className="flex-grow-1">
-                        <div className="fw-bold">
+                        <div className="font-bold">
                           {suggestion.name}
                           {suggestion.quantity && (
-                            <span className="ms-2 badge" style={{ 
+                            <span className="ml-2 badge" style={{ 
                               backgroundColor: colors.accent + '30',
                               color: colors.text,
                               fontWeight: 'normal',
@@ -756,21 +774,21 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                           <div className="mt-1">
                             {extendedData.originalAllergens && extendedData.originalAllergens.length > 0 && (
                               <div className="small">
-                                <FaExclamationTriangle className="me-1" style={{ color: '#dc3545' }} />
+                                <FaExclamationTriangle className="mr-1" style={{ color: '#dc3545' }} />
                                 Allergene: {extendedData.originalAllergens.slice(0, 3).join(', ')}
                                 {extendedData.originalAllergens.length > 3 && '...'}
                               </div>
                             )}
                             {extendedData.originalAdditives && extendedData.originalAdditives.length > 0 && (
                               <div className="small">
-                                <FaCheckCircle className="me-1" style={{ color: colors.accent }} />
+                                <FaCheckCircle className="mr-1" style={{ color: colors.accent }} />
                                 Zusatzstoffe: {extendedData.originalAdditives.slice(0, 3).join(', ')}
                                 {extendedData.originalAdditives.length > 3 && '...'}
                               </div>
                             )}
                             {extendedData.originalIngredients && extendedData.originalIngredients.length > 0 && (
                               <div className="small">
-                                <FaDownload className="me-1" style={{ color: '#6c757d' }} />
+                                <FaDownload className="mr-1" style={{ color: '#6c757d' }} />
                                 Zutaten: {extendedData.originalIngredients.length > 50 
                                   ? extendedData.originalIngredients.substring(0, 50) + '...' 
                                   : extendedData.originalIngredients}
@@ -779,7 +797,7 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
                           </div>
                         )}
                       </div>
-                      <div className="text-end">
+                      <div className="text-right">
                         <div className="small">
                           {isExtended ? extendedData?.nutritionData.calories : (suggestion as SuggestionItem).nutritionData.calories} kcal
                         </div>
@@ -802,7 +820,7 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
               borderColor: '#f5c6cb',
               color: '#721c24'
             }}>
-              <FaExclamationTriangle className="me-2" />
+              <FaExclamationTriangle className="mr-2" />
               <strong>Fehler:</strong> {errorMessage}
             </div>
           )}
@@ -813,7 +831,7 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
               borderColor: colors.infoBorder || '#bee5eb',
               color: colors.infoText || '#0c5460'
             }}>
-              <FaSearch className="me-2" />
+              <FaSearch className="mr-2" />
               Keine Produkte gefunden. Versuchen Sie einen anderen Suchbegriff.
             </div>
           )}
@@ -821,52 +839,32 @@ const NutritionSearch: React.FC<NutritionSearchProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="card-footer d-flex justify-content-between align-items-center" style={{ 
+        <div className="card-footer flex justify-between items-center" style={{ 
           backgroundColor: colors.secondary,
-          borderTop: 'none'
+          borderTopColor: colors.cardBorder
         }}>
-          <small className="text-muted" style={{ color: colors.textSecondary }}>
+          <small className="text-muted flex items-center" style={{ color: colors.textSecondary }}>
             {isDownloadingImage ? (
               <>
-                <FaSpinner className="fa-spin me-1" />
+                <FaSpinner className="fa-spin mr-1" />
                 Bild wird heruntergeladen...
               </>
             ) : (
               <>
-                <FaDownload className="me-1" />
+                <FaDownload className="mr-1" />
                 Daten von Open Food Facts
               </>
             )}
           </small>
           <button
             type="button"
-            className="btn btn-sm btn-secondary"
+            className="btn-outline-primary px-4 py-2 rounded"
             onClick={selectedProduct ? handleApplySelectedProduct : onClose}
             disabled={isDownloadingImage}
-            style={{
-              backgroundColor: selectedProduct ? colors.accent : colors.secondary,
-              borderColor: selectedProduct ? colors.accent : colors.cardBorder,
-              color: selectedProduct ? colors.cardBackground : colors.text,
-              transition: 'all 0.2s ease',
-              opacity: isDownloadingImage ? 0.6 : 1,
-              cursor: isDownloadingImage ? 'not-allowed' : 'pointer'
-            }}
-            onMouseEnter={(e) => {
-              if (!isDownloadingImage) {
-                e.currentTarget.style.backgroundColor = colors.accent + '20';
-                e.currentTarget.style.borderColor = colors.accent;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isDownloadingImage) {
-                e.currentTarget.style.backgroundColor = selectedProduct ? colors.accent : colors.secondary;
-                e.currentTarget.style.borderColor = selectedProduct ? colors.accent : colors.cardBorder;
-              }
-            }}
           >
             {isDownloadingImage ? (
               <>
-                <FaSpinner className="fa-spin me-1" />
+                <FaSpinner className="fa-spin mr-1" />
                 Lädt...
               </>
             ) : (

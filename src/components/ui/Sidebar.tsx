@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaTachometerAlt, FaDatabase, FaCalculator, FaShoppingCart, FaBoxes, FaUsers, FaShieldAlt, FaCog, FaChevronRight, FaList, FaUserFriends, FaClipboardList, FaUtensils, FaCalendarAlt, FaFileInvoice, FaWarehouse, FaThermometerHalf, FaBroom, FaExclamationTriangle } from 'react-icons/fa';
+import { FaTachometerAlt, FaDatabase, FaCalculator, FaShoppingCart, FaBoxes, FaUsers, FaShieldAlt, FaCog, FaChevronRight, FaList, FaUserFriends, FaClipboardList, FaUtensils, FaCalendarAlt, FaFileInvoice, FaWarehouse, FaThermometerHalf, FaBroom, FaExclamationTriangle, FaPalette } from 'react-icons/fa';
 
 interface SidebarProps {
   state: any;
@@ -27,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
         left: 0,
         width: state.sidebarOpen ? 224 : 60,
         height: 'calc(100vh - 56px)',
-        backgroundColor: colors.card,
+        backgroundColor: colors.sidebar,
         borderRight: `1px solid ${colors.cardBorder}`,
         transition: 'width 0.3s ease',
         zIndex: 1000,
@@ -101,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.datenbasis && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'artikel' ? 'active' : ''}`}
                     onClick={() => { 
@@ -109,30 +109,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Artikel"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaList style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Artikel</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'lieferanten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -140,29 +127,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Lieferanten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaUsers style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Lieferanten</span>
                   </button>
-                </li>
+                </div>
               </div>
           </li>
 
@@ -211,7 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.kalkulation && state.sidebarOpen ? '300px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'rezepte' ? 'active' : ''}`}
                     onClick={() => { 
@@ -219,30 +193,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Rezepte"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaUtensils style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Rezepte</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'speisekarten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -250,30 +211,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Speisekarten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaClipboardList style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Speisekarten</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'menus-buffets' ? 'active' : ''}`}
                     onClick={() => { 
@@ -281,30 +229,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Menüs & Büffets"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaUtensils style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Menüs &amp; Büffets</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'nachkalkulationen' ? 'active' : ''}`}
                     onClick={() => { 
@@ -312,29 +247,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Nachkalkulationen"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaCalculator style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Nachkalkulationen</span>
                   </button>
-                </li>
+                </div>
               </div>
           </li>
 
@@ -383,7 +305,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.einkauf && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'einkaufslisten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -391,30 +313,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Einkaufslisten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaList style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Einkaufslisten</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'einkauf-planen' ? 'active' : ''}`}
                     onClick={() => { 
@@ -422,30 +331,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Einkauf planen"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaCalendarAlt style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Einkauf planen</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'rechnungen' ? 'active' : ''}`}
                     onClick={() => { 
@@ -453,29 +349,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Rechnungen"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaFileInvoice style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Rechnungen</span>
                   </button>
-                </li>
+                </div>
               </div>
           </li>
 
@@ -524,7 +407,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.inventur && state.sidebarOpen ? '150px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'warenbestand' ? 'active' : ''}`}
                     onClick={() => { 
@@ -532,30 +415,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Warenbestand"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaWarehouse style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Warenbestand</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'inventar-verwalten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -563,29 +433,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Inventar verwalten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaBoxes style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Inventar verwalten</span>
                   </button>
-                </li>
+                </div>
               </div>
           </li>
 
@@ -634,7 +491,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.personal && state.sidebarOpen ? '250px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'personaldaten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -642,30 +499,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Personaldaten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaUserFriends style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Personaldaten</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'dienstplaene' ? 'active' : ''}`}
                     onClick={() => { 
@@ -673,30 +517,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Dienstpläne"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaCalendarAlt style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Dienstpläne</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'urlaubsplan' ? 'active' : ''}`}
                     onClick={() => { 
@@ -704,30 +535,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Urlaubsplan"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaCalendarAlt style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Urlaubsplan</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'fehlzeiten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -735,29 +553,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Fehlzeiten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaExclamationTriangle style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Fehlzeiten</span>
                   </button>
-                </li>
+                </div>
               </div>
           </li>
 
@@ -806,7 +611,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
               style={{
                 maxHeight: accordionOpen.haccp && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'temperaturlisten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -814,30 +619,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Temperaturlisten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaThermometerHalf style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Temperaturlisten</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'reinigungslisten' ? 'active' : ''}`}
                     onClick={() => { 
@@ -845,30 +637,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Reinigungslisten"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaBroom style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Reinigungslisten</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'material-verluste' ? 'active' : ''}`}
                     onClick={() => { 
@@ -876,29 +655,16 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Material-Verluste"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaExclamationTriangle style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Material-Verluste</span>
                   </button>
-                </li>
+                </div>
               </div>
           </li>
         </ul>
@@ -952,9 +718,9 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             <div 
               className={`accordion-content ${accordionOpen.einstellungen && state.sidebarOpen ? 'open' : 'closed'}`}
               style={{
-                maxHeight: accordionOpen.einstellungen && state.sidebarOpen ? '150px' : '0'
+                maxHeight: accordionOpen.einstellungen && state.sidebarOpen ? '200px' : '0'
               }}>
-                <li className="mb-0.5">
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'storage-management' ? 'active' : ''}`}
                     onClick={() => { 
@@ -962,30 +728,17 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Speicher-Verwaltung"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaCog style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Speicher-Verwaltung</span>
                   </button>
-                </li>
-                <li className="mb-0.5">
+                </div>
+                <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'development' ? 'active' : ''}`}
                     onClick={() => { 
@@ -993,29 +746,34 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
                     title="Entwicklung"
-                    style={{ 
-                      color: colors.text,
-                      borderRadius: '6px',
-                      backgroundColor: 'transparent',
-                      justifyContent: 'flex-start',
-                      minHeight: '40px',
-                      border: 'none',
-                      outline: 'none',
-                      padding: '8px 12px',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '14px'
-                    }}
                   >
                     <FaCog style={{ 
                       marginRight: '8px',
+                      marginLeft: '4px',
                       fontSize: '14px',
                       color: colors.text
                     }} />
                     <span>Entwicklung</span>
                   </button>
-                </li>
+                </div>
+                <div className="mb-0.5">
+                  <button 
+                    className={`sidebar-sub-button ${state.currentPage === 'theme-test' ? 'active' : ''}`}
+                    onClick={() => { 
+                      dispatch({ type: 'SET_CURRENT_PAGE', payload: 'theme-test' }); 
+                      if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                    }}
+                    title="Theme-Farben Test"
+                  >
+                    <FaPalette style={{ 
+                      marginRight: '8px',
+                      marginLeft: '4px',
+                      fontSize: '14px',
+                      color: colors.text
+                    }} />
+                    <span>Theme-Farben Test</span>
+                  </button>
+                </div>
               </div>
           </li>
         </ul>

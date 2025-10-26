@@ -92,6 +92,7 @@ export interface Article extends BaseEntity {
     fiber?: number; // g pro 100g
     sugar?: number; // g pro 100g
     salt?: number; // g pro 100g
+    alcohol?: number; // % Alkoholgehalt
   };
   openFoodFactsCode?: string; // Open Food Facts Produkt-Code für Rückverfolgbarkeit
   notes?: string;
@@ -153,6 +154,7 @@ export interface Recipe extends BaseEntity {
     fiber?: number;
     sugar?: number;
     salt?: number;
+    alcohol?: number; // % Alkoholgehalt
   };
   allergens: string[];
   notes?: string;

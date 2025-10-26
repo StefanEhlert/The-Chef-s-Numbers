@@ -244,17 +244,20 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   };
 
   return (
-    <div className="position-fixed top-0 start-0 w-100 h-100" style={{
-      background: 'rgba(0,0,0,0.5)',
-      zIndex: 3000,
-      top: 56
-    }}>
-      <div className="container-fluid h-100 p-4">
-        <div className="row justify-content-center h-100">
-          <div className="col-12 col-xl-6">
+    <div 
+      className="fixed top-0 left-0 w-full h-full" 
+      style={{
+        background: 'rgba(0,0,0,0.5)',
+        zIndex: 3000,
+        top: 56
+      }}
+    >
+      <div className="container-fluid h-full p-4">
+        <div className="flex justify-center h-full">
+          <div className="w-full xl:w-1/2">
             <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
-              <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                <h5 className="mb-0" style={{ color: colors.text }}>
+              <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
+                <h5 className="mb-0 form-label-themed">
                   {editingRecipe ? 'Rezept bearbeiten' : 'Neues Rezept erstellen'}
                 </h5>
                 <button
@@ -265,217 +268,208 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   <FaClose />
                 </button>
               </div>
-              <div className="card-body" style={{ 
-                overflowY: 'auto', 
-                maxHeight: 'calc(100vh - 180px)',
-                paddingBottom: '0',
-                borderBottom: 'none'
-              }}>
+              <div 
+                className="card-body" 
+                style={{ 
+                  overflowY: 'auto', 
+                  maxHeight: 'calc(100vh - 180px)',
+                  paddingBottom: '0',
+                  borderBottom: 'none'
+                }}
+              >
                 <form>
                   {/* Grunddaten */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Grunddaten
                       </h6>
                     </div>
-                    <div className="col-md-7 mb-3">
-                      <div className="row" style={{ height: '200px' }}>
-                        <div className="col-12 mb-3">
-                          <label className="form-label" style={{ color: colors.text }}>
-                            Rezeptname *
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={recipeForm.name}
-                            onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, name: e.target.value }))}
-                            style={{ borderColor: colors.cardBorder, color: colors.text }}
-                            required
-                          />
-                        </div>
-                        <div className="col-12" style={{ flex: 1 }}>
-                          <label className="form-label" style={{ color: colors.text }}>
-                            Beschreibung
-                          </label>
-                          <textarea
-                            className="form-control h-100"
-                            value={recipeForm.description}
-                            onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, description: e.target.value }))}
-                            placeholder="Kurze Beschreibung des Rezepts"
-                            style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
-                              resize: 'none'
-                            }}
-                          />
+                    <div className="flex flex-wrap -mx-2">
+                      <div className="w-full md:w-7/12 px-2 mb-3">
+                        <div className="flex flex-col" style={{ height: '200px' }}>
+                          <div className="mb-3">
+                            <label className="form-label form-label-themed">
+                              Rezeptname *
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={recipeForm.name}
+                              onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, name: e.target.value }))}
+                              required
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="form-label form-label-themed">
+                              Beschreibung
+                            </label>
+                            <textarea
+                              className="form-control form-control-themed h-full"
+                              value={recipeForm.description}
+                              onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, description: e.target.value }))}
+                              placeholder="Kurze Beschreibung des Rezepts"
+                              style={{ resize: 'none' }}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="col-md-5 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Rezeptbild
-                      </label>
-                      <div
-                        className="border rounded d-flex align-items-center justify-content-center"
-                        style={{
-                          borderColor: colors.cardBorder,
-                          backgroundColor: colors.background,
-                          height: '200px',
-                          width: '100%',
-                          cursor: 'pointer',
-                          borderStyle: 'dashed',
-                          overflow: 'hidden'
-                        }}
-                        onClick={() => document.getElementById('recipe-image-input')?.click()}
-                        title="Klicken Sie, um ein Bild auszuwählen"
-                      >
-                        {(recipeForm.image || savedImageUrl) ? (
-                          <div className="position-relative w-100 h-100">
-                            <img
-                              src={recipeForm.image ? URL.createObjectURL(recipeForm.image) : savedImageUrl!}
-                              alt="Rezeptbild"
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'contain',
-                                backgroundColor: colors.background
-                              }}
-                            />
-                            <div
-                              className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-                              style={{
-                                backgroundColor: 'rgba(0,0,0,0.3)',
-                                opacity: 0,
-                                transition: 'opacity 0.2s'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                              onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
-                            >
-                              <div className="text-center text-white">
-                                <FaImage style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }} />
-                                <div style={{ fontSize: '0.7rem' }}>
-                                  {recipeForm.image ? 'Bild ändern' : 'Neues Bild auswählen'}
+                      <div className="w-full md:w-5/12 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Rezeptbild
+                        </label>
+                        <div
+                          className="border rounded flex items-center justify-center"
+                          style={{
+                            borderColor: colors.cardBorder,
+                            backgroundColor: colors.background,
+                            height: '200px',
+                            width: '100%',
+                            cursor: 'pointer',
+                            borderStyle: 'dashed',
+                            overflow: 'hidden'
+                          }}
+                          onClick={() => document.getElementById('recipe-image-input')?.click()}
+                          title="Klicken Sie, um ein Bild auszuwählen"
+                        >
+                          {(recipeForm.image || savedImageUrl) ? (
+                            <div className="relative w-full h-full">
+                              <img
+                                src={recipeForm.image ? URL.createObjectURL(recipeForm.image) : savedImageUrl!}
+                                alt="Rezeptbild"
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'contain',
+                                  backgroundColor: colors.background
+                                }}
+                              />
+                              <div
+                                className="absolute top-0 left-0 w-full h-full flex items-center justify-center"
+                                style={{
+                                  backgroundColor: 'rgba(0,0,0,0.3)',
+                                  opacity: 0,
+                                  transition: 'opacity 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
+                              >
+                                <div className="text-center text-white">
+                                  <FaImage style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }} />
+                                  <div style={{ fontSize: '0.7rem' }}>
+                                    {recipeForm.image ? 'Bild ändern' : 'Neues Bild auswählen'}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <FaImage style={{ fontSize: '2rem', color: colors.cardBorder, marginBottom: '0.5rem' }} />
-                            <div style={{ fontSize: '0.8rem', color: colors.text }}>
-                              Bild auswählen
+                          ) : (
+                            <div className="text-center">
+                              <FaImage style={{ fontSize: '2rem', color: colors.cardBorder, marginBottom: '0.5rem' }} />
+                              <div className="form-label-themed" style={{ fontSize: '0.8rem' }}>
+                                Bild auswählen
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                        <input
+                          id="recipe-image-input"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleRecipeImageUpload}
+                          style={{ display: 'none' }}
+                        />
                       </div>
-                      <input
-                        id="recipe-image-input"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleRecipeImageUpload}
-                        style={{ display: 'none' }}
-                      />
                     </div>
                   </div>
 
                   {/* Details */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Details
                       </h6>
                     </div>
-                    <div className="col-md-3 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Portionen
-                      </label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        value={recipeForm.portions}
-                        onChange={(e) => {
-                          const newPortions = parseInt(e.target.value) || 0;
-                          setRecipeForm((prev: any) => {
-                            const updatedForm = { ...prev, portions: newPortions };
-                            // Berechne den Aufschlag mit dem neuen Portionen-Wert
-                            const materialCosts = calculateMaterialCosts();
-                            const costsPerPortion = materialCosts / newPortions;
-                            const netSellingPrice = calculateNetPrice(updatedForm.sellingPrice, updatedForm.vatRate);
-                            const markup = costsPerPortion > 0 ? Math.round((netSellingPrice / costsPerPortion) * 100) : 0;
-                            
-                            return { ...updatedForm, markupPercentage: markup };
-                          });
-                        }}
-                        min="1"
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Zeit (Minuten)
-                      </label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        value={recipeForm.preparationTime}
-                        onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, preparationTime: parseInt(e.target.value) || 0 }))}
-                        min="1"
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Schwierigkeit
-                      </label>
-                      <div 
-                        className="form-control d-flex align-items-center justify-content-center"
-                        style={{ 
-                          borderColor: colors.cardBorder, 
-                          color: colors.text,
-                          height: 'calc(1.5em + 0.75rem + 2px)',
-                          padding: '0'
-                        }}
-                      >
-                        <div className="d-flex gap-1 align-items-center">
-                          {[1, 2, 3, 4, 5].map(star => (
-                            <button
-                              key={star}
-                              type="button"
-                              className="btn btn-link p-0"
-                              onClick={() => setRecipeForm((prev: any) => ({ ...prev, difficulty: star }))}
-                              style={{ 
-                                color: star <= recipeForm.difficulty ? '#ffc107' : colors.cardBorder,
-                                fontSize: '1.5rem',
-                                textDecoration: 'none'
-                              }}
-                            >
-                              ★
-                            </button>
-                          ))}
+                    <div className="flex flex-wrap -mx-2">
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Portionen
+                        </label>
+                        <input
+                          type="number"
+                          className="form-control form-control-themed"
+                          value={recipeForm.portions}
+                          onChange={(e) => {
+                            const newPortions = parseInt(e.target.value) || 0;
+                            setRecipeForm((prev: any) => {
+                              const updatedForm = { ...prev, portions: newPortions };
+                              // Berechne den Aufschlag mit dem neuen Portionen-Wert
+                              const materialCosts = calculateMaterialCosts();
+                              const costsPerPortion = materialCosts / newPortions;
+                              const netSellingPrice = calculateNetPrice(updatedForm.sellingPrice, updatedForm.vatRate);
+                              const markup = costsPerPortion > 0 ? Math.round((netSellingPrice / costsPerPortion) * 100) : 0;
+                              
+                              return { ...updatedForm, markupPercentage: markup };
+                            });
+                          }}
+                          min="1"
+                        />
+                      </div>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Zeit (Minuten)
+                        </label>
+                        <input
+                          type="number"
+                          className="form-control form-control-themed"
+                          value={recipeForm.preparationTime}
+                          onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, preparationTime: parseInt(e.target.value) || 0 }))}
+                          min="1"
+                        />
+                      </div>
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Schwierigkeit
+                        </label>
+                        <div className="form-control form-control-themed flex items-center justify-center" style={{ padding: '0' }}>
+                          <div className="flex gap-1 items-center">
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button
+                                key={star}
+                                type="button"
+                                className="btn btn-link p-0"
+                                onClick={() => setRecipeForm((prev: any) => ({ ...prev, difficulty: star }))}
+                                style={{ 
+                                  color: star <= recipeForm.difficulty ? '#ffc107' : colors.cardBorder,
+                                  fontSize: '1.5rem',
+                                  textDecoration: 'none'
+                                }}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <label className="form-label" style={{ color: colors.text }}>
-                        Energie (kWh)
-                      </label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        value={recipeForm.energy}
-                        onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, energy: parseFloat(e.target.value) || 0 }))}
-                        step="0.1"
-                        min="0"
-                        style={{ borderColor: colors.cardBorder, color: colors.text }}
-                      />
+                      <div className="w-full md:w-1/4 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          Energie (kWh)
+                        </label>
+                        <input
+                          type="number"
+                          className="form-control form-control-themed"
+                          value={recipeForm.energy}
+                          onChange={(e) => setRecipeForm((prev: any) => ({ ...prev, energy: parseFloat(e.target.value) || 0 }))}
+                          step="0.1"
+                          min="0"
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* Kalkulation */}
-                  <div className="row mb-4" style={{ minHeight: '250px' }}>
-                    <div className="col-12">
-                      <div className="d-flex mb-4" style={{ borderBottom: `2px solid ${colors.accent}` }}>
+                  <div className="mb-4" style={{ minHeight: '250px' }}>
+                    <div className="w-full">
+                      <div className="flex mb-4" style={{ borderBottom: `2px solid ${colors.accent}` }}>
                         {[
                           { key: 'kalkulation', label: 'Kalkulation' },
                           { key: 'inhaltsangaben', label: 'Inhaltsangaben' },
@@ -483,7 +477,7 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                         ].map(tab => (
                           <div
                             key={tab.key}
-                            className="flex-fill text-center"
+                            className="flex-1 text-center"
                             style={{
                               cursor: 'pointer',
                               fontWeight: activeTab === tab.key ? 'bold' : 'normal',
@@ -503,214 +497,191 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                     {activeTab === 'kalkulation' && (
                       <>
                         {/* Obere Reihe */}
-                        <div className="col-md-4 mb-3">
-                          <div className="d-flex justify-content-between align-items-center mb-1" style={{ height: '24px' }}>
-                            <label className="form-label mb-0" style={{ color: colors.text }}>
-                              Aufschlag (%)
-                            </label>
-                          </div>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={recipeForm.markupPercentage}
-                            onChange={(e) => handleMarkupChange(parseFloat(e.target.value) || 0)}
-                            onBlur={(e) => {
-                              const roundedValue = Math.round(parseFloat(e.target.value) || 0);
-                              setRecipeForm((prev: any) => ({ ...prev, markupPercentage: roundedValue }));
-                            }}
-                            min="0"
-                            step="1"
-                            style={{ borderColor: colors.cardBorder, color: colors.text }}
-                          />
-                        </div>
-                        <div className="col-md-4 mb-3">
-                          <div className="d-flex justify-content-between align-items-center mb-1" style={{ height: '24px' }}>
-                            <label className="form-label mb-0" style={{ color: colors.text }}>
-                              MwSt. (%)
-                            </label>
-                            <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
-                              {(() => {
-                                const values = calculateAllValues();
-                                return `${values.vatAmount.toFixed(2)} €`;
-                              })()}
-                            </small>
-                          </div>
-                          <select
-                            className="form-control"
-                            value={recipeForm.vatRate}
-                            onChange={(e) => {
-                              const newVatRate = parseInt(e.target.value);
-                              setRecipeForm((prev: any) => {
-                                const updatedForm = { ...prev, vatRate: newVatRate };
-                                // Berechne den Aufschlag mit dem neuen MwSt-Satz
-                                const materialCosts = calculateMaterialCosts();
-                                const costsPerPortion = materialCosts / updatedForm.portions;
-                                const netSellingPrice = calculateNetPrice(updatedForm.sellingPrice, newVatRate);
-                                const markup = costsPerPortion > 0 ? Math.round((netSellingPrice / costsPerPortion) * 100) : 0;
-                                
-                                return { ...updatedForm, markupPercentage: markup };
-                              });
-                            }}
-                            style={{ borderColor: colors.cardBorder, color: colors.text }}
-                          >
-                            <option value={0}>0%</option>
-                            <option value={7}>7%</option>
-                            <option value={19}>19%</option>
-                          </select>
-                        </div>
-                        <div className="col-md-4 mb-3">
-                          <div className="d-flex justify-content-between align-items-center mb-1" style={{ height: '24px' }}>
-                            <label className="form-label mb-0" style={{ color: colors.text }}>
-                              Verkaufspreis
-                            </label>
-                            <small style={{ color: '#dc3545', fontSize: '0.75rem' }}>
-                              Netto {calculateNetPrice(recipeForm.sellingPrice, recipeForm.vatRate).toFixed(2)} €
-                            </small>
-                          </div>
-                          <div className="input-group">
+                        <div className="flex flex-wrap -mx-2">
+                          <div className="w-full md:w-1/3 px-2 mb-3">
+                            <div className="flex justify-between items-center mb-1" style={{ height: '24px' }}>
+                              <label className="form-label mb-0 form-label-themed">
+                                Aufschlag (%)
+                              </label>
+                            </div>
                             <input
-                              type="text"
-                              className="form-control"
-                              value={sellingPriceInput}
-                              onChange={(e) => {
-                                setSellingPriceInput(e.target.value);
-                                const value = parseFloat(e.target.value.replace(',', '.'));
-                                if (!isNaN(value)) {
-                                  setRecipeForm((prev: any) => ({ ...prev, sellingPrice: value }));
-                                }
-                              }}
-                              onBlur={() => {
-                                setSellingPriceInput(recipeForm.sellingPrice.toFixed(2));
-                                const values = calculateAllValues();
-                                setRecipeForm((prev: any) => ({ ...prev, markupPercentage: values.markup }));
-                              }}
-                              onFocus={(e) => {
-                                setSellingPriceInput(recipeForm.sellingPrice.toString());
-                                setTimeout(() => e.target.select(), 0);
+                              type="number"
+                              className="form-control form-control-themed"
+                              value={recipeForm.markupPercentage}
+                              onChange={(e) => handleMarkupChange(parseFloat(e.target.value) || 0)}
+                              onBlur={(e) => {
+                                const roundedValue = Math.round(parseFloat(e.target.value) || 0);
+                                setRecipeForm((prev: any) => ({ ...prev, markupPercentage: roundedValue }));
                               }}
                               min="0"
-                              step="0.01"
-                              style={{ borderColor: colors.cardBorder, color: '#28a745', fontWeight: 'bold' }}
+                              step="1"
                             />
-                            <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
-                              €
-                            </span>
+                          </div>
+                          <div className="w-full md:w-1/3 px-2 mb-3">
+                            <div className="flex justify-between items-center mb-1" style={{ height: '24px' }}>
+                              <label className="form-label mb-0 form-label-themed">
+                                MwSt. (%)
+                              </label>
+                              <small style={{ color: colors.accent, fontSize: '0.75rem' }}>
+                                {(() => {
+                                  const values = calculateAllValues();
+                                  return `${values.vatAmount.toFixed(2)} €`;
+                                })()}
+                              </small>
+                            </div>
+                            <select
+                              className="form-control form-control-themed"
+                              value={recipeForm.vatRate}
+                              onChange={(e) => {
+                                const newVatRate = parseInt(e.target.value);
+                                setRecipeForm((prev: any) => {
+                                  const updatedForm = { ...prev, vatRate: newVatRate };
+                                  // Berechne den Aufschlag mit dem neuen MwSt-Satz
+                                  const materialCosts = calculateMaterialCosts();
+                                  const costsPerPortion = materialCosts / updatedForm.portions;
+                                  const netSellingPrice = calculateNetPrice(updatedForm.sellingPrice, newVatRate);
+                                  const markup = costsPerPortion > 0 ? Math.round((netSellingPrice / costsPerPortion) * 100) : 0;
+                                  
+                                  return { ...updatedForm, markupPercentage: markup };
+                                });
+                              }}
+                            >
+                              <option value={0}>0%</option>
+                              <option value={7}>7%</option>
+                              <option value={19}>19%</option>
+                            </select>
+                          </div>
+                          <div className="w-full md:w-1/3 px-2 mb-3">
+                            <div className="flex justify-between items-center mb-1" style={{ height: '24px' }}>
+                              <label className="form-label mb-0 form-label-themed">
+                                Verkaufspreis
+                              </label>
+                              <small style={{ color: '#dc3545', fontSize: '0.75rem' }}>
+                                Netto {calculateNetPrice(recipeForm.sellingPrice, recipeForm.vatRate).toFixed(2)} €
+                              </small>
+                            </div>
+                            <div className="input-group">
+                              <input
+                                type="text"
+                                className="form-control form-control-themed"
+                                value={sellingPriceInput}
+                                onChange={(e) => {
+                                  setSellingPriceInput(e.target.value);
+                                  const value = parseFloat(e.target.value.replace(',', '.'));
+                                  if (!isNaN(value)) {
+                                    setRecipeForm((prev: any) => ({ ...prev, sellingPrice: value }));
+                                  }
+                                }}
+                                onBlur={() => {
+                                  setSellingPriceInput(recipeForm.sellingPrice.toFixed(2));
+                                  const values = calculateAllValues();
+                                  setRecipeForm((prev: any) => ({ ...prev, markupPercentage: values.markup }));
+                                }}
+                                onFocus={(e) => {
+                                  setSellingPriceInput(recipeForm.sellingPrice.toString());
+                                  setTimeout(() => e.target.select(), 0);
+                                }}
+                                min="0"
+                                step="0.01"
+                                style={{ color: '#28a745', fontWeight: 'bold' }}
+                              />
+                              <span className="input-group-text" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder, color: colors.text }}>
+                                €
+                              </span>
+                            </div>
                           </div>
                         </div>
                         {/* Untere Reihe */}
                         {(() => {
                           const values = calculateAllValues();
                           return (
-                            <>
-                              <div className="col-md-4 mb-3">
-                                <label className="form-label" style={{ color: colors.text }}>
+                            <div className="flex flex-wrap -mx-2">
+                              <div className="w-full md:w-1/3 px-2 mb-3">
+                                <label className="form-label form-label-themed">
                                   Materialkosten
                                 </label>
-                                <div className="form-control" style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text, 
+                                <div className="form-control form-control-themed flex items-center" style={{ 
                                   backgroundColor: colors.secondary,
-                                  display: 'flex',
-                                  alignItems: 'center',
                                   height: 'calc(1.5em + 0.75rem + 2px)'
                                 }}>
                                   {values.materialCosts.toFixed(2)} €
                                 </div>
                               </div>
-                              <div className="col-md-4 mb-3">
-                                <label className="form-label" style={{ color: colors.text }}>
+                              <div className="w-full md:w-1/3 px-2 mb-3">
+                                <label className="form-label form-label-themed">
                                   Kosten/Portion
                                 </label>
-                                <div className="form-control" style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text, 
+                                <div className="form-control form-control-themed flex items-center" style={{ 
                                   backgroundColor: colors.secondary,
-                                  display: 'flex',
-                                  alignItems: 'center',
                                   height: 'calc(1.5em + 0.75rem + 2px)'
                                 }}>
                                   {values.costsPerPortion.toFixed(2)} €
                                 </div>
                               </div>
-                              <div className="col-md-4 mb-3">
-                                <label className="form-label" style={{ color: colors.text }}>
+                              <div className="w-full md:w-1/3 px-2 mb-3">
+                                <label className="form-label form-label-themed">
                                   Rohertrag
                                 </label>
-                                <div className="form-control" style={{ 
-                                  borderColor: colors.cardBorder, 
+                                <div className="form-control form-control-themed flex items-center" style={{ 
                                   color: values.grossProfit < 0 ? '#dc3545' : '#28a745', 
                                   backgroundColor: colors.secondary,
-                                  display: 'flex',
-                                  alignItems: 'center',
                                   height: 'calc(1.5em + 0.75rem + 2px)',
                                   fontWeight: 'bold'
                                 }}>
                                   {values.grossProfit.toFixed(2)} €
                                 </div>
                               </div>
-                            </>
+                            </div>
                           );
                         })()}
                       </>
                     )}
                     {(activeTab as string) === 'inhaltsangaben' && (
                       <>
-                        <div className="col-md-6 mb-3">
-                          <label className="form-label" style={{ color: colors.text }}>
-                            Zusatzstoffe
-                          </label>
-                          <div className="position-relative ingredients-dropdown-container">
-                            <div
-                              className="form-control"
-                              style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text,
+                        <div className="flex flex-wrap -mx-2">
+                          <div className="w-full md:w-1/2 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Zusatzstoffe
+                            </label>
+                            <div className="relative ingredients-dropdown-container">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
                                 minHeight: '38px',
-                                display: 'flex',
-                                alignItems: 'center',
                                 backgroundColor: colors.paper || colors.card
-                              }}
-                            >
-                              <span style={{ 
-                                fontSize: '0.9rem',
-                                color: getRecipeAdditives().length > 0 ? colors.text : colors.text + '80'
                               }}>
-                                {formatAdditivesDisplay(getRecipeAdditives())}
-                              </span>
+                                <span style={{ 
+                                  fontSize: '0.9rem',
+                                  color: getRecipeAdditives().length > 0 ? colors.text : colors.text + '80'
+                                }}>
+                                  {formatAdditivesDisplay(getRecipeAdditives())}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="w-full md:w-1/2 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Allergene
+                            </label>
+                            <div className="relative allergens-dropdown-container">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
+                                minHeight: '38px',
+                                backgroundColor: colors.paper || colors.card
+                              }}>
+                                <span style={{ 
+                                  fontSize: '0.9rem',
+                                  color: getRecipeAllergens().length > 0 ? colors.text : colors.text + '80'
+                                }}>
+                                  {formatAllergensDisplay(getRecipeAllergens())}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                        <div className="col-md-6 mb-3">
-                          <label className="form-label" style={{ color: colors.text }}>
-                            Allergene
-                          </label>
-                          <div className="position-relative allergens-dropdown-container">
-                            <div
-                              className="form-control"
-                              style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text,
-                                minHeight: '38px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                backgroundColor: colors.paper || colors.card
-                              }}
-                            >
-                              <span style={{ 
-                                fontSize: '0.9rem',
-                                color: getRecipeAllergens().length > 0 ? colors.text : colors.text + '80'
-                              }}>
-                                {formatAllergensDisplay(getRecipeAllergens())}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-12 mb-3">
-                          <label className="form-label" style={{ color: colors.text }}>
+                        <div className="w-full mb-3">
+                          <label className="form-label form-label-themed">
                             Inhaltsstoffe
                           </label>
                           <textarea
-                            className="form-control"
+                            className="form-control form-control-themed"
                             value={(() => {
                               const ingredients = new Set<string>();
                               
@@ -756,8 +727,6 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                             readOnly
                             rows={1}
                             style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text,
                               backgroundColor: colors.paper || colors.card,
                               resize: 'none'
                             }}
@@ -767,137 +736,119 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                       </>
                     )}
                     {(activeTab as string) === 'naehrwerte' && (
-                      <div className="row">
-                        <div className="col-12">
-                          <div className="row">
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Energie (kcal)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().calories}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Energie (kJ)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().kilojoules}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Fett (g)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().fat}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Kohlenhydrate (g)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().carbohydrates}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Eiweiß (g)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().protein}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Ballaststoffe (g)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().fiber}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Salz (g)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().salt}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
-                            <div className="col-md-3 mb-3">
-                              <label className="form-label" style={{ color: colors.text }}>
-                                Zucker (g)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={calculateRecipeNutrition().sugar}
-                                readOnly
-                                style={{ 
-                                  borderColor: colors.cardBorder, 
-                                  color: colors.text,
-                                  backgroundColor: colors.paper || colors.card
-                                }}
-                              />
-                            </div>
+                      <div className="w-full">
+                        <div className="flex flex-wrap -mx-2">
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Energie (kcal)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().calories}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Energie (kJ)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().kilojoules}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Fett (g)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().fat}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Kohlenhydrate (g)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().carbohydrates}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Eiweiß (g)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().protein}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Ballaststoffe (g)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().fiber}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Salz (g)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().salt}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
+                          </div>
+                          <div className="w-full md:w-1/4 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Zucker (g)
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-themed"
+                              value={calculateRecipeNutrition().sugar}
+                              readOnly
+                              style={{ 
+                                backgroundColor: colors.paper || colors.card
+                              }}
+                            />
                           </div>
                         </div>
                       </div>
@@ -906,30 +857,26 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
 
                   {/* Verwendete Rezepte */}
                   {recipeForm.usedRecipes && recipeForm.usedRecipes.length > 0 && (
-                    <div className="row mb-4">
-                      <div className="col-12">
-                        <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                    <div className="mb-4">
+                      <div className="w-full">
+                        <h6 className="form-label-themed section-header">
                           Verwendete Rezepte
                         </h6>
                         
                         {recipeForm.usedRecipes.map((usedRecipe: any, index: number) => (
-                          <div key={usedRecipe.id} className="row mb-3 align-items-center">
-                            <div className="col-md-5">
-                              <div className="form-control" style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text, 
+                          <div key={usedRecipe.id} className="flex items-center mb-3">
+                            <div className="w-full md:w-5/12 mr-3">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
                                 backgroundColor: colors.secondary,
-                                display: 'flex',
-                                alignItems: 'center',
                                 height: 'calc(1.5em + 0.75rem + 2px)'
                               }}>
                                 {usedRecipe.name}
                               </div>
                             </div>
-                            <div className="col-md-2">
+                            <div className="w-full md:w-2/12 mr-3">
                               <input
                                 type="number"
-                                className="form-control"
+                                className="form-control form-control-themed"
                                 value={usedRecipe.portions}
                                 onChange={(e) => {
                                   const newPortions = parseFloat(e.target.value) || 0;
@@ -944,45 +891,31 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                                 step="0.1"
                                 min="0"
                                 placeholder="Portionen"
-                                style={{ borderColor: colors.cardBorder, color: colors.text }}
                               />
                             </div>
-                            <div className="col-md-2">
-                              <div className="form-control" style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text, 
+                            <div className="w-full md:w-2/12 mr-3">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
                                 backgroundColor: colors.secondary,
-                                display: 'flex',
-                                alignItems: 'center',
                                 height: 'calc(1.5em + 0.75rem + 2px)'
                               }}>
                                 Portionen
                               </div>
                             </div>
-                            <div className="col-md-2">
-                              <div className="form-control" style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text, 
+                            <div className="w-full md:w-2/12 mr-3">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
                                 backgroundColor: colors.secondary,
-                                display: 'flex',
-                                alignItems: 'center',
                                 height: 'calc(1.5em + 0.75rem + 2px)'
                               }}>
                                 {usedRecipe.totalCost.toFixed(2)} €
                               </div>
                             </div>
-                            <div className="col-md-1 d-flex justify-content-end align-items-center h-100">
+                            <div className="w-full md:w-1/12 flex justify-end items-center">
                               <button
                                 type="button"
-                                className="btn btn-link p-0"
+                                className="btn btn-link btn-action btn-danger"
                                 title="Löschen"
                                 onClick={() => removeUsedRecipe(index)}
                                 tabIndex={-1}
-                                style={{
-                                  color: '#dc3545',
-                                  textDecoration: 'none',
-                                  fontSize: '14px'
-                                }}
                               >
                                 <FaClose />
                               </button>
@@ -994,9 +927,9 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   )}
 
                   {/* Zutaten */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Zutaten
                       </h6>
                       
@@ -1017,22 +950,21 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                           : 'transparent';
                         
                         return (
-                          <div key={ingredient.id} className="row mb-3 align-items-center" style={{ backgroundColor }}>
-                            <div className="col-md-5">
-                              <div className="position-relative">
+                          <div key={ingredient.id} className="flex items-center mb-3" style={{ backgroundColor }}>
+                            <div className="w-full md:w-5/12 mr-3">
+                              <div className="relative">
                                 <input
                                   type="text"
-                                  className="form-control"
+                                  className="form-control form-control-themed"
                                   value={ingredient.name}
                                   onChange={(e) => handleIngredientInputChange(e.target.value, index)}
                                   onFocus={() => handleIngredientFocus(index)}
                                   onBlur={handleIngredientInputBlur}
                                   onKeyDown={(e) => handleIngredientKeyDown(e, index)}
                                   placeholder="Zutat suchen oder neu erstellen..."
-                                  style={{ borderColor: colors.cardBorder, color: colors.text }}
                                 />
                                 {showIngredientDropdown && selectedIngredientIndex === index && (
-                                  <div className="position-absolute w-100" style={{
+                                  <div className="absolute w-full" style={{
                                     top: '100%',
                                     left: 0,
                                     zIndex: 1000,
@@ -1104,10 +1036,10 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                                 )}
                               </div>
                             </div>
-                            <div className="col-md-2">
+                            <div className="w-full md:w-2/12 mr-3">
                               <input
                                 type="number"
-                                className="form-control"
+                                className="form-control form-control-themed"
                                 value={ingredient.amount}
                                 onChange={(e) => {
                                   const newIngredients = [...recipeForm.ingredients];
@@ -1120,61 +1052,42 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                                 step="0.1"
                                 min="0"
                                 placeholder="Menge"
-                                style={{ borderColor: colors.cardBorder, color: colors.text }}
                               />
                             </div>
-                            <div className="col-md-2">
-                              <div className="form-control" style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text, 
+                            <div className="w-full md:w-2/12 mr-3">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
                                 backgroundColor: colors.secondary,
-                                display: 'flex',
-                                alignItems: 'center',
                                 height: 'calc(1.5em + 0.75rem + 2px)'
                               }}>
                                 {ingredient.unit}
                               </div>
                             </div>
-                            <div className="col-md-2">
-                              <div className="form-control" style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text, 
+                            <div className="w-full md:w-2/12 mr-3">
+                              <div className="form-control form-control-themed flex items-center" style={{ 
                                 backgroundColor: colors.secondary,
-                                display: 'flex',
-                                alignItems: 'center',
                                 height: 'calc(1.5em + 0.75rem + 2px)'
                               }}>
                                 {calculateIngredientPrice(ingredient).toFixed(2)} €
                               </div>
                             </div>
-                            <div className="col-md-1 d-flex justify-content-end align-items-center h-100 gap-1">
+                            <div className="w-full md:w-1/12 flex justify-end items-center gap-1">
                               {articles.find(a => a.name === ingredient.name) && (
                                 <button
                                   type="button"
-                                  className="btn btn-link p-0"
+                                  className="btn btn-link btn-action"
                                   title="Bearbeiten"
                                   onClick={() => handleEditIngredient(index)}
                                   tabIndex={-1}
-                                  style={{
-                                    color: colors.accent,
-                                    textDecoration: 'none',
-                                    fontSize: '14px'
-                                  }}
                                 >
                                   <FaPencilAlt />
                                 </button>
                               )}
                               <button
                                 type="button"
-                                className="btn btn-link p-0"
+                                className="btn btn-link btn-action btn-danger"
                                 title="Löschen"
                                 onClick={() => removeIngredient(index)}
                                 tabIndex={-1}
-                                style={{
-                                  color: '#dc3545',
-                                  textDecoration: 'none',
-                                  fontSize: '14px'
-                                }}
                               >
                                 <FaClose />
                               </button>
@@ -1186,54 +1099,40 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   </div>
 
                   {/* Zubereitung */}
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <h6 style={{ color: colors.text, borderBottom: `2px solid ${colors.accent}`, paddingBottom: '0.5rem' }}>
+                  <div className="mb-4">
+                    <div className="w-full">
+                      <h6 className="form-label-themed section-header">
                         Zubereitung
                       </h6>
                       
                       {recipeForm.preparationSteps.map((step: any, index: number) => (
-                        <div key={step.id} className="row mb-3 align-items-start">
-                          <div className="col-md-1">
-                            <div className="form-control text-center" style={{ 
-                              borderColor: colors.cardBorder, 
-                              color: colors.text, 
+                        <div key={step.id} className="flex items-start mb-3">
+                          <div className="w-full md:w-1/12 mr-3">
+                            <div className="form-control form-control-themed text-center flex items-center justify-center" style={{ 
                               backgroundColor: colors.secondary,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
                               height: 'calc(1.5em + 0.75rem + 2px)',
                               fontWeight: 'bold'
                             }}>
                               {index + 1}
                             </div>
                           </div>
-                          <div className="col-md-10">
+                          <div className="w-full md:w-10/12 mr-3">
                             <textarea
-                              className="form-control"
+                              className="form-control form-control-themed"
                               value={step.description}
                               onChange={(e) => handlePreparationStepChange(index, e.target.value)}
                               placeholder={`Schritt ${index + 1} beschreiben...`}
                               rows={2}
-                              style={{ 
-                                borderColor: colors.cardBorder, 
-                                color: colors.text,
-                                resize: 'none'
-                              }}
+                              style={{ resize: 'none' }}
                             />
                           </div>
-                          <div className="col-md-1 d-flex justify-content-end align-items-start">
+                          <div className="w-full md:w-1/12 flex justify-end items-start">
                             <button
                               type="button"
-                              className="btn btn-link p-0"
+                              className="btn btn-link btn-action btn-danger"
                               title="Löschen"
                               onClick={() => removePreparationStep(index)}
                               tabIndex={-1}
-                              style={{
-                                color: '#dc3545',
-                                textDecoration: 'none',
-                                fontSize: '14px'
-                              }}
                             >
                               <FaClose />
                             </button>
@@ -1244,31 +1143,30 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   </div>
                 </form>
               </div>
-              <div className="card-footer d-flex justify-content-end gap-2" style={{ backgroundColor: colors.secondary }}>
+              <div 
+                className="card-footer flex justify-between" 
+                style={{ 
+                  backgroundColor: colors.secondary,
+                  borderTop: 'none',
+                  position: 'sticky',
+                  bottom: 0,
+                  zIndex: 10
+                }}
+              >
                 <button
-                  type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-outline-secondary"
                   onClick={handleClose}
-                  style={{
-                    backgroundColor: colors.cardBorder,
-                    borderColor: colors.cardBorder,
-                    color: colors.text
-                  }}
                 >
+                  <FaArrowLeft className="mr-2" />
                   Abbrechen
                 </button>
                 <button
-                  type="button"
-                  className="btn btn-primary"
+                  className="btn btn-outline-primary"
                   onClick={handleSave}
-                  style={{
-                    backgroundColor: colors.accent,
-                    borderColor: colors.accent,
-                    color: 'white'
-                  }}
+                  disabled={!recipeForm.name}
                 >
-                  <FaSave className="me-2" />
-                  Speichern
+                  <FaSave className="mr-2" />
+                  {editingRecipe ? 'Änderungen speichern' : 'Rezept speichern'}
                 </button>
               </div>
             </div>

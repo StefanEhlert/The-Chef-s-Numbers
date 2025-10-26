@@ -139,7 +139,8 @@ const Calculator: React.FC<CalculatorProps> = ({ onResult, colors }) => {
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: '0.5rem',
-          maxWidth: '300px'
+          maxWidth: '300px',
+          margin: '0 auto'
         }}>
           {/* Row 1 */}
           <button onClick={clear} style={buttonStyle}>C</button>
@@ -178,16 +179,14 @@ const Calculator: React.FC<CalculatorProps> = ({ onResult, colors }) => {
         borderTop: 'none',
         position: 'sticky',
         bottom: 0,
-        zIndex: 10
+        zIndex: 10,
+        margin: '0 -1rem -1rem -1rem',
+        padding: '0.75rem 1rem'
       }}>
         <div></div>
         <button
-          className="btn btn-primary"
+          className="btn btn-outline-primary"
           onClick={handleApply}
-          style={{
-            backgroundColor: colors.accent,
-            borderColor: colors.accent
-          }}
         >
           Übernehmen
         </button>
