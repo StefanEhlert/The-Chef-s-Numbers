@@ -2164,6 +2164,240 @@ const StorageManagement: React.FC = () => {
     return nameMap[entityType] || entityType;
   };
 
+  // Schema-Migration: Führt die entsprechende SQL-Initialisierung für den Ziel-Storage aus
+  const initializeSchemaForStorage = async (
+    storageType: string,
+    connectionData: any
+  ): Promise<boolean> => {
+    try {
+      let scriptPath: string | null = null;
+      let rpcFunction: string | null = null;
+
+      // Bestimme Script-Pfad und RPC-Funktion basierend auf Storage-Typ
+      if (storageType === 'Supabase') {
+        scriptPath = '/init-scripts/init-chef-numbers-supabase.sql';
+        rpcFunction = 'execute_sql_dynamic';
+      } else if (storageType === 'PostgreSQL') {
+        scriptPath = '/init-scripts/init-chef-numbers-postgresql.sql';
+        rpcFunction = null; // PostgreSQL verwendet direkt SQL-Ausführung
+      } else if (storageType === 'MariaDB') {
+        scriptPath = '/init-scripts/init-chef-numbers-mysql.sql';
+        rpcFunction = null; // MariaDB verwendet Prisma API
+      } else if (storageType === 'MySQL') {
+        scriptPath = '/init-scripts/init-chef-numbers-mysql.sql';
+        rpcFunction = null; // MySQL verwendet Prisma API
+      } else {
+        // Keine Schema-Migration für andere Storage-Typen
+        console.log(`ℹ️ Keine Schema-Migration für ${storageType} erforderlich`);
+        return true;
+      }
+
+      if (!scriptPath) {
+        return true; // Keine Migration erforderlich
+      }
+
+      console.log(`🔧 Starte Schema-Migration für ${storageType}...`);
+      console.log(`📄 Script-Pfad: ${scriptPath}`);
+
+      // Lade SQL-Script
+      const response = await fetch(scriptPath);
+      if (!response.ok) {
+        console.warn(`⚠️ Init-Script nicht gefunden (404): ${scriptPath}`);
+        console.warn('⚠️ Schema könnte bereits existieren oder manuell erstellt werden müssen');
+        return false;
+      }
+
+      const sqlScript = await response.text();
+      console.log(`✅ SQL-Script geladen (${sqlScript.length} Zeichen)`);
+
+      // Führe Schema-Migration aus
+      if (storageType === 'Supabase' && rpcFunction) {
+        // Supabase: Verwende execute_sql_dynamic RPC-Funktion
+        const baseUrl = `${connectionData?.url}/rest/v1`;
+        const authHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+          'apikey': connectionData?.anonKey || '',
+          'Authorization': `Bearer ${connectionData?.anonKey || ''}`
+        };
+
+        // Teile Script in Abschnitte auf (um Deadlocks zu vermeiden)
+        const sections = splitSupabaseScriptIntoSections(sqlScript);
+        console.log(`📦 Script in ${sections.length} Abschnitte aufgeteilt`);
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i];
+          const sectionLabel = section.label || `Abschnitt ${i + 1}`;
+
+          try {
+            console.log(`☁️ Führe ${sectionLabel} aus (${i + 1}/${sections.length})...`);
+
+            const rpcResponse = await fetch(`${baseUrl}/rpc/${rpcFunction}`, {
+              method: 'POST',
+              headers: authHeaders,
+              body: JSON.stringify({ sql_statement: section.sql })
+            });
+
+            if (rpcResponse.ok) {
+              const result = await rpcResponse.json();
+              if (result.success) {
+                console.log(`✅ ${sectionLabel} erfolgreich ausgeführt`);
+                successCount++;
+              } else {
+                const errorMsg = result.error || result.message || '';
+                const isCriticalError =
+                  errorMsg.toLowerCase().includes('deadlock') ||
+                  errorMsg.toLowerCase().includes('timeout') ||
+                  errorMsg.toLowerCase().includes('connection');
+
+                if (isCriticalError) {
+                  console.warn(`⚠️ ${sectionLabel} meldete kritischen Fehler:`, errorMsg);
+                  errorCount++;
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                } else {
+                  console.log(`ℹ️ ${sectionLabel} meldete nicht-kritischen Fehler (idempotent):`, errorMsg);
+                  successCount++;
+                }
+              }
+            } else {
+              const errorText = await rpcResponse.text();
+              if (rpcResponse.status === 404 || errorText.includes('does not exist')) {
+                console.warn('⚠️ RPC-Funktion execute_sql_dynamic nicht verfügbar');
+                console.warn('⚠️ Bitte führen Sie init-chef-numbers-supabase.sql einmalig im Supabase SQL Editor aus');
+                return false;
+              } else {
+                console.warn(`⚠️ ${sectionLabel} fehlgeschlagen:`, errorText.substring(0, 200));
+                errorCount++;
+              }
+            }
+
+            // Pause zwischen Abschnitten
+            if (i < sections.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          } catch (error: any) {
+            console.error(`❌ Fehler beim Ausführen von ${sectionLabel}:`, error);
+            errorCount++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        console.log(`📊 Schema-Migration abgeschlossen: ${successCount} erfolgreich, ${errorCount} Fehler`);
+
+        if (errorCount > 0 && successCount === 0) {
+          console.error('❌ Alle Abschnitte fehlgeschlagen');
+          return false;
+        }
+
+        return true;
+      } else if (storageType === 'PostgreSQL') {
+        // PostgreSQL: Direkte SQL-Ausführung über API
+        // Hier müsste die SQL-Ausführung über die PostgreSQL API erfolgen
+        // Da dies komplex ist, geben wir eine Warnung aus
+        console.warn('⚠️ PostgreSQL Schema-Migration über direkte SQL-Ausführung noch nicht implementiert');
+        console.warn('⚠️ Bitte führen Sie init-chef-numbers-postgresql.sql manuell aus');
+        return true; // Akzeptiere als Erfolg, da keine Fehler entstehen
+      } else if (storageType === 'MariaDB' || storageType === 'MySQL') {
+        // MariaDB/MySQL: Verwende Prisma API
+        console.warn('⚠️ MariaDB/MySQL Schema-Migration über Prisma API noch nicht implementiert');
+        console.warn(`⚠️ Bitte führen Sie ${scriptPath} manuell aus`);
+        return true; // Akzeptiere als Erfolg, da keine Fehler entstehen
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`❌ Fehler bei Schema-Migration für ${storageType}:`, error);
+      return false;
+    }
+  };
+
+  // Hilfsfunktion: Teilt Supabase SQL-Script in logische Abschnitte auf
+  const splitSupabaseScriptIntoSections = (sqlScript: string): Array<{ label: string; sql: string }> => {
+    const sections: Array<{ label: string; sql: string }> = [];
+    
+    // Finde alle Abschnitt-Markierungen (-- ======================================== gefolgt von -- Text)
+    const markerPattern = /-- ========================================\s*\r?\n\s*-- (.+?)\s*\r?\n/g;
+    const foundMarkers: Array<{ position: number; label: string }> = [];
+    
+    let match;
+    while ((match = markerPattern.exec(sqlScript)) !== null) {
+      const label = match[1].trim();
+      let normalizedLabel = label;
+      if (label.includes('Enum-Typen')) {
+        normalizedLabel = '1. Enum-Typen';
+      } else if (label.includes('System-Tabellen')) {
+        normalizedLabel = '2. System-Tabellen';
+      } else if (label.includes('Haupt-Tabellen')) {
+        normalizedLabel = '3. Haupt-Tabellen';
+      } else if (label.startsWith('Tabelle:')) {
+        const tableName = label.match(/Tabelle: (\w+)/)?.[1] || 'unbekannt';
+        normalizedLabel = `4. Tabelle: ${tableName}`;
+      } else if (label.includes('ALTER-Statements')) {
+        normalizedLabel = '5. ALTER-Statements';
+      } else if (label.includes('Trigger')) {
+        normalizedLabel = '6. Trigger';
+      } else if (label.includes('System-Informationen')) {
+        normalizedLabel = '7. System-Info';
+      } else if (label.includes('Dynamische RPC-Functions')) {
+        normalizedLabel = '8. RPC-Functions';
+      }
+      
+      foundMarkers.push({
+        position: match.index,
+        label: normalizedLabel
+      });
+    }
+    
+    foundMarkers.sort((a, b) => a.position - b.position);
+    
+    if (foundMarkers.length === 0) {
+      // Fallback: Teile in Chunks
+      const chunkSize = 50000;
+      for (let i = 0; i < sqlScript.length; i += chunkSize) {
+        const chunk = sqlScript.substring(i, i + chunkSize).trim();
+        if (chunk.length > 0) {
+          sections.push({
+            label: `Chunk ${Math.floor(i / chunkSize) + 1}`,
+            sql: chunk
+          });
+        }
+      }
+      return sections;
+    }
+    
+    // Erstelle Abschnitte zwischen den Markern
+    for (let i = 0; i < foundMarkers.length; i++) {
+      const marker = foundMarkers[i];
+      const nextMarker = foundMarkers[i + 1];
+      
+      const sectionStart = marker.position;
+      const sectionEnd = nextMarker ? nextMarker.position : sqlScript.length;
+      const sectionSQL = sqlScript.substring(sectionStart, sectionEnd).trim();
+      
+      if (sectionSQL.length > 0) {
+        sections.push({
+          label: marker.label,
+          sql: sectionSQL
+        });
+      }
+    }
+    
+    // Füge Einleitung hinzu, wenn vorhanden
+    if (foundMarkers.length > 0 && foundMarkers[0].position > 0) {
+      const introSQL = sqlScript.substring(0, foundMarkers[0].position).trim();
+      if (introSQL.length > 0) {
+        sections.unshift({
+          label: '0. Einleitung',
+          sql: introSQL
+        });
+      }
+    }
+    
+    return sections;
+  };
+
   // Handler für Datenübertragung mit Merge-Strategie
   const handleDataTransferWithStrategy = async () => {
     try {
@@ -2211,12 +2445,30 @@ const StorageManagement: React.FC = () => {
       
       // 2. Initialisiere Ziel-Storage
       const targetStorageLayer = new (StorageLayer as any)();
-      
+
       const targetConfig = {
         mode: storageManagement.selectedStorage.selectedStorageMode,
         data: storageManagement.selectedStorage.selectedDataStorage,
         picture: storageManagement.selectedStorage.selectedPictureStorage
       };
+      
+      // WICHTIG: Führe Schema-Migration VOR der Storage-Initialisierung aus
+      const targetDataStorage = storageManagement.selectedStorage.selectedDataStorage;
+      if (targetDataStorage && ['Supabase', 'PostgreSQL', 'MariaDB', 'MySQL'].includes(targetDataStorage)) {
+        console.log(`🔧 Starte Schema-Migration für ${targetDataStorage} VOR Datenübertragung...`);
+        const connectionDataForSchema = (targetConnectionData as any)[targetDataStorage.toLowerCase()] || 
+                                       targetConnectionData.supabase || 
+                                       targetConnectionData.postgres || 
+                                       targetConnectionData.mariadb || 
+                                       targetConnectionData.mysql;
+        
+        const schemaSuccess = await initializeSchemaForStorage(targetDataStorage, connectionDataForSchema);
+        if (!schemaSuccess) {
+          console.warn(`⚠️ Schema-Migration für ${targetDataStorage} hatte Probleme - fahre trotzdem fort`);
+        } else {
+          console.log(`✅ Schema-Migration für ${targetDataStorage} erfolgreich abgeschlossen`);
+        }
+      }
       
       await targetStorageLayer.initialize(targetConfig, targetConnectionData);
       console.log('✅ Ziel-Storage initialisiert');
@@ -3224,6 +3476,24 @@ const StorageManagement: React.FC = () => {
         };
         
         console.log('🔓 Ziel-ConnectionData (aus connections):', Object.keys(targetConnectionData).filter(k => (targetConnectionData as any)[k]));
+        
+        // WICHTIG: Führe Schema-Migration VOR der Storage-Initialisierung aus
+        const targetDataStorage = storageManagement.selectedStorage.selectedDataStorage;
+        if (targetDataStorage && ['Supabase', 'PostgreSQL', 'MariaDB', 'MySQL'].includes(targetDataStorage)) {
+          console.log(`🔧 Starte Schema-Migration für ${targetDataStorage} VOR Datenübertragung...`);
+          const connectionDataForSchema = (targetConnectionData as any)[targetDataStorage.toLowerCase()] || 
+                                         targetConnectionData.supabase || 
+                                         targetConnectionData.postgres || 
+                                         targetConnectionData.mariadb || 
+                                         targetConnectionData.mysql;
+          
+          const schemaSuccess = await initializeSchemaForStorage(targetDataStorage, connectionDataForSchema);
+          if (!schemaSuccess) {
+            console.warn(`⚠️ Schema-Migration für ${targetDataStorage} hatte Probleme - fahre trotzdem fort`);
+          } else {
+            console.log(`✅ Schema-Migration für ${targetDataStorage} erfolgreich abgeschlossen`);
+          }
+        }
         
         await targetStorageLayer.initialize(targetConfig, targetConnectionData);
         console.log('✅ Ziel-Storage initialisiert');

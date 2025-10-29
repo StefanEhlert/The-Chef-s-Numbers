@@ -97,26 +97,47 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   const colors = getCurrentColors();
 
   // Aktualisiere Artikeldaten nach der Rückkehr vom Artikelformular
+  // WICHTIG: Nur ausführen, wenn sich articles geändert hat (nicht bei jeder ingredients-Änderung!)
   useEffect(() => {
-    if (show && recipeForm.ingredients.length > 0) {
-      // Prüfe alle Zutaten und aktualisiere sie mit den aktuellen Artikeldaten
-      recipeForm.ingredients.forEach((ingredient, index) => {
-        if (ingredient.name && ingredient.name.trim() !== '') {
-          // Prüfe, ob die Zutat aktualisiert werden muss (z.B. wenn sie nur einen Namen hat, aber keine anderen Daten)
-          const article = articles.find(a => a.name === ingredient.name);
-          if (article) {
-            // Aktualisiere die Zutat mit den Artikeldaten, wenn sie sich geändert haben
-            const needsUpdate = ingredient.unit === 'g' || ingredient.price === 0 || 
-                               ingredient.unit !== article.contentUnit || 
-                               ingredient.price !== article.pricePerUnit;
-            if (needsUpdate) {
-              updateIngredientFromArticle(index);
-            }
-          }
-        }
-      });
+    if (!show || recipeForm.ingredients.length === 0) return;
+    
+    // Prüfe alle Zutaten und aktualisiere sie mit den aktuellen Artikeldaten
+    let hasChanges = false;
+    const updatedIngredients = recipeForm.ingredients.map((ingredient, index) => {
+      if (!ingredient.name || ingredient.name.trim() === '') {
+        return ingredient; // Unverändert
+      }
+      
+      const article = articles.find(a => a.name === ingredient.name);
+      if (!article) {
+        return ingredient; // Unverändert
+      }
+      
+      // Prüfe, ob die Zutat aktualisiert werden muss
+      const needsUpdate = ingredient.unit === 'g' || ingredient.price === 0 || 
+                         ingredient.unit !== article.contentUnit || 
+                         ingredient.price !== article.pricePerUnit;
+      
+      if (needsUpdate) {
+        hasChanges = true;
+        return {
+          ...ingredient,
+          unit: article.contentUnit || ingredient.unit,
+          price: article.pricePerUnit || ingredient.price
+        };
+      }
+      
+      return ingredient; // Unverändert
+    });
+    
+    // Nur State aktualisieren, wenn tatsächlich Änderungen vorliegen
+    if (hasChanges) {
+      setRecipeForm(prev => ({
+        ...prev,
+        ingredients: updatedIngredients
+      }));
     }
-  }, [show, articles, recipeForm.ingredients, updateIngredientFromArticle]);
+  }, [show, articles]); // Entfernt recipeForm.ingredients und updateIngredientFromArticle aus Dependencies!
 
   // Lade gespeichertes Bild beim Öffnen des Formulares
   useEffect(() => {

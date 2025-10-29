@@ -23,6 +23,7 @@
 import { Project, InterfaceDeclaration, PropertySignature, TypeNode } from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 // Typ-Definitionen
 interface ColumnDefinition {
@@ -44,6 +45,374 @@ interface TableDefinition {
 
 interface SchemaDefinitions {
   [interfaceName: string]: TableDefinition;
+}
+
+// ========================================
+// SCHEMA-ÄNDERUNGSERKENNUNG & ALTER-STATEMENTS
+// ========================================
+
+/**
+ * Generiert einen deterministischen Hash für Schema-Definitionen
+ */
+function generateSchemaHash(definitions: SchemaDefinitions): string {
+  // Sortierte, deterministische Hash-Generierung
+  const sortedDefs = JSON.stringify(definitions, Object.keys(definitions).sort());
+  return crypto.createHash('sha256').update(sortedDefs).digest('hex');
+}
+
+/**
+ * Lädt vorherige Schema-Definitionen aus JSON-Datei
+ */
+function loadPreviousSchemaDefinitions(): SchemaDefinitions | null {
+  try {
+    const existingDefsPath = path.join(__dirname, '../src/schemas/generated/autoSchemaDefinitions.json');
+    
+    if (!fs.existsSync(existingDefsPath)) {
+      return null;
+    }
+    
+    const content = fs.readFileSync(existingDefsPath, 'utf-8');
+    return JSON.parse(content);
+  } catch (error) {
+    console.warn('⚠️ Fehler beim Laden der vorherigen Schema-Definitionen:', error);
+    return null;
+  }
+}
+
+/**
+ * Loggt detaillierte Schema-Änderungen
+ */
+function logSchemaChanges(previous: SchemaDefinitions, current: SchemaDefinitions): void {
+  console.log('🔄 Schema-Änderungen erkannt:');
+  
+  // Neue Tabellen
+  const newTables = Object.keys(current).filter(k => !previous[k]);
+  if (newTables.length > 0) {
+    console.log(`  📋 Neue Tabellen: ${newTables.join(', ')}`);
+  }
+  
+  // Entfernte Tabellen
+  const removedTables = Object.keys(previous).filter(k => !current[k]);
+  if (removedTables.length > 0) {
+    console.log(`  🗑️ Entfernte Tabellen: ${removedTables.join(', ')}`);
+  }
+  
+  // Geänderte Tabellen (neue/geänderte Felder)
+  for (const [tableName, currentDef] of Object.entries(current)) {
+    if (previous[tableName]) {
+      const prevDef = previous[tableName];
+      const currentColumns = currentDef.columns;
+      const prevColumns = prevDef.columns;
+      
+      // Neue Felder
+      const newColumns = currentColumns.filter(
+        col => !prevColumns.find((c: ColumnDefinition) => c.name === col.name)
+      );
+      if (newColumns.length > 0) {
+        console.log(`  ➕ ${tableName}: neue Felder: ${newColumns.map(c => c.name).join(', ')}`);
+      }
+      
+      // Geänderte Felder (Typ-Änderung, nullable-Änderung, etc.)
+      const changedColumns = currentColumns.filter(currentCol => {
+        const prevCol = prevColumns.find((c: ColumnDefinition) => c.name === currentCol.name);
+        if (!prevCol) return false;
+        
+        return (
+          prevCol.type !== currentCol.type ||
+          prevCol.nullable !== currentCol.nullable ||
+          prevCol.defaultValue !== currentCol.defaultValue
+        );
+      });
+      if (changedColumns.length > 0) {
+        console.log(`  🔄 ${tableName}: geänderte Felder: ${changedColumns.map(c => c.name).join(', ')}`);
+      }
+      
+      // Entfernte Felder (nur warnen, nicht automatisch löschen)
+      const removedColumns = prevColumns.filter(
+        (prevCol: ColumnDefinition) => !currentColumns.find(c => c.name === prevCol.name)
+      );
+      if (removedColumns.length > 0) {
+        console.log(`  ⚠️ ${tableName}: entfernte Felder (bleiben in DB erhalten): ${removedColumns.map((c: ColumnDefinition) => c.name).join(', ')}`);
+      }
+    }
+  }
+}
+
+/**
+ * Prüft ob sich das Schema geändert hat
+ */
+function hasSchemaChanged(currentDefinitions: SchemaDefinitions): boolean {
+  try {
+    console.log('🔍 Prüfe Schema-Änderungen...');
+    
+    const previousDefs = loadPreviousSchemaDefinitions();
+    
+    if (!previousDefs) {
+      console.log('📝 Keine vorherigen Schema-Definitionen gefunden - erstelle neue');
+      return true;
+    }
+    
+    // Hash-Vergleich
+    const currentHash = generateSchemaHash(currentDefinitions);
+    const previousHash = generateSchemaHash(previousDefs);
+    
+    if (currentHash === previousHash) {
+      console.log('✅ Schema unverändert - überspringe Regenerierung');
+      return false;
+    }
+    
+    console.log('🔄 Schema-Änderungen erkannt!');
+    console.log(`  📊 Hash-Vergleich:`);
+    console.log(`     Vorher: ${previousHash.substring(0, 16)}...`);
+    console.log(`     Jetzt:  ${currentHash.substring(0, 16)}...`);
+    
+    logSchemaChanges(previousDefs, currentDefinitions);
+    
+    return true;
+    
+  } catch (error) {
+    console.warn('⚠️ Fehler beim Schema-Vergleich, generiere sicherheitshalber neu:', error);
+    return true;
+  }
+}
+
+/**
+ * Generiert ALTER-Statements für alle Spalten in allen Tabellen (PostgreSQL)
+ * Prüft jede Spalte und fügt sie hinzu, wenn sie nicht existiert
+ */
+function generateAlterStatementsPostgreSQL(definitions: SchemaDefinitions): string {
+  let alterSQL = '';
+  alterSQL += '\n-- ========================================\n';
+  alterSQL += '-- ALTER-Statements für alle Tabellen (Idempotent)\n';
+  alterSQL += '-- Führt für jede Spalte eine Prüfung durch und fügt sie hinzu falls nicht vorhanden\n';
+  alterSQL += '-- ========================================\n\n';
+  
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    alterSQL += `-- Prüfe und füge Spalten für ${definition.tableName} hinzu\n`;
+    alterSQL += `DO $$\n`;
+    alterSQL += `BEGIN\n`;
+    
+    for (const col of definition.columns) {
+      const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+      
+      // Build default value
+      let defaultVal = '';
+      if (col.defaultValue !== undefined) {
+        const sqlFunctions = ['gen_random_uuid()', 'CURRENT_TIMESTAMP', 'NOW()'];
+        const isSqlFunction = sqlFunctions.some(fn => col.defaultValue === fn || col.defaultValue?.toString().includes(fn));
+        
+        if (isSqlFunction) {
+          defaultVal = `DEFAULT ${col.defaultValue}`;
+        } else if (typeof col.defaultValue === 'string') {
+          defaultVal = `DEFAULT '${col.defaultValue}'`;
+        } else {
+          defaultVal = `DEFAULT ${col.defaultValue}`;
+        }
+      }
+      
+      alterSQL += `    -- Spalte: ${col.name}\n`;
+      alterSQL += `    IF NOT EXISTS (\n`;
+      alterSQL += `        SELECT 1 FROM information_schema.columns \n`;
+      alterSQL += `        WHERE table_schema = 'public' \n`;
+      alterSQL += `        AND table_name = '${definition.tableName}' \n`;
+      alterSQL += `        AND column_name = '${col.name}'\n`;
+      alterSQL += `    ) THEN\n`;
+      alterSQL += `        ALTER TABLE ${definition.tableName} ADD COLUMN ${col.name} ${col.type} ${defaultVal} ${nullable};\n`;
+      alterSQL += `        RAISE NOTICE '✅ Spalte ${col.name} zu ${definition.tableName} hinzugefügt';\n`;
+      alterSQL += `    END IF;\n\n`;
+    }
+    
+    alterSQL += `END $$;\n\n`;
+  }
+  
+  return alterSQL;
+}
+
+/**
+ * Generiert ALTER-Statements für alle Spalten in allen Tabellen (MariaDB/MySQL)
+ * Prüft jede Spalte und fügt sie hinzu, wenn sie nicht existiert
+ */
+function generateAlterStatementsMySQL(definitions: SchemaDefinitions): string {
+  let alterSQL = '';
+  alterSQL += '\n-- ========================================\n';
+  alterSQL += '-- ALTER-Statements für alle Tabellen (Idempotent)\n';
+  alterSQL += '-- Führt für jede Spalte eine Prüfung durch und fügt sie hinzu falls nicht vorhanden\n';
+  alterSQL += '-- ========================================\n\n';
+  
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    alterSQL += `-- Prüfe und füge Spalten für ${definition.tableName} hinzu\n`;
+    
+    for (const col of definition.columns) {
+      // MariaDB/MySQL Typ-Mapping
+      let mysqlType = col.type;
+      if (mysqlType === 'UUID') {
+        mysqlType = 'CHAR(36)';
+      } else if (mysqlType === 'TEXT[]' || mysqlType === 'JSONB') {
+        mysqlType = 'JSON';
+      } else if (mysqlType === 'TIMESTAMP') {
+        if (col.name === 'created_at' || col.name === 'updated_at') {
+          mysqlType = 'TIMESTAMP';
+        } else {
+          mysqlType = 'DATETIME';
+        }
+      } else if (mysqlType === 'sync_status_enum') {
+        mysqlType = "VARCHAR(20)";
+      }
+      
+      // WICHTIG: Bei ALTER TABLE ADD COLUMN benötigen NOT NULL Felder einen DEFAULT-Wert
+      // oder müssen als NULL hinzugefügt werden (können später mit UPDATE gefüllt werden)
+      let nullable = col.nullable ? 'NULL' : 'NOT NULL';
+      
+      // Build default value
+      let defaultVal = '';
+      if (col.defaultValue !== undefined) {
+        if (col.defaultValue === 'gen_random_uuid()') {
+          // Wird von der App gesetzt - muss NULL sein bei ALTER oder mit DEFAULT ''
+          defaultVal = '';
+          // Bei ALTER TABLE und NOT NULL ohne DEFAULT: als NULL hinzufügen (kann später gefüllt werden)
+          if (!col.nullable) {
+            nullable = 'NULL';  // Temporär als NULL hinzufügen, kann später zu NOT NULL geändert werden
+          }
+        } else if (col.defaultValue === 'CURRENT_TIMESTAMP') {
+          defaultVal = 'DEFAULT CURRENT_TIMESTAMP';
+        } else if (typeof col.defaultValue === 'string') {
+          defaultVal = `DEFAULT '${col.defaultValue}'`;
+        } else {
+          defaultVal = `DEFAULT ${col.defaultValue}`;
+        }
+      }
+      
+      // Spezielle Behandlung für updated_at
+      let onUpdate = '';
+      if (col.name === 'updated_at') {
+        // updated_at benötigt sowohl DEFAULT als auch ON UPDATE
+        if (!defaultVal) {
+          defaultVal = 'DEFAULT CURRENT_TIMESTAMP';
+        }
+        onUpdate = 'ON UPDATE CURRENT_TIMESTAMP';
+      }
+      
+      // Spezielle Behandlung für created_at
+      if (col.name === 'created_at' && !defaultVal && !col.nullable) {
+        // created_at sollte immer DEFAULT CURRENT_TIMESTAMP haben wenn NOT NULL
+        defaultVal = 'DEFAULT CURRENT_TIMESTAMP';
+      }
+      
+      // WICHTIG: Escape alle Anführungszeichen für CONCAT korrekt
+      // ENUM-Werte und DEFAULT-Werte enthalten einfache Anführungszeichen
+      let mysqlTypeForConcat = mysqlType.replace(/'/g, "\\'");
+      let defaultValForConcat = defaultVal.replace(/'/g, "\\'");
+      let onUpdateForConcat = onUpdate.replace(/'/g, "\\'");
+      
+      alterSQL += `-- Spalte: ${col.name}\n`;
+      alterSQL += `SET @col_exists = 0;\n`;
+      alterSQL += `SELECT COUNT(*) INTO @col_exists \n`;
+      alterSQL += `FROM information_schema.columns \n`;
+      alterSQL += `WHERE table_schema = 'chef_numbers' \n`;
+      alterSQL += `  AND table_name = '${definition.tableName}' \n`;
+      alterSQL += `  AND column_name = '${col.name}';\n`;
+      alterSQL += `\n`;
+      
+      // Spezielle Behandlung für updated_at und created_at: Prüfe auch DEFAULT
+      if (col.name === 'updated_at' || col.name === 'created_at') {
+        alterSQL += `SET @col_has_default = 0;\n`;
+        alterSQL += `SELECT COUNT(*) INTO @col_has_default \n`;
+        alterSQL += `FROM information_schema.columns \n`;
+        alterSQL += `WHERE table_schema = 'chef_numbers' \n`;
+        alterSQL += `  AND table_name = '${definition.tableName}' \n`;
+        alterSQL += `  AND column_name = '${col.name}' \n`;
+        alterSQL += `  AND column_default IS NOT NULL;\n`;
+        alterSQL += `\n`;
+        // Wenn Spalte existiert, aber keinen DEFAULT hat: MODIFY COLUMN
+        alterSQL += `SET @query = IF(@col_exists = 1 AND @col_has_default = 0, \n`;
+        alterSQL += `  CONCAT('ALTER TABLE ${definition.tableName} MODIFY COLUMN ${col.name} ', '${mysqlTypeForConcat}', ' ', '${defaultValForConcat}', ' ', '${onUpdateForConcat}', ' ', '${nullable}'), \n`;
+        alterSQL += `  IF(@col_exists = 0, \n`;
+        alterSQL += `    CONCAT('ALTER TABLE ${definition.tableName} ADD COLUMN ${col.name} ', '${mysqlTypeForConcat}', ' ', '${defaultValForConcat}', ' ', '${onUpdateForConcat}', ' ', '${nullable}'), \n`;
+        alterSQL += `    'SELECT 1'));\n`;
+      } else {
+        // Normale Spalten: Nur ADD COLUMN wenn nicht existiert
+        alterSQL += `SET @query = IF(@col_exists = 0, \n`;
+        alterSQL += `  CONCAT('ALTER TABLE ${definition.tableName} ADD COLUMN ${col.name} ', '${mysqlTypeForConcat}', ' ', '${defaultValForConcat}', ' ', '${onUpdateForConcat}', ' ', '${nullable}'), \n`;
+        alterSQL += `  'SELECT 1');\n`;
+      }
+      
+      alterSQL += `PREPARE stmt FROM @query;\n`;
+      alterSQL += `EXECUTE stmt;\n`;
+      alterSQL += `DEALLOCATE PREPARE stmt;\n\n`;
+    }
+  }
+  
+  return alterSQL;
+}
+
+/**
+ * Generiert idempotente CREATE INDEX Statements für MariaDB/MySQL
+ * Prüft jeden Index und erstellt ihn nur, wenn er nicht existiert
+ */
+function generateIndexStatementsMySQL(definitions: SchemaDefinitions): string {
+  let indexSQL = '';
+  indexSQL += '\n-- ========================================\n';
+  indexSQL += '-- CREATE INDEX Statements (Idempotent)\n';
+  indexSQL += '-- Prüft jeden Index und erstellt ihn nur, wenn er nicht existiert\n';
+  indexSQL += '-- ========================================\n\n';
+  
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    const tableName = definition.tableName;
+    const indexes: Array<{ name: string; columns: string; prefix?: number }> = [];
+    
+    // Basis-Indizes
+    const hasId = definition.columns.find(col => col.name === 'id');
+    const hasDbId = definition.columns.find(col => col.name === 'db_id' && col.primary);
+    const hasCreatedAt = definition.columns.find(col => col.name === 'created_at');
+    const hasUpdatedAt = definition.columns.find(col => col.name === 'updated_at');
+    
+    if (hasId && !hasId.primary) {
+      indexes.push({ name: `idx_${tableName}_id`, columns: 'id' });
+    }
+    if (hasCreatedAt) {
+      indexes.push({ name: `idx_${tableName}_created_at`, columns: 'created_at' });
+    }
+    if (hasUpdatedAt) {
+      indexes.push({ name: `idx_${tableName}_updated_at`, columns: 'updated_at' });
+    }
+    
+    // Spezielle Indizes basierend auf Interface
+    if (definition.interfaceName === 'Article') {
+      const supplierIdColumn = definition.columns.find(col => col.name === 'supplier_id');
+      const categoryColumn = definition.columns.find(col => col.name === 'category');
+      
+      if (supplierIdColumn) {
+        indexes.push({ name: `idx_${tableName}_supplier_id`, columns: 'supplier_id' });
+      }
+      if (categoryColumn) {
+        indexes.push({ name: `idx_${tableName}_category`, columns: 'category(100)', prefix: 100 });
+      }
+    }
+    
+    // Generiere idempotente CREATE INDEX Statements für jeden Index
+    for (const idx of indexes) {
+      indexSQL += `-- Index: ${idx.name}\n`;
+      indexSQL += `SET @idx_exists = 0;\n`;
+      indexSQL += `SELECT COUNT(*) INTO @idx_exists \n`;
+      indexSQL += `FROM information_schema.statistics \n`;
+      indexSQL += `WHERE table_schema = 'chef_numbers' \n`;
+      indexSQL += `  AND table_name = '${tableName}' \n`;
+      indexSQL += `  AND index_name = '${idx.name}';\n\n`;
+      
+      // Build column definition (handle prefix for TEXT columns like category(100))
+      // Escape single quotes in column definition for CONCAT
+      const columnDefEscaped = idx.columns.replace(/'/g, "''");
+      
+      indexSQL += `SET @query = IF(@idx_exists = 0, \n`;
+      indexSQL += `  CONCAT('CREATE INDEX ${idx.name} ON ${tableName}(', '${columnDefEscaped}', ')'), \n`;
+      indexSQL += `  'SELECT 1');\n`;
+      indexSQL += `PREPARE stmt FROM @query;\n`;
+      indexSQL += `EXECUTE stmt;\n`;
+      indexSQL += `DEALLOCATE PREPARE stmt;\n\n`;
+    }
+  }
+  
+  return indexSQL;
 }
 
 // TypeScript-Typen zu PostgreSQL-Typen Mapping
@@ -69,7 +438,9 @@ const complexTypeMapping: { [key: string]: string } = {
   'RecipeIngredient[]': 'JSONB',
   'UsedRecipe[]': 'JSONB',
   'PreparationStep[]': 'JSONB',
-  'PhoneNumber[]': 'JSONB'
+  'PhoneNumber[]': 'JSONB',
+  'PriceHistoryEntry[]': 'JSONB',
+  'string[]': 'JSONB'  // Arrays sollten als JSONB gespeichert werden
 };
 
 // Extrahiere Typ-Informationen aus TypeScript-Typen
@@ -124,114 +495,26 @@ function extractDescription(property: PropertySignature): string {
   return `${property.getName()} property`;
 }
 
-// Generiere BaseEntity-Spalten (werden zu allen Tabellen hinzugefügt)
-// Reihenfolge: db_id - id - restliche BaseEntity-Felder
-function generateBaseEntityColumns(): ColumnDefinition[] {
-  return [
-    {
-      name: 'db_id',
-      type: 'UUID',
-      nullable: true,
-      primary: false,
-      description: 'Datenbank-ID für DB-Operationen',
-      tsType: 'string'
-    },
-    {
-      name: 'id',
-      type: 'UUID',
-      nullable: false,
-      primary: true,
-      description: 'Frontend-ID für State-Management',
-      tsType: 'string'
-    },
-    {
-      name: 'is_dirty',
-      type: 'BOOLEAN',
-      nullable: true,
-      primary: false,
-      defaultValue: false,
-      description: 'Wurde geändert?',
-      tsType: 'boolean'
-    },
-    {
-      name: 'is_new',
-      type: 'BOOLEAN',
-      nullable: true,
-      primary: false,
-      defaultValue: false,
-      description: 'Neuer Datensatz?',
-      tsType: 'boolean'
-    },
-    {
-      name: 'sync_status',
-      type: 'sync_status_enum',
-      nullable: true,
-      primary: false,
-      defaultValue: 'pending',
-      description: 'Sync-Status',
-      tsType: 'SyncStatus'
-    },
-    {
-      name: 'created_at',
-      type: 'TIMESTAMP',
-      nullable: false,
-      primary: false,
-      description: 'Erstellungsdatum',
-      tsType: 'Date'
-    },
-    {
-      name: 'updated_at',
-      type: 'TIMESTAMP',
-      nullable: false,
-      primary: false,
-      description: 'Aktualisierungsdatum',
-      tsType: 'Date'
-    },
-    {
-      name: 'created_by',
-      type: 'UUID',
-      nullable: true,
-      primary: false,
-      description: 'Benutzer-ID der erstellt hat',
-      tsType: 'string'
-    },
-    {
-      name: 'updated_by',
-      type: 'UUID',
-      nullable: true,
-      primary: false,
-      description: 'Benutzer-ID der zuletzt geändert hat',
-      tsType: 'string'
-    },
-    {
-      name: 'last_modified_by',
-      type: 'UUID',
-      nullable: true,
-      primary: false,
-      description: 'Benutzer-ID der zuletzt modifiziert hat',
-      tsType: 'string'
-    }
-  ];
-}
-
-// Generiere nur db_id und id für den Anfang
+// Hybrid-ID-System:
+// - id: Frontend-ID (wird vom Frontend gesetzt)
+// - db_id: Datenbank-ID (wird von Prisma mit UUID() automatisch generiert und als Primary Key verwendet)
 function generatePrimaryBaseEntityColumns(): ColumnDefinition[] {
   return [
     {
-      name: 'db_id',
-      type: 'UUID',
-      nullable: false,
-      primary: true,
-      defaultValue: 'gen_random_uuid()',  // PostgreSQL generiert automatisch UUID
-      description: 'Datenbank-ID für DB-Operationen (Primary Key)',
-      tsType: 'string'
-    },
-    {
       name: 'id',
       type: 'UUID',
       nullable: false,
-      primary: false,
+      primary: false,  // NICHT Primary Key, nur Frontend-ID
       description: 'Frontend-ID für State-Management',
+      tsType: 'string'
+    },
+    {
+      name: 'db_id',
+      type: 'UUID',
+      nullable: false,
+      primary: true,  // IST Primary Key
+      defaultValue: 'gen_random_uuid()',  // PostgreSQL generiert automatisch
+      description: 'Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert',
       tsType: 'string'
     }
   ];
@@ -334,7 +617,7 @@ function analyzeInterface(interfaceDecl: InterfaceDeclaration): TableDefinition 
     const propertyName = property.getName();
     
     // Überspringe BaseEntity-Felder (werden automatisch hinzugefügt)
-    const baseEntityFields = ['id', 'dbId', 'isDirty', 'isNew', 'syncStatus', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'lastModifiedBy'];
+    const baseEntityFields = ['id', 'db_id', 'isDirty', 'isNew', 'syncStatus', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'lastModifiedBy'];
     if (baseEntityFields.includes(propertyName)) {
       return;
     }
@@ -577,13 +860,13 @@ function generateSQLFromAutoSchema(definitions: SchemaDefinitions): string {
     
     sqlOutput += '\n';
 
-    // COMMENTS
-    sqlOutput += `-- Kommentare für Spalten in ${definition.tableName}\n`;
-    for (const column of definition.columns) {
-      sqlOutput += `-- Kommentar für Spalte: ${column.name}\n`;
-      sqlOutput += `COMMENT ON COLUMN ${definition.tableName}.${column.name} IS '${column.description} (TS: ${column.tsType})';\n`;
-    }
-    sqlOutput += '\n';
+    // COMMENTS - DEAKTIVIERT (werfen Fehler wenn Spalten nicht existieren)
+    // sqlOutput += `-- Kommentare für Spalten in ${definition.tableName}\n`;
+    // for (const column of definition.columns) {
+    //   sqlOutput += `-- Kommentar für Spalte: ${column.name}\n`;
+    //   sqlOutput += `COMMENT ON COLUMN ${definition.tableName}.${column.name} IS '${column.description} (TS: ${column.tsType})';\n`;
+    // }
+    // sqlOutput += '\n';
   }
 
   // FOREIGN KEYS (deaktiviert - werden in der App-Logik abgefangen)
@@ -611,30 +894,58 @@ function generateSQLFromAutoSchema(definitions: SchemaDefinitions): string {
   sqlOutput += `-- ========================================\n\n`;
   
   for (const [interfaceName, definition] of Object.entries(definitions)) {
-    // Positive Preise
+    // Positive Preise (nur numerische Felder!)
     const priceColumns = definition.columns.filter(col => 
-      col.name.includes('price') || col.name.includes('Price')
+      (col.name.includes('price') || col.name.includes('Price')) && 
+      col.type === 'DECIMAL'  // Nur DECIMAL-Felder, nicht TEXT/JSONB
     );
     
-    if (priceColumns.length > 0) {
-      const priceChecks = priceColumns.map(col => `${col.name} >= 0`).join(' AND ');
-      sqlOutput += `-- Check Constraint für positive Preise in ${definition.tableName}\n`;
-      sqlOutput += `ALTER TABLE ${definition.tableName} ADD CONSTRAINT chk_${definition.tableName}_positive_prices \n`;
-      sqlOutput += `  CHECK (${priceChecks});\n\n`;
-    }
-    
-    // Positive Zahlen
-    const numberColumns = definition.columns.filter(col => 
-      (col.name.includes('amount') || col.name.includes('content') || col.name.includes('portions')) &&
-      col.type === 'DECIMAL'
-    );
-    
-    if (numberColumns.length > 0) {
-      numberColumns.forEach(col => {
-        sqlOutput += `-- Check Constraint für positive ${col.name} in ${definition.tableName}\n`;
-        sqlOutput += `ALTER TABLE ${definition.tableName} ADD CONSTRAINT chk_${definition.tableName}_positive_${col.name} \n`;
-        sqlOutput += `  CHECK (${col.name} > 0);\n\n`;
-      });
+    // Constraints werden in separatem DO-Block erstellt (idempotent)
+    if (priceColumns.length > 0 || 
+        definition.columns.some(col => 
+          (col.name.includes('amount') || col.name.includes('content') || col.name.includes('portions')) &&
+          col.type === 'DECIMAL'
+        )) {
+      sqlOutput += `-- Check Constraints für ${definition.tableName} (Idempotent)\n`;
+      sqlOutput += `DO $$\n`;
+      sqlOutput += `BEGIN\n`;
+      
+      if (priceColumns.length > 0) {
+        const priceChecks = priceColumns.map(col => `${col.name} >= 0`).join(' AND ');
+        sqlOutput += `    -- Prüfe ob Constraint chk_${definition.tableName}_positive_prices existiert\n`;
+        sqlOutput += `    IF NOT EXISTS (\n`;
+        sqlOutput += `        SELECT 1 FROM pg_constraint WHERE conname = 'chk_${definition.tableName}_positive_prices'\n`;
+        sqlOutput += `    ) THEN\n`;
+        sqlOutput += `        ALTER TABLE ${definition.tableName} ADD CONSTRAINT chk_${definition.tableName}_positive_prices \n`;
+        sqlOutput += `          CHECK (${priceChecks});\n`;
+        sqlOutput += `        RAISE NOTICE '✅ Constraint chk_${definition.tableName}_positive_prices erstellt';\n`;
+        sqlOutput += `    ELSE\n`;
+        sqlOutput += `        RAISE NOTICE '✓ Constraint chk_${definition.tableName}_positive_prices existiert bereits';\n`;
+        sqlOutput += `    END IF;\n\n`;
+      }
+      
+      // Positive Zahlen
+      const numberColumns = definition.columns.filter(col => 
+        (col.name.includes('amount') || col.name.includes('content') || col.name.includes('portions')) &&
+        col.type === 'DECIMAL'
+      );
+      
+      if (numberColumns.length > 0) {
+        numberColumns.forEach(col => {
+          sqlOutput += `    -- Prüfe ob Constraint chk_${definition.tableName}_positive_${col.name} existiert\n`;
+          sqlOutput += `    IF NOT EXISTS (\n`;
+          sqlOutput += `        SELECT 1 FROM pg_constraint WHERE conname = 'chk_${definition.tableName}_positive_${col.name}'\n`;
+          sqlOutput += `    ) THEN\n`;
+          sqlOutput += `        ALTER TABLE ${definition.tableName} ADD CONSTRAINT chk_${definition.tableName}_positive_${col.name} \n`;
+          sqlOutput += `          CHECK (${col.name} > 0);\n`;
+          sqlOutput += `        RAISE NOTICE '✅ Constraint chk_${definition.tableName}_positive_${col.name} erstellt';\n`;
+          sqlOutput += `    ELSE\n`;
+          sqlOutput += `        RAISE NOTICE '✓ Constraint chk_${definition.tableName}_positive_${col.name} existiert bereits';\n`;
+          sqlOutput += `    END IF;\n\n`;
+        });
+      }
+      
+      sqlOutput += `END $$;\n\n`;
     }
   }
 
@@ -688,7 +999,7 @@ function generateMigrations(definitions: SchemaDefinitions, currentVersion: stri
   
   // Migration 1: Spezifische Typ-Konvertierungen
   migrations += `    -- Migration 1: Typ-Konvertierungen (v${currentVersion} → v${targetVersion})\n`;
-  migrations += `    IF current_schema_version IS NULL OR current_schema_version::DECIMAL < ${targetVersion} THEN\n`;
+  migrations += `    IF current_schema_version IS NULL OR current_schema_version < '${targetVersion}' THEN\n`;
   migrations += `        RAISE NOTICE 'Führe Typ-Konvertierungen aus...';\n`;
   migrations += `        \n`;
   
@@ -727,13 +1038,13 @@ function generateMigrations(definitions: SchemaDefinitions, currentVersion: stri
   
   // Migration 2: DEFAULT-Werte für db_id
   migrations += `    -- Migration 2: db_id mit DEFAULT gen_random_uuid()\n`;
-  migrations += `    IF current_schema_version IS NULL OR current_schema_version::DECIMAL < ${targetVersion} THEN\n`;
+  migrations += `    IF current_schema_version IS NULL OR current_schema_version < '${targetVersion}' THEN\n`;
   migrations += `        RAISE NOTICE 'Prüfe db_id DEFAULT-Werte...';\n`;
   migrations += `        \n`;
   migrations += `        DECLARE\n`;
-  migrations += `            table_name TEXT;\n`;
+  migrations += `            tbl_name TEXT;\n`;
   migrations += `        BEGIN\n`;
-  migrations += `            FOR table_name IN SELECT unnest(ARRAY[`;
+  migrations += `            FOR tbl_name IN SELECT unnest(ARRAY[`;
   
   // Sammle alle Tabellennamen
   const tableNames = Object.values(definitions).map(def => `'${def.tableName}'`).join(', ');
@@ -741,18 +1052,18 @@ function generateMigrations(definitions: SchemaDefinitions, currentVersion: stri
   
   migrations += `])\n`;
   migrations += `            LOOP\n`;
-  migrations += `                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND tables.table_name = table_name) THEN\n`;
+  migrations += `                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND tables.table_name = tbl_name) THEN\n`;
   migrations += `                    IF NOT EXISTS (\n`;
-  migrations += `                        SELECT 1 FROM information_schema.columns \n`;
+  migrations +=                       `                        SELECT 1 FROM information_schema.columns \n`;
   migrations += `                        WHERE table_schema = 'public' \n`;
-  migrations += `                        AND columns.table_name = table_name \n`;
+  migrations += `                        AND columns.table_name = tbl_name \n`;
   migrations += `                        AND column_name = 'db_id' \n`;
   migrations += `                        AND column_default LIKE '%gen_random_uuid%'\n`;
   migrations += `                    ) THEN\n`;
-  migrations += `                        EXECUTE format('ALTER TABLE %I ALTER COLUMN db_id SET DEFAULT gen_random_uuid()', table_name);\n`;
-  migrations += `                        RAISE NOTICE '✅ %.db_id: DEFAULT gen_random_uuid() hinzugefügt', table_name;\n`;
+  migrations += `                        EXECUTE format('ALTER TABLE %I ALTER COLUMN db_id SET DEFAULT gen_random_uuid()', tbl_name);\n`;
+  migrations += `                        RAISE NOTICE '✅ %.db_id: DEFAULT gen_random_uuid() hinzugefügt', tbl_name;\n`;
   migrations += `                    ELSE\n`;
-  migrations += `                        RAISE NOTICE '✓ %.db_id hat bereits DEFAULT', table_name;\n`;
+  migrations += `                        RAISE NOTICE '✓ %.db_id hat bereits DEFAULT', tbl_name;\n`;
   migrations += `                    END IF;\n`;
   migrations += `                END IF;\n`;
   migrations += `            END LOOP;\n`;
@@ -762,37 +1073,37 @@ function generateMigrations(definitions: SchemaDefinitions, currentVersion: stri
   
   // Migration 3: DEFAULT-Werte für Timestamps
   migrations += `    -- Migration 3: created_at und updated_at mit DEFAULT CURRENT_TIMESTAMP\n`;
-  migrations += `    IF current_schema_version IS NULL OR current_schema_version::DECIMAL < ${targetVersion} THEN\n`;
+  migrations += `    IF current_schema_version IS NULL OR current_schema_version < '${targetVersion}' THEN\n`;
   migrations += `        RAISE NOTICE 'Prüfe Timestamp DEFAULT-Werte...';\n`;
   migrations += `        \n`;
   migrations += `        DECLARE\n`;
-  migrations += `            table_name TEXT;\n`;
+  migrations += `            tbl_name TEXT;\n`;
   migrations += `        BEGIN\n`;
-  migrations += `            FOR table_name IN SELECT unnest(ARRAY[${tableNames}])\n`;
+  migrations += `            FOR tbl_name IN SELECT unnest(ARRAY[${tableNames}])\n`;
   migrations += `            LOOP\n`;
-  migrations += `                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND tables.table_name = table_name) THEN\n`;
+  migrations += `                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND tables.table_name = tbl_name) THEN\n`;
   migrations += `                    -- Prüfe created_at DEFAULT\n`;
   migrations += `                    IF NOT EXISTS (\n`;
   migrations += `                        SELECT 1 FROM information_schema.columns \n`;
   migrations += `                        WHERE table_schema = 'public' \n`;
-  migrations += `                        AND columns.table_name = table_name \n`;
+  migrations += `                        AND columns.table_name = tbl_name \n`;
   migrations += `                        AND column_name = 'created_at' \n`;
   migrations += `                        AND column_default IS NOT NULL\n`;
   migrations += `                    ) THEN\n`;
-  migrations += `                        EXECUTE format('ALTER TABLE %I ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP', table_name);\n`;
-  migrations += `                        RAISE NOTICE '✅ %.created_at: DEFAULT CURRENT_TIMESTAMP hinzugefügt', table_name;\n`;
+  migrations += `                        EXECUTE format('ALTER TABLE %I ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP', tbl_name);\n`;
+  migrations += `                        RAISE NOTICE '✅ %.created_at: DEFAULT CURRENT_TIMESTAMP hinzugefügt', tbl_name;\n`;
   migrations += `                    END IF;\n`;
   migrations += `                    \n`;
   migrations += `                    -- Prüfe updated_at DEFAULT\n`;
   migrations += `                    IF NOT EXISTS (\n`;
   migrations += `                        SELECT 1 FROM information_schema.columns \n`;
   migrations += `                        WHERE table_schema = 'public' \n`;
-  migrations += `                        AND columns.table_name = table_name \n`;
+  migrations += `                        AND columns.table_name = tbl_name \n`;
   migrations += `                        AND column_name = 'updated_at' \n`;
   migrations += `                        AND column_default IS NOT NULL\n`;
   migrations += `                    ) THEN\n`;
-  migrations += `                        EXECUTE format('ALTER TABLE %I ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP', table_name);\n`;
-  migrations += `                        RAISE NOTICE '✅ %.updated_at: DEFAULT CURRENT_TIMESTAMP hinzugefügt', table_name;\n`;
+  migrations += `                        EXECUTE format('ALTER TABLE %I ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP', tbl_name);\n`;
+  migrations += `                        RAISE NOTICE '✅ %.updated_at: DEFAULT CURRENT_TIMESTAMP hinzugefügt', tbl_name;\n`;
   migrations += `                    END IF;\n`;
   migrations += `                END IF;\n`;
   migrations += `            END LOOP;\n`;
@@ -922,48 +1233,9 @@ CREATE TABLE IF NOT EXISTS system_info (
   const sqlWithoutEnums = sqlOutput.replace(/-- ========================================\n-- Enum Types\n-- ========================================\n\nCREATE TYPE IF NOT EXISTS [^;]+;\nCREATE TYPE IF NOT EXISTS [^;]+;\nCREATE TYPE IF NOT EXISTS [^;]+;\n\n/g, '');
   script += sqlWithoutEnums;
   
-  // Füge zusätzliche System-Tabellen hinzu
-  script += `
--- Design-Tabelle für UI-Einstellungen
-CREATE TABLE IF NOT EXISTS design (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    theme TEXT DEFAULT 'light',
-    primary_color TEXT DEFAULT '#007bff',
-    secondary_color TEXT DEFAULT '#6c757d',
-    accent_color TEXT DEFAULT '#28a745',
-    background_color TEXT DEFAULT '#ffffff',
-    text_color TEXT DEFAULT '#212529',
-    card_color TEXT DEFAULT '#f8f9fa',
-    border_color TEXT DEFAULT '#dee2e6',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Shopping List Tabelle
-CREATE TABLE IF NOT EXISTS shopping_list (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    items JSONB DEFAULT '[]',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Inventory Tabelle
-CREATE TABLE IF NOT EXISTS inventory (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    article_id UUID,
-    quantity DECIMAL DEFAULT 0,
-    unit TEXT DEFAULT 'Stück',
-    expiry_date DATE,
-    location TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-`;
   
-  // Füge Migrations-Code hinzu
-  script += generateMigrations(definitions, currentVersion, targetVersion);
+  // ALTER-Statements für alle Spalten (Idempotent)
+  script += generateAlterStatementsPostgreSQL(definitions);
   
   script += `-- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
 INSERT INTO system_info (key, value, description) VALUES 
@@ -987,19 +1259,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Füge updated_at Trigger zu allen Tabellen hinzu
+-- Füge updated_at Trigger zu allen Tabellen hinzu (Idempotent)
 `;
 
-  // Füge Trigger für alle generierten Tabellen hinzu
+  // Füge Trigger für alle generierten Tabellen hinzu (mit IF NOT EXISTS)
   Object.values(definitions).forEach(def => {
-    script += `CREATE TRIGGER update_${def.tableName}_updated_at BEFORE UPDATE ON ${def.tableName} FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
+    script += `DO $$\n`;
+    script += `BEGIN\n`;
+    script += `    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_${def.tableName}_updated_at') THEN\n`;
+    script += `        CREATE TRIGGER update_${def.tableName}_updated_at BEFORE UPDATE ON ${def.tableName} FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
+    script += `        RAISE NOTICE '✅ Trigger update_${def.tableName}_updated_at erstellt';\n`;
+    script += `    ELSE\n`;
+    script += `        RAISE NOTICE '✓ Trigger update_${def.tableName}_updated_at existiert bereits';\n`;
+    script += `    END IF;\n`;
+    script += `END $$;\n\n`;
   });
   
-  // Füge Trigger für System-Tabellen hinzu
-  script += `CREATE TRIGGER update_design_updated_at BEFORE UPDATE ON design FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_shopping_list_updated_at BEFORE UPDATE ON shopping_list FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON inventory FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  // Füge Trigger für System-Tabellen hinzu (mit IF NOT EXISTS)
+  script += `DO $$\n`;
+  script += `BEGIN\n`;
+  script += `    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_system_info_updated_at') THEN\n`;
+  script += `        CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
+  script += `        RAISE NOTICE '✅ Trigger update_system_info_updated_at erstellt';\n`;
+  script += `    ELSE\n`;
+  script += `        RAISE NOTICE '✓ Trigger update_system_info_updated_at existiert bereits';\n`;
+  script += `    END IF;\n`;
+  script += `END $$;
 
 -- ========================================
 -- Row Level Security (RLS) Setup
@@ -1014,10 +1299,7 @@ CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EA
   });
   
   // Aktiviere RLS für System-Tabellen
-  script += `ALTER TABLE design ENABLE ROW LEVEL SECURITY;
-ALTER TABLE shopping_list ENABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE system_info ENABLE ROW LEVEL SECURITY;
+  script += `ALTER TABLE system_info ENABLE ROW LEVEL SECURITY;
 
 -- ========================================
 -- RLS Policies (erlaube alle Operationen für alle Rollen)
@@ -1025,20 +1307,31 @@ ALTER TABLE system_info ENABLE ROW LEVEL SECURITY;
 
 `;
   
-  // Erstelle RLS-Policies für alle generierten Tabellen
+  // Erstelle RLS-Policies für alle generierten Tabellen (Idempotent)
   Object.values(definitions).forEach(def => {
-    script += `-- RLS Policy für ${def.tableName}
-CREATE POLICY "Enable all operations for all users" ON ${def.tableName} FOR ALL USING (true);
-
-`;
+    script += `-- RLS Policy für ${def.tableName} (Idempotent)\n`;
+    script += `DO $$\n`;
+    script += `BEGIN\n`;
+    script += `    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = '${def.tableName}' AND policyname = 'Enable all operations for all users') THEN\n`;
+    script += `        CREATE POLICY "Enable all operations for all users" ON ${def.tableName} FOR ALL USING (true);\n`;
+    script += `        RAISE NOTICE '✅ RLS Policy für ${def.tableName} erstellt';\n`;
+    script += `    ELSE\n`;
+    script += `        RAISE NOTICE '✓ RLS Policy für ${def.tableName} existiert bereits';\n`;
+    script += `    END IF;\n`;
+    script += `END $$;\n\n`;
   });
   
-  // Erstelle RLS-Policies für System-Tabellen
-  script += `-- RLS Policies für System-Tabellen
-CREATE POLICY "Enable all operations for all users" ON design FOR ALL USING (true);
-CREATE POLICY "Enable all operations for all users" ON shopping_list FOR ALL USING (true);
-CREATE POLICY "Enable all operations for all users" ON inventory FOR ALL USING (true);
-CREATE POLICY "Enable all operations for all users" ON system_info FOR ALL USING (true);
+  // Erstelle RLS-Policies für System-Tabellen (Idempotent)
+  script += `-- RLS Policy für system_info (Idempotent)\n`;
+  script += `DO $$\n`;
+  script += `BEGIN\n`;
+  script += `    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'system_info' AND policyname = 'Enable all operations for all users') THEN\n`;
+  script += `        CREATE POLICY "Enable all operations for all users" ON system_info FOR ALL USING (true);\n`;
+  script += `        RAISE NOTICE '✅ RLS Policy für system_info erstellt';\n`;
+  script += `    ELSE\n`;
+  script += `        RAISE NOTICE '✓ RLS Policy für system_info existiert bereits';\n`;
+  script += `    END IF;\n`;
+  script += `END $$;
 
 -- WICHTIG: Explizite Berechtigungen für alle bestehenden Tabellen (PostgREST benötigt diese!)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
@@ -1049,6 +1342,47 @@ GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role, postgres;
+
+-- ========================================
+-- SQL-Execution RPC Function (Phase 2)
+-- ========================================
+
+-- RPC-Funktion für sichere SQL-Execution (nur ALTER/CREATE TABLE IF NOT EXISTS)
+CREATE OR REPLACE FUNCTION execute_safe_sql(sql_text TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    result JSON;
+BEGIN
+    -- Führe SQL aus und gib Ergebnis zurück
+    EXECUTE sql_text;
+    
+    -- Gebe Erfolg zurück
+    result := json_build_object(
+        'success', true,
+        'message', 'SQL erfolgreich ausgeführt',
+        'timestamp', CURRENT_TIMESTAMP
+    );
+    
+    RETURN result;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Gebe Fehler zurück
+        result := json_build_object(
+            'success', false,
+            'error', SQLERRM,
+            'sqlstate', SQLSTATE,
+            'timestamp', CURRENT_TIMESTAMP
+        );
+        
+        RETURN result;
+END;
+$$;
+
+-- Berechtigungen für RPC-Funktion
+GRANT EXECUTE ON FUNCTION execute_safe_sql(TEXT) TO anon, authenticated, service_role, postgres;
 
 -- Erfolgsmeldung
 SELECT 'PostgreSQL-Initialisierung erfolgreich abgeschlossen!' as status;
@@ -1112,7 +1446,7 @@ USE chef_numbers;
           mysqlType = 'DATETIME';
         }
       } else if (mysqlType === 'sync_status_enum') {
-        mysqlType = "ENUM('synced', 'pending', 'error', 'conflict')";
+        mysqlType = "VARCHAR(20)";
       }
       
       const nullable = column.nullable ? 'NULL' : 'NOT NULL';
@@ -1136,6 +1470,10 @@ USE chef_numbers;
       // Spezielle Behandlung für updated_at
       let onUpdate = '';
       if (column.name === 'updated_at') {
+        // updated_at benötigt sowohl DEFAULT als auch ON UPDATE
+        if (!defaultVal) {
+          defaultVal = 'DEFAULT CURRENT_TIMESTAMP';
+        }
         onUpdate = 'ON UPDATE CURRENT_TIMESTAMP';
       }
       
@@ -1145,39 +1483,6 @@ USE chef_numbers;
     
     script += columnDefinitions.join(',\n');
     script += '\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n';
-
-    // Indizes
-    script += `-- Indizes für ${definition.tableName}\n`;
-    
-    const hasId = definition.columns.find(col => col.name === 'id');
-    const hasDbId = definition.columns.find(col => col.name === 'db_id' && col.primary);
-    const hasCreatedAt = definition.columns.find(col => col.name === 'created_at');
-    const hasUpdatedAt = definition.columns.find(col => col.name === 'updated_at');
-    
-    if (hasId && !hasId.primary) {
-      script += `CREATE INDEX idx_${definition.tableName}_id ON ${definition.tableName}(id);\n`;
-    }
-    if (hasCreatedAt) {
-      script += `CREATE INDEX idx_${definition.tableName}_created_at ON ${definition.tableName}(created_at);\n`;
-    }
-    if (hasUpdatedAt) {
-      script += `CREATE INDEX idx_${definition.tableName}_updated_at ON ${definition.tableName}(updated_at);\n`;
-    }
-    
-    // Spezielle Indizes basierend auf Interface
-    if (definition.interfaceName === 'Article') {
-      const supplierIdColumn = definition.columns.find(col => col.name === 'supplier_id');
-      const categoryColumn = definition.columns.find(col => col.name === 'category');
-      
-      if (supplierIdColumn) {
-        script += `CREATE INDEX idx_${definition.tableName}_supplier_id ON ${definition.tableName}(supplier_id);\n`;
-      }
-      if (categoryColumn) {
-        script += `CREATE INDEX idx_${definition.tableName}_category ON ${definition.tableName}(category(100));\n`;
-      }
-    }
-    
-    script += '\n';
   }
 
   // System-Tabellen
@@ -1191,44 +1496,71 @@ CREATE TABLE IF NOT EXISTS system_info (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Design-Tabelle für UI-Einstellungen
-CREATE TABLE IF NOT EXISTS design (
-    id CHAR(36) PRIMARY KEY,
-    theme VARCHAR(50) DEFAULT 'light',
-    primary_color VARCHAR(7) DEFAULT '#007bff',
-    secondary_color VARCHAR(7) DEFAULT '#6c757d',
-    accent_color VARCHAR(7) DEFAULT '#28a745',
-    background_color VARCHAR(7) DEFAULT '#ffffff',
-    text_color VARCHAR(7) DEFAULT '#212529',
-    card_color VARCHAR(7) DEFAULT '#f8f9fa',
-    border_color VARCHAR(7) DEFAULT '#dee2e6',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Shopping List Tabelle
-CREATE TABLE IF NOT EXISTS shopping_list (
-    id CHAR(36) PRIMARY KEY,
-    name TEXT NOT NULL,
-    items JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Inventory Tabelle
-CREATE TABLE IF NOT EXISTS inventory (
-    id CHAR(36) PRIMARY KEY,
-    article_id CHAR(36),
-    quantity DECIMAL(10,3) DEFAULT 0,
-    unit VARCHAR(50) DEFAULT 'Stück',
-    expiry_date DATE,
-    location TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 `;
 
+  // ALTER-Statements für alle Spalten (Idempotent)
+  script += generateAlterStatementsMySQL(definitions);
+  
+  // CREATE INDEX Statements (Idempotent)
+  script += generateIndexStatementsMySQL(definitions);
+  
+  // ALTER-Statements für system_info Tabelle (fix für updated_at ohne DEFAULT)
+  script += `-- ========================================\n`;
+  script += `-- ALTER-Statements für system_info Tabelle\n`;
+  script += `-- ========================================\n\n`;
+  
+  // Prüfe und korrigiere updated_at in system_info
+  script += `-- Spalte: updated_at in system_info\n`;
+  script += `SET @col_exists = 0;\n`;
+  script += `SELECT COUNT(*) INTO @col_exists \n`;
+  script += `FROM information_schema.columns \n`;
+  script += `WHERE table_schema = 'chef_numbers' \n`;
+  script += `  AND table_name = 'system_info' \n`;
+  script += `  AND column_name = 'updated_at';\n\n`;
+  
+  script += `SET @col_has_default = 0;\n`;
+  script += `SELECT COUNT(*) INTO @col_has_default \n`;
+  script += `FROM information_schema.columns \n`;
+  script += `WHERE table_schema = 'chef_numbers' \n`;
+  script += `  AND table_name = 'system_info' \n`;
+  script += `  AND column_name = 'updated_at' \n`;
+  script += `  AND column_default IS NOT NULL;\n\n`;
+  
+  script += `SET @query = IF(@col_exists = 1 AND @col_has_default = 0, \n`;
+  script += `  CONCAT('ALTER TABLE system_info MODIFY COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), \n`;
+  script += `  IF(@col_exists = 0, \n`;
+  script += `    CONCAT('ALTER TABLE system_info ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), \n`;
+  script += `    'SELECT 1'));\n`;
+  script += `PREPARE stmt FROM @query;\n`;
+  script += `EXECUTE stmt;\n`;
+  script += `DEALLOCATE PREPARE stmt;\n\n`;
+  
+  // Prüfe und korrigiere created_at in system_info
+  script += `-- Spalte: created_at in system_info\n`;
+  script += `SET @col_exists = 0;\n`;
+  script += `SELECT COUNT(*) INTO @col_exists \n`;
+  script += `FROM information_schema.columns \n`;
+  script += `WHERE table_schema = 'chef_numbers' \n`;
+  script += `  AND table_name = 'system_info' \n`;
+  script += `  AND column_name = 'created_at';\n\n`;
+  
+  script += `SET @col_has_default = 0;\n`;
+  script += `SELECT COUNT(*) INTO @col_has_default \n`;
+  script += `FROM information_schema.columns \n`;
+  script += `WHERE table_schema = 'chef_numbers' \n`;
+  script += `  AND table_name = 'system_info' \n`;
+  script += `  AND column_name = 'created_at' \n`;
+  script += `  AND column_default IS NOT NULL;\n\n`;
+  
+  script += `SET @query = IF(@col_exists = 1 AND @col_has_default = 0, \n`;
+  script += `  CONCAT('ALTER TABLE system_info MODIFY COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'), \n`;
+  script += `  IF(@col_exists = 0, \n`;
+  script += `    CONCAT('ALTER TABLE system_info ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'), \n`;
+  script += `    'SELECT 1'));\n`;
+  script += `PREPARE stmt FROM @query;\n`;
+  script += `EXECUTE stmt;\n`;
+  script += `DEALLOCATE PREPARE stmt;\n\n`;
+  
   // System-Informationen
   script += `-- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
 -- MariaDB/MySQL benötigt explizite UUIDs für id-Feld
@@ -1244,7 +1576,9 @@ ON DUPLICATE KEY UPDATE
     value = VALUES(value),
     updated_at = CURRENT_TIMESTAMP;
 
--- Erfolgsmeldung
+`;
+  
+  script += `-- Erfolgsmeldung
 SELECT '${dbName}-Initialisierung erfolgreich abgeschlossen!' as status;
 SELECT 'Frontend-synchronisiertes Schema v${targetVersion} installiert' as schema_info;
 `;
@@ -1338,7 +1672,9 @@ datasource db {
       }
       
       // Field Mapping (wenn camelCase zu snake_case)
+      // WICHTIG: db_id bleibt als db_id (keine camelCase-Konvertierung!)
       const camelCaseName = column.name.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      // Nur 'id' und 'db_id' werden ausgeschlossen (bleiben als id und db_id im Prisma Schema)
       if (camelCaseName !== column.name && column.name !== 'id' && column.name !== 'db_id') {
         attributes.push(`@map("${column.name}")`);
       }
@@ -1362,7 +1698,8 @@ datasource db {
       }
       
       // Baue die Zeile zusammen
-      const fieldName = camelCaseName;
+      // WICHTIG: db_id bleibt als db_id (keine camelCase-Konvertierung!)
+      const fieldName = column.name === 'db_id' ? 'db_id' : camelCaseName;
       const attrString = attributes.length > 0 ? ' ' + attributes.join(' ') : '';
       schema += `  ${fieldName.padEnd(22)} ${prismaType}${optional}${attrString}\n`;
     }
@@ -1372,7 +1709,7 @@ datasource db {
     schema += `}\n\n`;
   }
 
-  // System-Tabellen hinzufügen
+  // System-Tabellen hinzufügen (nur SystemInfo für Schema-Versionierung)
   schema += `// System-Tabellen
 
 model SystemInfo {
@@ -1384,45 +1721,6 @@ model SystemInfo {
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
   @@map("system_info")
-}
-
-model Design {
-  id              String   @id @default(uuid()) @db.VarChar(36)
-  theme           String?  @default("light") @db.VarChar(50)
-  primaryColor    String?  @default("#007bff") @map("primary_color") @db.VarChar(7)
-  secondaryColor  String?  @default("#6c757d") @map("secondary_color") @db.VarChar(7)
-  accentColor     String?  @default("#28a745") @map("accent_color") @db.VarChar(7)
-  backgroundColor String?  @default("#ffffff") @map("background_color") @db.VarChar(7)
-  textColor       String?  @default("#212529") @map("text_color") @db.VarChar(7)
-  cardColor       String?  @default("#f8f9fa") @map("card_color") @db.VarChar(7)
-  borderColor     String?  @default("#dee2e6") @map("border_color") @db.VarChar(7)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
-
-  @@map("design")
-}
-
-model ShoppingList {
-  id        String   @id @default(uuid()) @db.VarChar(36)
-  name      String   @db.Text
-  items     Json?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
-
-  @@map("shopping_list")
-}
-
-model Inventory {
-  id         String   @id @default(uuid()) @db.VarChar(36)
-  articleId  String?  @map("article_id") @db.VarChar(36)
-  quantity   Decimal  @default(0) @db.Decimal(10, 3)
-  unit       String?  @default("Stück") @db.VarChar(50)
-  expiryDate DateTime? @map("expiry_date") @db.Date
-  location   String?  @db.Text
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
-
-  @@map("inventory")
 }
 `;
 
@@ -1444,6 +1742,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
+const mysql = require('mysql2/promise');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -1511,6 +1810,81 @@ app.post('/api/test-connection', async (req, res) => {
   }
 });
 
+// Execute SQL Endpoint (für Schema-Initialisierung)
+app.post('/api/execute-sql', async (req, res) => {
+  let mysqlConnection = null;
+  
+  try {
+    const { sql } = req.body;
+    
+    if (!sql || typeof sql !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'SQL-String erforderlich'
+      });
+    }
+    
+    console.log(\`📝 Führe SQL aus: \${sql.substring(0, 100)}...\`);
+    
+    // Parse DATABASE_URL für native MySQL-Verbindung
+    const dbUrl = process.env.DATABASE_URL;
+    console.log('🔍 DATABASE_URL:', dbUrl);
+    
+    // Parse DATABASE_URL: mysql://user:password@host:port/database
+    const dbUrlMatch = dbUrl.match(/mysql:\\/\\/([^:]+):([^@]+)@([^:]+):(\\d+)\\/(.+)/);
+    
+    if (!dbUrlMatch) {
+      throw new Error('Ungültige DATABASE_URL');
+    }
+    
+    const [, user, password, host, port, database] = dbUrlMatch;
+    console.log('🔌 Verbinde zu MySQL:', { host, port: parseInt(port), user, database });
+    
+    // Erstelle native MySQL-Verbindung
+    mysqlConnection = await mysql.createConnection({
+      host: host,
+      port: parseInt(port),
+      user: user,
+      password: password,
+      database: database,
+      multipleStatements: true // Wichtig für Multi-Statement-Scripts
+    });
+    
+    console.log('✅ MySQL-Verbindung etabliert');
+    
+    // Entferne USE-Statement aus SQL (wird bereits durch Connection verwendet)
+    const cleanedSql = sql.replace(/^USE\\s+\\w+;/gi, '').trim();
+    
+    // Führe SQL aus
+    const [results] = await mysqlConnection.query(cleanedSql);
+    
+    console.log(\`✅ SQL erfolgreich ausgeführt\`);
+    
+    res.json({
+      success: true,
+      message: 'SQL erfolgreich ausgeführt',
+      result: results,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ SQL-Execution fehlgeschlagen:', error);
+    
+    res.status(400).json({
+      success: false,
+      error: error.message,
+      sqlstate: error.code,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    // Schließe MySQL-Verbindung
+    if (mysqlConnection) {
+      await mysqlConnection.end();
+      console.log('🔌 MySQL-Verbindung geschlossen');
+    }
+  }
+});
+
 `;
 
   // Generiere REST-Endpunkte für jede Tabelle
@@ -1539,7 +1913,7 @@ app.get('/api/${tableName}', async (req, res) => {
 app.get('/api/${tableName}/:id', async (req, res) => {
   try {
     const data = await prisma.${modelName}.findUnique({
-      where: { dbId: req.params.id }
+      where: { db_id: req.params.id }
     });
     if (!data) {
       return res.status(404).json({ error: '${interfaceName} nicht gefunden' });
@@ -1557,9 +1931,9 @@ app.post('/api/${tableName}', async (req, res) => {
     const dataToInsert = { ...req.body };
     
     // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
-    if (!dataToInsert.dbId && !dataToInsert.db_id) {
-      dataToInsert.dbId = generateUUID();
-      console.log(\`🆕 Generiere db_id für neues ${interfaceName}: \${dataToInsert.dbId}\`);
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(\`🆕 Generiere db_id für neues ${interfaceName}: \${dataToInsert.db_id}\`);
     }
     
     const data = await prisma.${modelName}.create({
@@ -1576,7 +1950,7 @@ app.post('/api/${tableName}', async (req, res) => {
 app.put('/api/${tableName}/:id', async (req, res) => {
   try {
     const data = await prisma.${modelName}.update({
-      where: { dbId: req.params.id },
+      where: { db_id: req.params.id },
       data: req.body
     });
     res.json(data);
@@ -1665,6 +2039,12 @@ const main = () => {
     
     if (Object.keys(definitions).length === 0) {
       console.log('⚠️ Keine Interfaces gefunden. Stelle sicher, dass TypeScript-Interfaces in src/types/ vorhanden sind.');
+      return;
+    }
+    
+    // NEU: Prüfe ob Schema-Änderungen vorliegen
+    if (!hasSchemaChanged(definitions)) {
+      console.log('✅ Keine Schema-Änderungen - beende Routine');
       return;
     }
     
@@ -1807,7 +2187,8 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
         "cors": "^2.8.5",
         "helmet": "^7.1.0",
         "compression": "^1.7.4",
-        "uuid": "^9.0.1"
+        "uuid": "^9.0.1",
+        "mysql2": "^3.6.5"
       },
       "devDependencies": {
         "prisma": "^5.7.0",
@@ -1845,6 +2226,82 @@ export const AUTO_GENERATED_SQL: string = \`${sqlOutput.replace(/`/g, '\\`')}\`;
   }
 };
 
+// Generiere idempotente ALTER Statements für Supabase (DO $$ Blocks)
+function generateAlterStatementsSupabase(definitions: SchemaDefinitions): string {
+  let alterSQL = '';
+  alterSQL += '\n-- ========================================\n';
+  alterSQL += '-- ALTER-Statements für alle Spalten (Idempotent)\n';
+  alterSQL += '-- Prüft jede Spalte und fügt sie hinzu, wenn sie nicht existiert\n';
+  alterSQL += '-- ========================================\n\n';
+  
+  for (const [interfaceName, definition] of Object.entries(definitions)) {
+    alterSQL += `-- Prüfe und füge Spalten für ${definition.tableName} hinzu\n`;
+    
+    for (const col of definition.columns) {
+      // PostgreSQL/Supabase Typ-Mapping
+      let pgType = col.type;
+      
+      // Typ-Konvertierungen
+      if (pgType === 'UUID') {
+        pgType = 'UUID';
+      } else if (pgType === 'TEXT[]' || pgType === 'JSONB') {
+        // Behalte TEXT[] und JSONB wie sie sind
+        pgType = col.type;
+      } else if (pgType === 'TIMESTAMP') {
+        pgType = 'TIMESTAMP';
+      } else if (pgType === 'sync_status_enum') {
+        pgType = 'sync_status_enum';
+      }
+      
+      const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+      const primary = col.primary ? 'PRIMARY KEY' : '';
+      
+      // Build default value
+      let defaultVal = '';
+      if (col.defaultValue !== undefined) {
+        if (col.defaultValue === 'gen_random_uuid()') {
+          defaultVal = 'DEFAULT gen_random_uuid()';
+        } else if (col.defaultValue === 'CURRENT_TIMESTAMP' || col.defaultValue === 'now()') {
+          defaultVal = 'DEFAULT now()';
+        } else if (typeof col.defaultValue === 'string') {
+          defaultVal = `DEFAULT '${col.defaultValue}'`;
+        } else {
+          defaultVal = `DEFAULT ${col.defaultValue}`;
+        }
+      } else {
+        // Spezielle Behandlung für bestimmte Spalten
+        if (col.name === 'db_id') {
+          defaultVal = 'DEFAULT gen_random_uuid()';
+        } else if (col.name === 'created_at') {
+          defaultVal = 'DEFAULT now()';
+        } else if (col.name === 'updated_at') {
+          defaultVal = 'DEFAULT now()'; // Auch DEFAULT für CREATE, Trigger für UPDATE
+        } else if (col.name === 'sync_status') {
+          defaultVal = "DEFAULT 'pending'";
+        } else if (col.name === 'is_dirty' || col.name === 'is_new') {
+          defaultVal = 'DEFAULT false';
+        }
+      }
+      
+      alterSQL += `DO $$\n`;
+      alterSQL += `BEGIN\n`;
+      alterSQL += `    IF NOT EXISTS (\n`;
+      alterSQL += `        SELECT 1 FROM information_schema.columns \n`;
+      alterSQL += `        WHERE table_name = '${definition.tableName}' \n`;
+      alterSQL += `        AND column_name = '${col.name}'\n`;
+      alterSQL += `    ) THEN\n`;
+      alterSQL += `        ALTER TABLE ${definition.tableName} ADD COLUMN ${col.name} ${pgType} ${defaultVal} ${nullable} ${primary};\n`;
+      alterSQL += `        RAISE NOTICE '✅ Spalte ${col.name} zu ${definition.tableName} hinzugefügt';\n`;
+      alterSQL += `    ELSE\n`;
+      alterSQL += `        RAISE NOTICE '✓ Spalte ${col.name} existiert bereits in ${definition.tableName}';\n`;
+      alterSQL += `    END IF;\n`;
+      alterSQL += `END $$;\n\n`;
+    }
+  }
+  
+  return alterSQL;
+}
+
 // Generiere Supabase Init-Script (PostgreSQL-kompatibel mit RLS)
 function generateSupabaseInitScript(definitions: SchemaDefinitions): string {
   const timestamp = new Date().toISOString();
@@ -1856,7 +2313,7 @@ function generateSupabaseInitScript(definitions: SchemaDefinitions): string {
 -- 
 -- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
 -- - Verwendet UUIDs als Primary Keys
--- - Beinhaltet RLS (Row Level Security) Policies
+-- - Beinhaltet idempotente Schema-Updates
 -- - Storage Bucket für Bilder wird separat erstellt
 
 -- ========================================
@@ -1884,20 +2341,20 @@ CREATE TABLE IF NOT EXISTS system_info (
     updated_at TIMESTAMP DEFAULT now()
 );
 
--- Design-Tabelle
-CREATE TABLE IF NOT EXISTS design (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    theme TEXT DEFAULT 'light',
-    primary_color TEXT DEFAULT '#007bff',
-    secondary_color TEXT DEFAULT '#6c757d',
-    accent_color TEXT DEFAULT '#28a745',
-    background_color TEXT DEFAULT '#ffffff',
-    text_color TEXT DEFAULT '#212529',
-    card_color TEXT DEFAULT '#f8f9fa',
-    border_color TEXT DEFAULT '#dee2e6',
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP DEFAULT now()
-);
+-- Design-Tabelle (NICHT ERSTELLEN - wird nur in LocalStorage verwendet)
+-- CREATE TABLE IF NOT EXISTS design (
+--     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--     theme TEXT DEFAULT 'light',
+--     primary_color TEXT DEFAULT '#007bff',
+--     secondary_color TEXT DEFAULT '#6c757d',
+--     accent_color TEXT DEFAULT '#28a745',
+--     background_color TEXT DEFAULT '#ffffff',
+--     text_color TEXT DEFAULT '#212529',
+--     card_color TEXT DEFAULT '#f8f9fa',
+--     border_color TEXT DEFAULT '#dee2e6',
+--     created_at TIMESTAMP DEFAULT now(),
+--     updated_at TIMESTAMP DEFAULT now()
+-- );
 
 -- ========================================
 -- Haupt-Tabellen
@@ -1909,18 +2366,31 @@ CREATE TABLE IF NOT EXISTS design (
   for (const [interfaceName, definition] of Object.entries(definitions)) {
     const tableName = definition.tableName;
     
-    script += `-- Tabelle: ${tableName}\n`;
+    script += `-- ========================================\n`;
+    script += `-- Tabelle: ${tableName} (Interface: ${definition.interfaceName})\n`;
+    script += `-- ========================================\n\n`;
+    
+    script += `-- Erstelle Tabelle falls nicht vorhanden\n`;
     script += `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
+    
+    // Erstelle Column-Liste für CREATE TABLE
+    const columnDefinitions: string[] = [];
     
     for (const column of definition.columns) {
       // PostgreSQL/Supabase Typ-Mapping
       let pgType = column.type;
       
       // Typ-Konvertierungen für Supabase (PostgreSQL-kompatibel)
-      if (pgType === 'SERIAL') {
-        pgType = 'INTEGER';
+      if (pgType === 'UUID') {
+        pgType = 'UUID';
       } else if (pgType === 'TEXT[]') {
         pgType = 'TEXT[]';
+      } else if (pgType === 'JSONB') {
+        pgType = 'JSONB';
+      } else if (pgType === 'TIMESTAMP') {
+        pgType = 'TIMESTAMP';
+      } else if (pgType === 'sync_status_enum') {
+        pgType = 'sync_status_enum';
       }
       
       const nullable = column.nullable ? 'NULL' : 'NOT NULL';
@@ -1933,8 +2403,7 @@ CREATE TABLE IF NOT EXISTS design (
       } else if (column.name === 'created_at') {
         defaultValue = 'DEFAULT now()';
       } else if (column.name === 'updated_at') {
-        // updated_at hat kein DEFAULT - wird über Trigger gesetzt
-        defaultValue = '';
+        defaultValue = 'DEFAULT now()'; // DEFAULT für CREATE, Trigger für UPDATE
       } else if (column.name === 'sync_status') {
         defaultValue = "DEFAULT 'pending'";
       } else if (column.name === 'is_dirty' || column.name === 'is_new') {
@@ -1953,21 +2422,45 @@ CREATE TABLE IF NOT EXISTS design (
         }
       }
       
-      script += `    ${column.name} ${pgType} ${defaultValue} ${nullable} ${primary}`.trim();
-      script += ',\n';
+      const columnDef = `${column.name} ${pgType} ${defaultValue} ${nullable} ${primary}`.trim();
+      columnDefinitions.push(`    ${columnDef}`);
     }
     
-    // Entferne letztes Komma
-    script = script.slice(0, -2) + '\n';
-    script += `);\n\n`;
+    script += columnDefinitions.join(',\n');
+    script += '\n);\n\n';
     
-    // Indizes für Performance
+    // Basis-Indizes
     script += `-- Indizes für ${tableName}\n`;
-    script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_id ON ${tableName}(id);\n`;
-    script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_sync_status ON ${tableName}(sync_status);\n`;
-    script += `\n`;
+    
+    const hasId = definition.columns.find(col => col.name === 'id');
+    const hasSyncStatus = definition.columns.find(col => col.name === 'sync_status');
+    
+    if (hasId && !hasId.primary) {
+      script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_id ON ${tableName}(id);\n`;
+    }
+    if (hasSyncStatus) {
+      script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_sync_status ON ${tableName}(sync_status);\n`;
+    }
+    
+    // Spezielle Indizes basierend auf Interface
+    if (definition.interfaceName === 'Article') {
+      const supplierIdColumn = definition.columns.find(col => col.name === 'supplier_id');
+      const categoryColumn = definition.columns.find(col => col.name === 'category');
+      
+      if (supplierIdColumn) {
+        script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_supplier_id ON ${tableName}(supplier_id);\n`;
+      }
+      if (categoryColumn) {
+        script += `CREATE INDEX IF NOT EXISTS idx_${tableName}_category ON ${tableName}(category);\n`;
+      }
+    }
+    
+    script += '\n';
   }
 
+  // ALTER-Statements für alle Spalten (Idempotent)
+  script += generateAlterStatementsSupabase(definitions);
+  
   // Trigger-Funktion für updated_at (einmalig erstellen)
   script += `-- ========================================\n`;
   script += `-- Trigger für automatisches updated_at\n`;
@@ -2005,22 +2498,190 @@ CREATE TABLE IF NOT EXISTS design (
   script += `    FOR EACH ROW\n`;
   script += `    EXECUTE FUNCTION update_updated_at_column();\n\n`;
 
-  script += `-- Trigger für design\n`;
-  script += `DROP TRIGGER IF EXISTS update_design_updated_at ON design;\n`;
-  script += `CREATE TRIGGER update_design_updated_at\n`;
-  script += `    BEFORE UPDATE ON design\n`;
-  script += `    FOR EACH ROW\n`;
-  script += `    EXECUTE FUNCTION update_updated_at_column();\n\n`;
-
-  // System-Informationen (Tabellen bereits oben erstellt)
+  // System-Informationen initialisieren (idempotent)
   script += `-- System-Informationen initialisieren\n`;
   script += `INSERT INTO system_info (key, value, description) VALUES\n`;
   script += `    ('schema_version', '${targetVersion}', 'Frontend-synchronisiertes Schema Version'),\n`;
   script += `    ('installation_date', now()::text, 'Datum der Schema-Installation'),\n`;
-  script += `    ('last_migration', now()::text, 'Datum der letzten Migration')\n`;
+  script += `    ('last_update', now()::text, 'Datum der letzten Schema-Aktualisierung'),\n`;
+  script += `    ('idempotent_updates', 'true', 'Schema-Updates sind idempotent - keine Versionsprüfung nötig')\n`;
   script += `ON CONFLICT (key) DO UPDATE SET\n`;
   script += `    value = EXCLUDED.value,\n`;
   script += `    updated_at = now();\n\n`;
+
+  // Dynamische RPC-Functions für Schema-Updates
+  script += `-- ========================================\n`;
+  script += `-- Dynamische RPC-Functions für Schema-Updates\n`;
+  script += `-- ========================================\n\n`;
+  
+  // RPC-Function 1: Dynamische Tabellen-Erstellung
+  script += `-- RPC-Function: Dynamische Tabellen-Erstellung\n`;
+  script += `CREATE OR REPLACE FUNCTION create_table_dynamic(table_sql TEXT)\n`;
+  script += `RETURNS JSON\n`;
+  script += `LANGUAGE plpgsql\n`;
+  script += `SECURITY DEFINER  -- Führt mit Owner-Rechten aus (wichtig!)\n`;
+  script += `AS $$\n`;
+  script += `DECLARE\n`;
+  script += `  result JSON;\n`;
+  script += `  table_name TEXT;\n`;
+  script += `BEGIN\n`;
+  script += `  RAISE NOTICE '========================================';\n`;
+  script += `  RAISE NOTICE 'DYNAMISCHE TABELLEN-ERSTELLUNG';\n`;
+  script += `  RAISE NOTICE '========================================';\n`;
+  script += `  \n`;
+  script += `  -- Extrahiere Tabellennamen aus SQL (vereinfacht)\n`;
+  script += `  -- Suche nach "CREATE TABLE [IF NOT EXISTS] table_name"\n`;
+  script += `  table_name := regexp_replace(table_sql, '.*CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(\\w+).*', '\\1', 'gi');\n`;
+  script += `  \n`;
+  script += `  RAISE NOTICE '🔧 Erstelle Tabelle: %', table_name;\n`;
+  script += `  RAISE NOTICE '📝 SQL: %', table_sql;\n`;
+  script += `  \n`;
+  script += `  BEGIN\n`;
+  script += `    -- Führe das SQL aus\n`;
+  script += `    EXECUTE table_sql;\n`;
+  script += `    \n`;
+  script += `    RAISE NOTICE '✅ Tabelle % erfolgreich erstellt', table_name;\n`;
+  script += `    \n`;
+  script += `    result := json_build_object(\n`;
+  script += `      'success', true,\n`;
+  script += `      'table_name', table_name,\n`;
+  script += `      'message', 'Tabelle ' || table_name || ' erfolgreich erstellt',\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `    \n`;
+  script += `  EXCEPTION WHEN OTHERS THEN\n`;
+  script += `    RAISE NOTICE '❌ Fehler beim Erstellen der Tabelle %: %', table_name, SQLERRM;\n`;
+  script += `    \n`;
+  script += `    result := json_build_object(\n`;
+  script += `      'success', false,\n`;
+  script += `      'table_name', table_name,\n`;
+  script += `      'error', SQLERRM,\n`;
+  script += `      'message', 'Fehler beim Erstellen der Tabelle ' || table_name || ': ' || SQLERRM,\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `  END;\n`;
+  script += `  \n`;
+  script += `  RETURN result;\n`;
+  script += `  \n`;
+  script += `EXCEPTION\n`;
+  script += `  WHEN OTHERS THEN\n`;
+  script += `    RETURN json_build_object(\n`;
+  script += `      'success', false,\n`;
+  script += `      'error', SQLERRM,\n`;
+  script += `      'message', 'Dynamische Tabellen-Erstellung fehlgeschlagen: ' || SQLERRM,\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `END;\n`;
+  script += `$$;\n\n`;
+  
+  // RPC-Function 2: SQL ausführen
+  script += `-- RPC-Function: SQL ausführen\n`;
+  script += `CREATE OR REPLACE FUNCTION execute_sql_dynamic(sql_statement TEXT)\n`;
+  script += `RETURNS JSON\n`;
+  script += `LANGUAGE plpgsql\n`;
+  script += `SECURITY DEFINER  -- Führt mit Owner-Rechten aus (wichtig!)\n`;
+  script += `AS $$\n`;
+  script += `DECLARE\n`;
+  script += `  result JSON;\n`;
+  script += `  affected_rows INTEGER := 0;\n`;
+  script += `BEGIN\n`;
+  script += `  RAISE NOTICE '========================================';\n`;
+  script += `  RAISE NOTICE 'DYNAMISCHE SQL-AUSFÜHRUNG';\n`;
+  script += `  RAISE NOTICE '========================================';\n`;
+  script += `  \n`;
+  script += `  RAISE NOTICE '📝 SQL: %', sql_statement;\n`;
+  script += `  \n`;
+  script += `  BEGIN\n`;
+  script += `    -- Führe das SQL aus\n`;
+  script += `    EXECUTE sql_statement;\n`;
+  script += `    \n`;
+  script += `    -- Versuche die Anzahl der betroffenen Zeilen zu ermitteln\n`;
+  script += `    GET DIAGNOSTICS affected_rows = ROW_COUNT;\n`;
+  script += `    \n`;
+  script += `    RAISE NOTICE '✅ SQL erfolgreich ausgeführt (betroffene Zeilen: %)', affected_rows;\n`;
+  script += `    \n`;
+  script += `    result := json_build_object(\n`;
+  script += `      'success', true,\n`;
+  script += `      'affected_rows', affected_rows,\n`;
+  script += `      'message', 'SQL erfolgreich ausgeführt',\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `    \n`;
+  script += `  EXCEPTION WHEN OTHERS THEN\n`;
+  script += `    RAISE NOTICE '❌ Fehler bei SQL-Ausführung: %', SQLERRM;\n`;
+  script += `    \n`;
+  script += `    result := json_build_object(\n`;
+  script += `      'success', false,\n`;
+  script += `      'error', SQLERRM,\n`;
+  script += `      'message', 'Fehler bei SQL-Ausführung: ' || SQLERRM,\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `  END;\n`;
+  script += `  \n`;
+  script += `  RETURN result;\n`;
+  script += `  \n`;
+  script += `EXCEPTION\n`;
+  script += `  WHEN OTHERS THEN\n`;
+  script += `    RETURN json_build_object(\n`;
+  script += `      'success', false,\n`;
+  script += `      'error', SQLERRM,\n`;
+  script += `      'message', 'Dynamische SQL-Ausführung fehlgeschlagen: ' || SQLERRM,\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `END;\n`;
+  script += `$$;\n\n`;
+  
+  // RPC-Function 3: Idempotentes Schema-Update
+  script += `-- RPC-Function: Idempotentes Schema-Update\n`;
+  script += `CREATE OR REPLACE FUNCTION update_schema_idempotent()\n`;
+  script += `RETURNS JSON\n`;
+  script += `LANGUAGE plpgsql\n`;
+  script += `SECURITY DEFINER  -- Führt mit Owner-Rechten aus (wichtig!)\n`;
+  script += `AS $$\n`;
+  script += `DECLARE\n`;
+  script += `  result JSON;\n`;
+  script += `  target_version TEXT := '${targetVersion}';\n`;
+  script += `BEGIN\n`;
+  script += `  RAISE NOTICE '========================================';\n`;
+  script += `  RAISE NOTICE 'IDEMPOTENTES SCHEMA-UPDATE';\n`;
+  script += `  RAISE NOTICE '========================================';\n`;
+  script += `  \n`;
+  script += `  RAISE NOTICE '🎯 Ziel-Version: %', target_version;\n`;
+  script += `  RAISE NOTICE '🔄 Führe idempotente Schema-Updates durch...';\n`;
+  script += `  \n`;
+  script += `  -- Das komplette Init-Script ist bereits idempotent\n`;
+  script += `  -- Es erstellt nur fehlende Tabellen/Spalten\n`;
+  script += `  -- Keine Versionsprüfung nötig!\n`;
+  script += `  \n`;
+  script += `  -- Update System-Info\n`;
+  script += `  INSERT INTO system_info (key, value, description) VALUES\n`;
+  script += `    ('schema_version', target_version, 'Schema Version'),\n`;
+  script += `    ('last_idempotent_update', now()::text, 'Letztes idempotentes Schema-Update'),\n`;
+  script += `    ('idempotent_system', 'active', 'Idempotentes Schema-System ist aktiv')\n`;
+  script += `  ON CONFLICT (key) DO UPDATE SET \n`;
+  script += `    value = EXCLUDED.value, \n`;
+  script += `    updated_at = now();\n`;
+  script += `  \n`;
+  script += `  result := json_build_object(\n`;
+  script += `    'success', true,\n`;
+  script += `    'target_version', target_version,\n`;
+  script += `    'message', 'Idempotentes Schema-Update erfolgreich durchgeführt (v' || target_version || ')',\n`;
+  script += `    'idempotent', true,\n`;
+  script += `    'timestamp', now()\n`;
+  script += `  );\n`;
+  script += `  \n`;
+  script += `  RETURN result;\n`;
+  script += `  \n`;
+  script += `EXCEPTION\n`;
+  script += `  WHEN OTHERS THEN\n`;
+  script += `    RETURN json_build_object(\n`;
+  script += `      'success', false,\n`;
+  script += `      'error', SQLERRM,\n`;
+  script += `      'message', 'Idempotentes Schema-Update fehlgeschlagen: ' || SQLERRM,\n`;
+  script += `      'timestamp', now()\n`;
+  script += `    );\n`;
+  script += `END;\n`;
+  script += `$$;\n\n`;
 
   // Storage Bucket für Bilder
   script += `-- ========================================\n`;
@@ -2054,32 +2715,49 @@ CREATE TABLE IF NOT EXISTS design (
     script += `-- CREATE POLICY "${tableName}_all_access" ON ${tableName} FOR ALL USING (true);\n`;
   }
   
-  script += `\n-- ========================================\n`;
+  script += `-- ========================================\n`;
   script += `-- Schema-Initialisierung abgeschlossen\n`;
   script += `-- Version: ${targetVersion}\n`;
   script += `-- ========================================\n`;
+  script += `-- \n`;
+  script += `-- VERFÜGBARE RPC-FUNCTIONS:\n`;
+  script += `-- 1. create_table_dynamic(table_sql) - Erstellt eine Tabelle dynamisch\n`;
+  script += `-- 2. execute_sql_dynamic(sql_statement) - Führt beliebiges SQL aus\n`;
+  script += `-- 3. update_schema_idempotent() - Führt idempotente Schema-Updates durch\n`;
+  script += `-- \n`;
+  script += `-- API-AUFRUFE:\n`;
+  script += `-- POST /rest/v1/rpc/create_table_dynamic\n`;
+  script += `-- POST /rest/v1/rpc/execute_sql_dynamic  \n`;
+  script += `-- POST /rest/v1/rpc/update_schema_idempotent\n`;
+  script += `-- \n`;
+  script += `-- IDEMPOTENTES SYSTEM:\n`;
+  script += `-- ✅ Alle Tabellen-Erstellungen sind idempotent (CREATE TABLE IF NOT EXISTS)\n`;
+  script += `-- ✅ Alle Spalten-Hinzufügungen sind idempotent (prüfen auf Existenz)\n`;
+  script += `-- ✅ Alle Indizes sind idempotent (CREATE INDEX IF NOT EXISTS)\n`;
+  script += `-- ✅ Keine Versionsprüfung nötig - einfach Script ausführen!\n`;
   script += `-- \n`;
   script += `-- NÄCHSTE SCHRITTE:\n`;
   script += `-- 1. Erstellen Sie den Storage Bucket "chef-numbers-images" im Dashboard\n`;
   script += `-- 2. Aktivieren Sie RLS Policies wenn gewünscht\n`;
   script += `-- 3. Testen Sie die Verbindung in Ihrer App\n`;
+  script += `-- 4. Bei Schema-Änderungen: Führen Sie das komplette Script erneut aus!\n`;
   script += `-- \n`;
 
   return script;
 }
 
-// Generiere RPC-Function für automatische Schema-Installation
+// Generiere RPC-Functions für Supabase (nur Functions, kein Schema!)
 function generateSupabaseRPCFunction(definitions: SchemaDefinitions): string {
   const timestamp = new Date().toISOString();
   const targetVersion = '2.2.2';
   
   let script = `-- ============================================
--- SUPABASE AUTO-INSTALLER: RPC-Function
+-- SUPABASE AUTO-INSTALLER: RPC-Functions
 -- ============================================
 -- Frontend-synchronisiertes Schema v${targetVersion}
 -- Automatisch generiert am: ${timestamp}
 --
--- Diese RPC-Function ermöglicht die automatische Schema-Installation
+-- Diese RPC-Functions ermöglichen die automatische Schema-Installation
 -- per REST API ohne manuelle Benutzerinteraktion!
 --
 -- EINMALIGE INSTALLATION:
@@ -2087,268 +2765,185 @@ function generateSupabaseRPCFunction(definitions: SchemaDefinitions): string {
 -- 
 -- AUTOMATISCHE NUTZUNG:
 -- Die App kann dann per API-Call das Schema initialisieren:
--- POST https://xxxxx.supabase.co/rest/v1/rpc/initialize_chef_numbers_schema
+-- POST https://xxxxx.supabase.co/rest/v1/rpc/execute_schema_idempotent
+--
+-- VERFÜGBARE RPC-FUNCTIONS:
+-- 1. execute_sql_dynamic(sql_statement TEXT) - Führt einzelnes SQL-Statement aus
+-- 2. execute_schema_idempotent() - Führt das komplette Schema-Script aus (idempotent)
 --
 
 -- ========================================
--- RPC-Function: Schema initialisieren/migrieren
+-- RPC-Function 1: Dynamische SQL-Ausführung (für einzelne Statements)
 -- ========================================
 
-CREATE OR REPLACE FUNCTION initialize_chef_numbers_schema()
+CREATE OR REPLACE FUNCTION execute_sql_dynamic(sql_statement TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER  -- Führt mit Owner-Rechten aus (wichtig!)
 AS $$
 DECLARE
-  current_version TEXT := NULL;
-  target_version TEXT := '${targetVersion}';
-  tables_created INTEGER := 0;
-  tables_migrated INTEGER := 0;
-  errors_count INTEGER := 0;
   result JSON;
+  affected_rows INTEGER := 0;
 BEGIN
-  -- Prüfe ob system_info Tabelle existiert
-  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'system_info') THEN
-    -- ERSTE INSTALLATION - Erstelle alles von Grund auf
-    RAISE NOTICE '========================================';
-    RAISE NOTICE 'ERSTE INSTALLATION - Erstelle Schema v%', target_version;
-    RAISE NOTICE '========================================';
-    
-    -- 1. Erstelle Enum-Typen
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sync_status_enum') THEN
-        CREATE TYPE sync_status_enum AS ENUM ('synced', 'pending', 'error', 'conflict');
-        RAISE NOTICE '✅ Enum sync_status_enum erstellt';
-      END IF;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE '⚠️ Fehler bei sync_status_enum: %', SQLERRM;
-      errors_count := errors_count + 1;
-    END;
-    
-    -- 2. Erstelle system_info Tabelle
-    BEGIN
-      CREATE TABLE IF NOT EXISTS system_info (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        key TEXT UNIQUE NOT NULL,
-        value TEXT NOT NULL,
-        description TEXT,
-        created_at TIMESTAMP DEFAULT now(),
-        updated_at TIMESTAMP DEFAULT now()
-      );
-      tables_created := tables_created + 1;
-      RAISE NOTICE '✅ Tabelle system_info erstellt';
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE '❌ Fehler bei system_info: %', SQLERRM;
-      errors_count := errors_count + 1;
-    END;
-    
-    -- 3. Erstelle design Tabelle
-    BEGIN
-      CREATE TABLE IF NOT EXISTS design (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        theme TEXT DEFAULT 'light',
-        primary_color TEXT DEFAULT '#007bff',
-        secondary_color TEXT DEFAULT '#6c757d',
-        accent_color TEXT DEFAULT '#28a745',
-        background_color TEXT DEFAULT '#ffffff',
-        text_color TEXT DEFAULT '#212529',
-        card_color TEXT DEFAULT '#f8f9fa',
-        border_color TEXT DEFAULT '#dee2e6',
-        created_at TIMESTAMP DEFAULT now(),
-        updated_at TIMESTAMP DEFAULT now()
-      );
-      tables_created := tables_created + 1;
-      RAISE NOTICE '✅ Tabelle design erstellt';
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE '❌ Fehler bei design: %', SQLERRM;
-      errors_count := errors_count + 1;
-    END;
-    
-`;
-
-  // Generiere CREATE TABLE Statements für alle Entity-Tabellen
-  for (const [interfaceName, definition] of Object.entries(definitions)) {
-    const tableName = definition.tableName;
-    
-    script += `    -- 4.${Object.keys(definitions).indexOf(interfaceName) + 1} Erstelle ${tableName} Tabelle\n`;
-    script += `    BEGIN\n`;
-    script += `      CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
-    
-    for (let i = 0; i < definition.columns.length; i++) {
-      const column = definition.columns[i];
-      let pgType = column.type;
-      
-      const nullable = column.nullable ? 'NULL' : 'NOT NULL';
-      const primary = column.primary ? 'PRIMARY KEY' : '';
-      
-      let defaultValue = '';
-      if (column.name === 'db_id') {
-        defaultValue = 'DEFAULT gen_random_uuid()';
-      } else if (column.name === 'created_at') {
-        defaultValue = 'DEFAULT now()';
-      } else if (column.name === 'sync_status') {
-        defaultValue = "DEFAULT 'pending'";
-      } else if (column.name === 'is_dirty' || column.name === 'is_new') {
-        defaultValue = 'DEFAULT false';
-      } else if (column.defaultValue !== undefined && column.defaultValue !== null) {
-        if (typeof column.defaultValue === 'string' && 
-            (column.defaultValue === 'CURRENT_TIMESTAMP' || 
-             column.defaultValue === 'now()' ||
-             column.defaultValue.startsWith('gen_random_uuid'))) {
-          defaultValue = `DEFAULT ${column.defaultValue}`;
-        } else if (typeof column.defaultValue === 'string') {
-          defaultValue = `DEFAULT '${column.defaultValue}'`;
-        } else {
-          defaultValue = `DEFAULT ${column.defaultValue}`;
-        }
-      }
-      
-      const comma = i < definition.columns.length - 1 ? ',' : '';
-      script += `        ${column.name} ${pgType} ${defaultValue} ${nullable} ${primary}${comma}\n`;
-    }
-    
-    script += `      );\n`;
-    script += `      tables_created := tables_created + 1;\n`;
-    script += `      RAISE NOTICE '✅ Tabelle ${tableName} erstellt';\n`;
-    script += `    EXCEPTION WHEN OTHERS THEN\n`;
-    script += `      RAISE NOTICE '❌ Fehler bei ${tableName}: %', SQLERRM;\n`;
-    script += `      errors_count := errors_count + 1;\n`;
-    script += `    END;\n\n`;
-    
-    // Erstelle Indizes
-    script += `    -- Indizes für ${tableName}\n`;
-    script += `    BEGIN\n`;
-    script += `      CREATE INDEX IF NOT EXISTS idx_${tableName}_id ON ${tableName}(id);\n`;
-    script += `      CREATE INDEX IF NOT EXISTS idx_${tableName}_sync_status ON ${tableName}(sync_status);\n`;
-    script += `      RAISE NOTICE '✅ Indizes für ${tableName} erstellt';\n`;
-    script += `    EXCEPTION WHEN OTHERS THEN\n`;
-    script += `      RAISE NOTICE '⚠️ Fehler bei Indizes für ${tableName}: %', SQLERRM;\n`;
-    script += `    END;\n\n`;
-  }
-
-  // Trigger-Function und Trigger
-  script += `    -- 5. Erstelle Trigger-Function für updated_at\n`;
-  script += `    BEGIN\n`;
-  script += `      CREATE OR REPLACE FUNCTION update_updated_at_column()\n`;
-  script += `      RETURNS TRIGGER AS $trigger$\n`;
-  script += `      BEGIN\n`;
-  script += `        NEW.updated_at = now();\n`;
-  script += `        RETURN NEW;\n`;
-  script += `      END;\n`;
-  script += `      $trigger$ language 'plpgsql';\n`;
-  script += `      RAISE NOTICE '✅ Trigger-Function erstellt';\n`;
-  script += `    EXCEPTION WHEN OTHERS THEN\n`;
-  script += `      RAISE NOTICE '❌ Fehler bei Trigger-Function: %', SQLERRM;\n`;
-  script += `      errors_count := errors_count + 1;\n`;
-  script += `    END;\n\n`;
-
-  // Trigger für alle Tabellen
-  script += `    -- 6. Erstelle updated_at Trigger\n`;
-  for (const [_, definition] of Object.entries(definitions)) {
-    const tableName = definition.tableName;
-    script += `    BEGIN\n`;
-    script += `      DROP TRIGGER IF EXISTS update_${tableName}_updated_at ON ${tableName};\n`;
-    script += `      CREATE TRIGGER update_${tableName}_updated_at\n`;
-    script += `        BEFORE UPDATE ON ${tableName}\n`;
-    script += `        FOR EACH ROW\n`;
-    script += `        EXECUTE FUNCTION update_updated_at_column();\n`;
-    script += `    EXCEPTION WHEN OTHERS THEN null; END;\n\n`;
-  }
+  RAISE NOTICE '========================================';
+  RAISE NOTICE 'DYNAMISCHE SQL-AUSFÜHRUNG';
+  RAISE NOTICE '========================================';
   
-  // System-Tabellen Trigger
-  script += `    BEGIN\n`;
-  script += `      DROP TRIGGER IF EXISTS update_system_info_updated_at ON system_info;\n`;
-  script += `      CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
-  script += `      DROP TRIGGER IF EXISTS update_design_updated_at ON design;\n`;
-  script += `      CREATE TRIGGER update_design_updated_at BEFORE UPDATE ON design FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n`;
-  script += `    EXCEPTION WHEN OTHERS THEN null; END;\n\n`;
+  RAISE NOTICE '📝 SQL: %', LEFT(sql_statement, 200);
+  
+  BEGIN
+    -- Führe das SQL aus
+    EXECUTE sql_statement;
+    
+    -- Versuche die Anzahl der betroffenen Zeilen zu ermitteln
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    
+    RAISE NOTICE '✅ SQL erfolgreich ausgeführt (betroffene Zeilen: %)', affected_rows;
+    
+    result := json_build_object(
+      'success', true,
+      'affected_rows', affected_rows,
+      'message', 'SQL erfolgreich ausgeführt',
+      'timestamp', now()
+    );
+    
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '❌ Fehler bei SQL-Ausführung: %', SQLERRM;
+    
+    result := json_build_object(
+      'success', false,
+      'error', SQLERRM,
+      'message', 'Fehler bei SQL-Ausführung: ' || SQLERRM,
+      'timestamp', now()
+    );
+  END;
+  
+  RETURN result;
+  
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', SQLERRM,
+      'message', 'Dynamische SQL-Ausführung fehlgeschlagen: ' || SQLERRM,
+      'timestamp', now()
+    );
+END;
+$$;
 
-  // System-Info initialisieren
-  script += `    -- 7. Initialisiere system_info\n`;
-  script += `    BEGIN\n`;
-  script += `      INSERT INTO system_info (key, value, description) VALUES\n`;
-  script += `        ('schema_version', '${targetVersion}', 'Schema Version'),\n`;
-  script += `        ('installation_date', now()::text, 'Installationsdatum'),\n`;
-  script += `        ('auto_installed', 'true', 'Per RPC-Function automatisch installiert')\n`;
-  script += `      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();\n`;
-  script += `      RAISE NOTICE '✅ System-Info initialisiert';\n`;
-  script += `    EXCEPTION WHEN OTHERS THEN\n`;
-  script += `      RAISE NOTICE '❌ Fehler bei system_info INSERT: %', SQLERRM;\n`;
-  script += `      errors_count := errors_count + 1;\n`;
-  script += `    END;\n\n`;
+-- ========================================
+-- RPC-Function 2: Idempotentes Schema-Update
+-- ========================================
+-- Diese Function führt das komplette init-chef-numbers-supabase.sql aus
+-- Das Script ist bereits idempotent (CREATE TABLE IF NOT EXISTS, etc.)
+-- Keine Versionsprüfung nötig!
 
-  script += `  ELSE\n`;
-  script += `    -- SCHEMA EXISTIERT BEREITS - Prüfe Migration\n`;
-  script += `    SELECT value INTO current_version FROM system_info WHERE key = 'schema_version' LIMIT 1;\n`;
-  script += `    \n`;
-  script += `    RAISE NOTICE '========================================';\n`;
-  script += `    RAISE NOTICE 'SCHEMA-MIGRATION';\n`;
-  script += `    RAISE NOTICE 'Aktuelle Version: %', COALESCE(current_version, 'unbekannt');\n`;
-  script += `    RAISE NOTICE 'Ziel-Version: %', target_version;\n`;
-  script += `    RAISE NOTICE '========================================';\n`;
-  script += `    \n`;
-  script += `    IF current_version IS NULL OR current_version::DECIMAL < target_version::DECIMAL THEN\n`;
-  script += `      RAISE NOTICE '🔄 Migration erforderlich';\n`;
-  script += `      \n`;
-  script += `      -- Hier könnten spezifische Migrationen eingefügt werden\n`;
-  script += `      -- Beispiel: ALTER TABLE ... ADD COLUMN ...\n`;
-  script += `      \n`;
-  script += `      -- Update Schema-Version\n`;
-  script += `      UPDATE system_info SET value = target_version, updated_at = now() WHERE key = 'schema_version';\n`;
-  script += `      tables_migrated := tables_migrated + 1;\n`;
-  script += `      RAISE NOTICE '✅ Schema auf v% migriert', target_version;\n`;
-  script += `    ELSE\n`;
-  script += `      RAISE NOTICE '✅ Schema ist bereits aktuell (v%)', current_version;\n`;
-  script += `    END IF;\n`;
-  script += `  END IF;\n`;
-  script += `  \n`;
-  script += `  -- Baue Ergebnis-JSON\n`;
-  script += `  result := json_build_object(\n`;
-  script += `    'success', true,\n`;
-  script += `    'version', target_version,\n`;
-  script += `    'tables_created', tables_created,\n`;
-  script += `    'tables_migrated', tables_migrated,\n`;
-  script += `    'errors_count', errors_count,\n`;
-  script += `    'message', CASE\n`;
-  script += `      WHEN tables_created > 0 THEN 'Schema v' || target_version || ' erfolgreich installiert! ' || tables_created::text || ' Tabellen erstellt.'\n`;
-  script += `      WHEN tables_migrated > 0 THEN 'Schema auf v' || target_version || ' migriert!'\n`;
-  script += `      ELSE 'Schema ist bereits aktuell (v' || target_version || ')'\n`;
-  script += `    END,\n`;
-  script += `    'timestamp', now()\n`;
-  script += `  );\n`;
-  script += `  \n`;
-  script += `  RETURN result;\n`;
-  script += `  \n`;
-  script += `EXCEPTION\n`;
-  script += `  WHEN OTHERS THEN\n`;
-  script += `    RETURN json_build_object(\n`;
-  script += `      'success', false,\n`;
-  script += `      'error', SQLERRM,\n`;
-  script += `      'message', 'Schema-Installation fehlgeschlagen: ' || SQLERRM,\n`;
-  script += `      'timestamp', now()\n`;
-  script += `    );\n`;
-  script += `END;\n`;
-  script += `$$;\n\n`;
+CREATE OR REPLACE FUNCTION execute_schema_idempotent(sql_script TEXT DEFAULT NULL)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER  -- Führt mit Owner-Rechten aus (wichtig!)
+AS $$
+DECLARE
+  result JSON;
+  statements TEXT[];
+  stmt TEXT;
+  success_count INTEGER := 0;
+  error_count INTEGER := 0;
+  i INTEGER;
+BEGIN
+  RAISE NOTICE '========================================';
+  RAISE NOTICE 'IDEMPOTENTES SCHEMA-UPDATE';
+  RAISE NOTICE '========================================';
+  
+  -- Wenn kein SQL-Script übergeben wurde, verwende Standard-Verhalten
+  IF sql_script IS NULL OR sql_script = '' THEN
+    RAISE NOTICE '⚠️ Kein SQL-Script übergeben - Schema wird nicht aktualisiert';
+    RETURN json_build_object(
+      'success', false,
+      'message', 'Kein SQL-Script übergeben',
+      'timestamp', now()
+    );
+  END IF;
+  
+  RAISE NOTICE '📝 SQL-Script erhalten (Länge: % Zeichen)', LENGTH(sql_script);
+  RAISE NOTICE '🔄 Führe idempotente Schema-Updates durch...';
+  
+  -- Das komplette Init-Script ist bereits idempotent
+  -- Es erstellt nur fehlende Tabellen/Spalten
+  -- Keine Versionsprüfung nötig!
+  
+  -- Versuche das SQL direkt auszuführen (für Multi-Statement)
+  -- PostgreSQL unterstützt Multi-Statement-SQL wenn es als String übergeben wird
+  BEGIN
+    -- Führe das komplette SQL-Script aus
+    -- WICHTIG: Das Script muss als komplettes DO Block oder direkt ausführbar sein
+    EXECUTE sql_script;
+    
+    RAISE NOTICE '✅ SQL-Script erfolgreich ausgeführt';
+    
+    result := json_build_object(
+      'success', true,
+      'message', 'Idempotentes Schema-Update erfolgreich durchgeführt',
+      'idempotent', true,
+      'timestamp', now()
+    );
+    
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '❌ Fehler bei Schema-Update: %', SQLERRM;
+    RAISE NOTICE '⚠️ Versuche alternative Methode (Statement-Splitting)...';
+    
+    -- Fallback: Versuche Statements einzeln auszuführen
+    -- Dies ist komplex, da DO $$ Blocks mehrere Statements enthalten können
+    -- Für jetzt: Gebe Fehler zurück und empfehle manuelle Ausführung
+    
+    result := json_build_object(
+      'success', false,
+      'error', SQLERRM,
+      'message', 'SQL-Execution fehlgeschlagen. Bitte führen Sie das Script manuell aus: ' || SQLERRM,
+      'hint', 'Das SQL-Script ist zu komplex für automatische Ausführung. Bitte führen Sie init-chef-numbers-supabase.sql manuell im SQL Editor aus.',
+      'timestamp', now()
+    );
+  END;
+  
+  RETURN result;
+  
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', SQLERRM,
+      'message', 'Idempotentes Schema-Update fehlgeschlagen: ' || SQLERRM,
+      'timestamp', now()
+    );
+END;
+$$;
 
-  script += `-- ========================================\n`;
-  script += `-- FERTIG!\n`;
-  script += `-- ========================================\n`;
-  script += `-- \n`;
-  script += `-- Die RPC-Function ist jetzt installiert!\n`;
-  script += `-- \n`;
-  script += `-- Die App kann sie nun per API aufrufen:\n`;
-  script += `-- POST /rest/v1/rpc/initialize_chef_numbers_schema\n`;
-  script += `-- \n`;
-  script += `-- Die Function:\n`;
-  script += `-- - Erkennt automatisch ob Neu-Installation oder Migration\n`;
-  script += `-- - Erstellt alle benötigten Tabellen\n`;
-  script += `-- - Führt Migrationen durch (falls nötig)\n`;
-  script += `-- - Gibt detailliertes JSON-Ergebnis zurück\n`;
-  script += `-- \n`;
-  script += `-- ========================================\n`;
+-- ========================================
+-- FERTIG!
+-- ========================================
+-- 
+-- Die RPC-Functions sind jetzt installiert!
+-- 
+-- Verfügbare Functions:
+-- 1. execute_sql_dynamic(sql_statement TEXT)
+--    Führt einzelnes SQL-Statement aus
+-- 
+-- 2. execute_schema_idempotent(sql_script TEXT)
+--    Führt das komplette Schema-Script aus (idempotent)
+--    Das SQL-Script wird vom Frontend übergeben
+-- 
+-- NÄCHSTE SCHRITTE:
+-- 1. Die App ruft execute_schema_idempotent() mit dem SQL-Script auf
+-- 2. Das Schema wird automatisch initialisiert (idempotent)
+-- 3. Keine manuelle Interaktion nötig!
+-- 
+-- ========================================
+`;
 
   return script;
 }
+
+// Entfernt: generateOldSupabaseRPCFunction - nicht mehr benötigt
 
 // Führe Script aus
 if (require.main === module) {

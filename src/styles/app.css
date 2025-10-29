@@ -29,9 +29,33 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+
+/* Drawer Overlay (for mobile) */
+.drawer-toggle:checked ~ .drawer-side {
+  pointer-events: none;
+}
+
+/* Drawer Toggle Label */
+.drawer-toggle:checked ~ .drawer-content {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .drawer-toggle:checked ~ .drawer-overlay {
+    background-color: rgba(0, 0, 0, 0.5);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 999;
+  }
+}
+
 /* Utility Classes (minimal) */
 .flex { display: flex; }
 .flex-column { flex-direction: column; }
+.flex-col { flex-direction: column; } /* Tailwind-style alias */
 .flex-wrap { flex-wrap: wrap; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }

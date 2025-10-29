@@ -1,6 +1,6 @@
 // Chef Numbers Prisma REST API Server
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-10-13T15:52:59.869Z
+// Automatisch generiert am: 2025-10-29T20:35:35.945Z
 
 const express = require('express');
 const cors = require('cors');
@@ -8,6 +8,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
+const mysql = require('mysql2/promise');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -75,95 +76,78 @@ app.post('/api/test-connection', async (req, res) => {
   }
 });
 
-// ========================================
-// EinkaufsItem Routes
-// ========================================
-
-// GET all einkaufsitems
-app.get('/api/einkaufsitems', async (req, res) => {
+// Execute SQL Endpoint (für Schema-Initialisierung)
+app.post('/api/execute-sql', async (req, res) => {
+  let mysqlConnection = null;
+  
   try {
-    const data = await prisma.einkaufsItem.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(data);
-  } catch (error) {
-    console.error('Fehler beim Laden von einkaufsitems:', error);
-    res.status(500).json({ error: 'Fehler beim Laden von einkaufsitems', details: error.message });
-  }
-});
-
-// GET single EinkaufsItem
-app.get('/api/einkaufsitems/:id', async (req, res) => {
-  try {
-    const data = await prisma.einkaufsItem.findUnique({
-      where: { dbId: req.params.id }
-    });
-    if (!data) {
-      return res.status(404).json({ error: 'EinkaufsItem nicht gefunden' });
-    }
-    res.json(data);
-  } catch (error) {
-    console.error('Fehler beim Laden von EinkaufsItem:', error);
-    res.status(500).json({ error: 'Fehler beim Laden von EinkaufsItem', details: error.message });
-  }
-});
-
-// POST new EinkaufsItem
-app.post('/api/einkaufsitems', async (req, res) => {
-  try {
-    const dataToInsert = { ...req.body };
+    const { sql } = req.body;
     
-    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
-    if (!dataToInsert.dbId && !dataToInsert.db_id) {
-      dataToInsert.dbId = generateUUID();
-      console.log(`🆕 Generiere db_id für neues EinkaufsItem: ${dataToInsert.dbId}`);
+    if (!sql || typeof sql !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'SQL-String erforderlich'
+      });
     }
     
-    const data = await prisma.einkaufsItem.create({
-      data: dataToInsert
-    });
-    res.status(201).json(data);
-  } catch (error) {
-    console.error('Fehler beim Erstellen von EinkaufsItem:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen von EinkaufsItem', details: error.message });
-  }
-});
-
-// PUT update EinkaufsItem
-app.put('/api/einkaufsitems/:id', async (req, res) => {
-  try {
-    const data = await prisma.einkaufsItem.update({
-      where: { dbId: req.params.id },
-      data: req.body
-    });
-    res.json(data);
-  } catch (error) {
-    console.error('Fehler beim Aktualisieren von EinkaufsItem:', error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren von EinkaufsItem', details: error.message });
-  }
-});
-
-// DELETE EinkaufsItem (über Frontend-ID oder db_id)
-app.delete('/api/einkaufsitems', async (req, res) => {
-  try {
-    const { id } = req.query;
-    if (!id) {
-      return res.status(400).json({ error: 'ID parameter required' });
+    console.log(`📝 Führe SQL aus: ${sql.substring(0, 100)}...`);
+    
+    // Parse DATABASE_URL für native MySQL-Verbindung
+    const dbUrl = process.env.DATABASE_URL;
+    console.log('🔍 DATABASE_URL:', dbUrl);
+    
+    // Parse DATABASE_URL: mysql://user:password@host:port/database
+    const dbUrlMatch = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
+    
+    if (!dbUrlMatch) {
+      throw new Error('Ungültige DATABASE_URL');
     }
     
-    // Versuche über Frontend-ID zu löschen
-    const deleted = await prisma.einkaufsItem.deleteMany({
-      where: { id: id }
+    const [, user, password, host, port, database] = dbUrlMatch;
+    console.log('🔌 Verbinde zu MySQL:', { host, port: parseInt(port), user, database });
+    
+    // Erstelle native MySQL-Verbindung
+    mysqlConnection = await mysql.createConnection({
+      host: host,
+      port: parseInt(port),
+      user: user,
+      password: password,
+      database: database,
+      multipleStatements: true // Wichtig für Multi-Statement-Scripts
     });
     
-    if (deleted.count === 0) {
-      return res.status(404).json({ error: 'EinkaufsItem nicht gefunden' });
-    }
+    console.log('✅ MySQL-Verbindung etabliert');
     
-    res.json({ success: true, deleted: deleted.count });
+    // Entferne USE-Statement aus SQL (wird bereits durch Connection verwendet)
+    const cleanedSql = sql.replace(/^USE\s+\w+;/gi, '').trim();
+    
+    // Führe SQL aus
+    const [results] = await mysqlConnection.query(cleanedSql);
+    
+    console.log(`✅ SQL erfolgreich ausgeführt`);
+    
+    res.json({
+      success: true,
+      message: 'SQL erfolgreich ausgeführt',
+      result: results,
+      timestamp: new Date().toISOString()
+    });
+    
   } catch (error) {
-    console.error('Fehler beim Löschen von EinkaufsItem:', error);
-    res.status(500).json({ error: 'Fehler beim Löschen von EinkaufsItem', details: error.message });
+    console.error('❌ SQL-Execution fehlgeschlagen:', error);
+    
+    res.status(400).json({
+      success: false,
+      error: error.message,
+      sqlstate: error.code,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    // Schließe MySQL-Verbindung
+    if (mysqlConnection) {
+      await mysqlConnection.end();
+      console.log('🔌 MySQL-Verbindung geschlossen');
+    }
   }
 });
 
@@ -188,7 +172,7 @@ app.get('/api/suppliers', async (req, res) => {
 app.get('/api/suppliers/:id', async (req, res) => {
   try {
     const data = await prisma.supplier.findUnique({
-      where: { dbId: req.params.id }
+      where: { db_id: req.params.id }
     });
     if (!data) {
       return res.status(404).json({ error: 'Supplier nicht gefunden' });
@@ -206,9 +190,9 @@ app.post('/api/suppliers', async (req, res) => {
     const dataToInsert = { ...req.body };
     
     // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
-    if (!dataToInsert.dbId && !dataToInsert.db_id) {
-      dataToInsert.dbId = generateUUID();
-      console.log(`🆕 Generiere db_id für neues Supplier: ${dataToInsert.dbId}`);
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Supplier: ${dataToInsert.db_id}`);
     }
     
     const data = await prisma.supplier.create({
@@ -225,7 +209,7 @@ app.post('/api/suppliers', async (req, res) => {
 app.put('/api/suppliers/:id', async (req, res) => {
   try {
     const data = await prisma.supplier.update({
-      where: { dbId: req.params.id },
+      where: { db_id: req.params.id },
       data: req.body
     });
     res.json(data);
@@ -280,7 +264,7 @@ app.get('/api/articles', async (req, res) => {
 app.get('/api/articles/:id', async (req, res) => {
   try {
     const data = await prisma.article.findUnique({
-      where: { dbId: req.params.id }
+      where: { db_id: req.params.id }
     });
     if (!data) {
       return res.status(404).json({ error: 'Article nicht gefunden' });
@@ -298,9 +282,9 @@ app.post('/api/articles', async (req, res) => {
     const dataToInsert = { ...req.body };
     
     // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
-    if (!dataToInsert.dbId && !dataToInsert.db_id) {
-      dataToInsert.dbId = generateUUID();
-      console.log(`🆕 Generiere db_id für neues Article: ${dataToInsert.dbId}`);
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Article: ${dataToInsert.db_id}`);
     }
     
     const data = await prisma.article.create({
@@ -317,7 +301,7 @@ app.post('/api/articles', async (req, res) => {
 app.put('/api/articles/:id', async (req, res) => {
   try {
     const data = await prisma.article.update({
-      where: { dbId: req.params.id },
+      where: { db_id: req.params.id },
       data: req.body
     });
     res.json(data);
@@ -372,7 +356,7 @@ app.get('/api/recipes', async (req, res) => {
 app.get('/api/recipes/:id', async (req, res) => {
   try {
     const data = await prisma.recipe.findUnique({
-      where: { dbId: req.params.id }
+      where: { db_id: req.params.id }
     });
     if (!data) {
       return res.status(404).json({ error: 'Recipe nicht gefunden' });
@@ -390,9 +374,9 @@ app.post('/api/recipes', async (req, res) => {
     const dataToInsert = { ...req.body };
     
     // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
-    if (!dataToInsert.dbId && !dataToInsert.db_id) {
-      dataToInsert.dbId = generateUUID();
-      console.log(`🆕 Generiere db_id für neues Recipe: ${dataToInsert.dbId}`);
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Recipe: ${dataToInsert.db_id}`);
     }
     
     const data = await prisma.recipe.create({
@@ -409,7 +393,7 @@ app.post('/api/recipes', async (req, res) => {
 app.put('/api/recipes/:id', async (req, res) => {
   try {
     const data = await prisma.recipe.update({
-      where: { dbId: req.params.id },
+      where: { db_id: req.params.id },
       data: req.body
     });
     res.json(data);
@@ -443,98 +427,6 @@ app.delete('/api/recipes', async (req, res) => {
   }
 });
 
-// ========================================
-// InventurItem Routes
-// ========================================
-
-// GET all inventuritems
-app.get('/api/inventuritems', async (req, res) => {
-  try {
-    const data = await prisma.inventurItem.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(data);
-  } catch (error) {
-    console.error('Fehler beim Laden von inventuritems:', error);
-    res.status(500).json({ error: 'Fehler beim Laden von inventuritems', details: error.message });
-  }
-});
-
-// GET single InventurItem
-app.get('/api/inventuritems/:id', async (req, res) => {
-  try {
-    const data = await prisma.inventurItem.findUnique({
-      where: { dbId: req.params.id }
-    });
-    if (!data) {
-      return res.status(404).json({ error: 'InventurItem nicht gefunden' });
-    }
-    res.json(data);
-  } catch (error) {
-    console.error('Fehler beim Laden von InventurItem:', error);
-    res.status(500).json({ error: 'Fehler beim Laden von InventurItem', details: error.message });
-  }
-});
-
-// POST new InventurItem
-app.post('/api/inventuritems', async (req, res) => {
-  try {
-    const dataToInsert = { ...req.body };
-    
-    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
-    if (!dataToInsert.dbId && !dataToInsert.db_id) {
-      dataToInsert.dbId = generateUUID();
-      console.log(`🆕 Generiere db_id für neues InventurItem: ${dataToInsert.dbId}`);
-    }
-    
-    const data = await prisma.inventurItem.create({
-      data: dataToInsert
-    });
-    res.status(201).json(data);
-  } catch (error) {
-    console.error('Fehler beim Erstellen von InventurItem:', error);
-    res.status(500).json({ error: 'Fehler beim Erstellen von InventurItem', details: error.message });
-  }
-});
-
-// PUT update InventurItem
-app.put('/api/inventuritems/:id', async (req, res) => {
-  try {
-    const data = await prisma.inventurItem.update({
-      where: { dbId: req.params.id },
-      data: req.body
-    });
-    res.json(data);
-  } catch (error) {
-    console.error('Fehler beim Aktualisieren von InventurItem:', error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren von InventurItem', details: error.message });
-  }
-});
-
-// DELETE InventurItem (über Frontend-ID oder db_id)
-app.delete('/api/inventuritems', async (req, res) => {
-  try {
-    const { id } = req.query;
-    if (!id) {
-      return res.status(400).json({ error: 'ID parameter required' });
-    }
-    
-    // Versuche über Frontend-ID zu löschen
-    const deleted = await prisma.inventurItem.deleteMany({
-      where: { id: id }
-    });
-    
-    if (deleted.count === 0) {
-      return res.status(404).json({ error: 'InventurItem nicht gefunden' });
-    }
-    
-    res.json({ success: true, deleted: deleted.count });
-  } catch (error) {
-    console.error('Fehler beim Löschen von InventurItem:', error);
-    res.status(500).json({ error: 'Fehler beim Löschen von InventurItem', details: error.message });
-  }
-});
-
 // Error Handling
 app.use((err, req, res, next) => {
   console.error('Unbehandelter Fehler:', err);
@@ -564,9 +456,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prisma API Server läuft auf Port ${PORT}`);
   console.log(`📊 Schema Version: 2.2.2`);
   console.log(`🔗 Endpunkte:`);
-  console.log(`   - /api/einkaufsitems`);
   console.log(`   - /api/suppliers`);
   console.log(`   - /api/articles`);
   console.log(`   - /api/recipes`);
-  console.log(`   - /api/inventuritems`);
 });

@@ -78,9 +78,10 @@ export const templateEngine = {
     generateJWTSecret: (config: DockerComposeConfig): string => {
       // Generiert JWT-Secret aus PostgreSQL-Passwort (SHA256-Hash)
       // Das gleiche Verfahren wie im Frontend für Konsistenz
+      // WICHTIG: IMMER lowercase für PostgREST!
       const crypto = require('crypto');
       const hash = crypto.createHash('sha256').update(config.postgres.password).digest('hex').toLowerCase();
-      console.log('🔑 JWT-Secret generiert aus PostgreSQL-Passwort:', hash);
+      console.log('🔑 JWT-Secret generiert aus PostgreSQL-Passwort (lowercase):', hash);
       return hash;
     },
     
@@ -178,28 +179,17 @@ services:
       - "{{CONFIG:postgres.port}}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    command: |
+    entrypoint: |
       sh -c "
-        # Starte PostgreSQL im Hintergrund
-        docker-entrypoint.sh postgres &
-        POSTGRES_PID=\$!
+        # Lade Init-Script herunter und führe aus
+        echo '📥 Lade Init-Script von der App...'
+        mkdir -p /docker-entrypoint-initdb.d
+        wget -q -O /docker-entrypoint-initdb.d/01-init-roles.sql '{{FUNCTION:getFrontendUrl}}/init-scripts/init-chef-numbers-postgresql.sql'
         
-        # Warte bis PostgreSQL bereit ist
-        until pg_isready -U {{CONFIG:postgres.username}} -d postgres; do
-          echo 'Warte auf PostgreSQL...'
-          sleep 2
-        done
+        echo '✅ Init-Script geladen, starte PostgreSQL...'
         
-        # Lade Init-Script von der App herunter
-        echo 'Lade Init-Script von der App...'
-        wget -O /docker-entrypoint-initdb.d/init-chef-numbers-postgresql.sql {{FUNCTION:getFrontendUrl}}/init-scripts/init-chef-numbers-postgresql.sql
-        
-        # Führe Init-Script aus
-        echo 'Führe Init-Script aus...'
-        psql -U {{CONFIG:postgres.username}} -d postgres -f /docker-entrypoint-initdb.d/init-chef-numbers-postgresql.sql
-        
-        # Warte auf PostgreSQL-Prozess
-        wait \$POSTGRES_PID
+        # Starte Standard-Entrypoint
+        /usr/local/bin/docker-entrypoint.sh postgres
       "
     networks:
       - chef-numbers-network
@@ -402,8 +392,8 @@ services:
         echo '🔄 Generiere Prisma Client...'
         npx prisma generate
         
-        echo '🗄️ Führe Datenbank-Migrationen aus...'
-        npx prisma db push --accept-data-loss
+        echo '✅ Prisma Client generiert'
+        echo 'ℹ️ Das Schema wurde bereits von MariaDB erstellt'
         
         echo '🚀 Starte Prisma API Server...'
         npm start
@@ -447,21 +437,22 @@ services:
       - "{{CONFIG:mysql.port}}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - mysql-init:/docker-entrypoint-initdb.d
-    command: >
-      sh -c "
-        echo 'MySQL Container gestartet...' &&
-        echo 'Lade Init-Script von der App...' &&
-        curl -o /docker-entrypoint-initdb.d/init-chef-numbers-mysql.sql {{FUNCTION:getFrontendUrl}}/init-scripts/init-chef-numbers-mysql.sql &&
-        echo 'Init-Script geladen. Starte MySQL Server mit Standard-Entrypoint...' &&
-        /usr/local/bin/docker-entrypoint.sh mysqld
+    entrypoint: >
+      /bin/bash -c "
+        echo 'MySQL Container gestartet...'
+        echo 'Installiere curl für Init-Script-Download...'
+        apt-get update -qq
+        apt-get install -y -qq curl
+        echo 'MySQL wird mit Standard-Entrypoint gestartet...'
+        echo 'Das Schema wird nach dem Start über die Prisma API initialisiert.'
+        exec /usr/local/bin/docker-entrypoint.sh mysqld
       "
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p{{CONFIG:mysql.password}}"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   # Prisma API Server
   prisma-api:
@@ -474,21 +465,21 @@ services:
       NODE_ENV: production
     ports:
       - "{{CONFIG:mysql.prismaPort}}:3001"
-    command: >
+    command: |
       sh -c "
-        echo 'Prisma API Container gestartet...' &&
-        apk add --no-cache curl openssl &&
-        echo 'Lade Prisma API Dateien herunter...' &&
-        curl -o package.json {{FUNCTION:getFrontendUrl}}/prisma-api/package.json &&
-        curl -o schema.prisma {{FUNCTION:getFrontendUrl}}/prisma-api/schema.prisma &&
-        curl -o server.js {{FUNCTION:getFrontendUrl}}/prisma-api/server.js &&
-        echo 'Installiere Prisma API Dependencies...' &&
-        npm install &&
-        echo 'Generiere Prisma Client...' &&
-        npx prisma generate &&
-        echo 'Führe Datenbank-Migrationen aus...' &&
-        npx prisma db push --accept-data-loss &&
-        echo 'Starte Prisma API Server...' &&
+        echo 'Prisma API Container gestartet...'
+        apk add --no-cache curl openssl
+        echo 'Lade Prisma API Dateien herunter...'
+        curl -o package.json {{FUNCTION:getFrontendUrl}}/prisma-api/package.json
+        curl -o schema.prisma {{FUNCTION:getFrontendUrl}}/prisma-api/schema.prisma
+        curl -o server.js {{FUNCTION:getFrontendUrl}}/prisma-api/server.js
+        echo 'Installiere Prisma API Dependencies...'
+        npm install
+        echo 'Generiere Prisma Client...'
+        npx prisma generate
+        echo 'Führe Datenbank-Migrationen aus...'
+        npx prisma db push --accept-data-loss
+        echo 'Starte Prisma API Server...'
         npm start
       "
     depends_on:
@@ -503,8 +494,6 @@ services:
 
 volumes:
   mysql_data:
-    driver: local
-  mysql-init:
     driver: local
 
 networks:
@@ -702,30 +691,36 @@ networks:
 export const dockerComposeGenerator = {
   // Intelligente Frontend-URL-Erkennung
   getFrontendUrl(config: DockerComposeConfig): string {
+    // Im Browser: Verwende IMMER window.location für korrekte Host-IP
     let frontendHost = config.frontend.host;
     let frontendPort = config.frontend.port;
     
-    // Wenn localhost, verwende die aktuelle IP-Adresse
-    if (frontendHost === 'localhost' || frontendHost === '127.0.0.1') {
-      // Versuche die aktuelle IP-Adresse zu ermitteln
-      try {
-        // In einer Browser-Umgebung können wir window.location verwenden
-        if (typeof window !== 'undefined') {
-          const currentHost = window.location.hostname;
-          if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-            frontendHost = currentHost;
-          } else {
-            // Fallback: Verwende die erste verfügbare IP-Adresse
-            frontendHost = '192.168.1.20'; // Fallback für Entwicklung
-          }
+    // WICHTIG: In einer Browser-Umgebung verwenden wir IMMER window.location
+    // Das stellt sicher, dass der Docker-Container die richtige IP-Adresse verwendet
+    try {
+      if (typeof window !== 'undefined') {
+        const currentHost = window.location.hostname;
+        
+        // Wenn wir auf einem Remote-Host sind (nicht localhost), verwende diesen Host
+        if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+          frontendHost = currentHost;
+          console.log(`🌐 Verwende Browser-Host: ${currentHost}`);
+        } else {
+          // localhost → versuche die lokale IP-Adresse zu ermitteln
+          frontendHost = '192.168.1.20'; // Fallback für lokale Entwicklung
+          console.log(`🔄 Verwende Fallback-Host: ${frontendHost}`);
         }
-      } catch (error) {
-        console.warn('Konnte Frontend-Host nicht automatisch ermitteln, verwende Fallback');
-        frontendHost = '192.168.1.20'; // Fallback
       }
+    } catch (error) {
+      console.warn('Konnte Frontend-Host nicht automatisch ermitteln, verwende Fallback');
+      frontendHost = '192.168.1.20'; // Fallback
     }
     
-    return `http://${frontendHost}:${frontendPort}`;
+    // Wichtig: Verwende IMMER Port 3000 für das Frontend (React-Dev-Server)
+    // Der Docker-Container holt die Dateien vom Frontend-Server
+    const url = `http://${frontendHost}:3000`;
+    console.log(`📥 Frontend-Download-URL: ${url}`);
+    return url;
   },
   // Generiert eine Docker-Compose-Datei basierend auf der Konfiguration
   generateDockerCompose(config: DockerComposeConfig): GeneratedDockerCompose {

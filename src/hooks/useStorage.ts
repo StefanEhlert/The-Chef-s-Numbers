@@ -75,8 +75,6 @@ export const useStorage = () => {
       const recipes = await storageLayer.load('recipes');
       // Design immer aus LocalStorage laden (nicht über StorageLayer)
       const design = localStorage.getItem('chef_design');
-      const shoppingList = await storageLayer.load('shopping_list'); // einkaufsListe → shopping_list
-      const inventory = await storageLayer.load('inventory'); // inventurListe → inventory
       
       console.log('📁 Daten über StorageLayer geladen');
       return {
@@ -84,8 +82,8 @@ export const useStorage = () => {
         suppliers: suppliers || [],
         recipes: recipes || [],
         design: design ? JSON.parse(design) : 'warm',
-        einkaufsListe: shoppingList || [], // Backward compatibility
-        inventurListe: inventory || [] // Backward compatibility
+        einkaufsListe: [], // Backward compatibility - nicht mehr in DB
+        inventurListe: [] // Backward compatibility - nicht mehr in DB
       };
     } catch (error) {
       console.error('❌ Fehler beim Laden der Daten über StorageLayer:', error);

@@ -66,6 +66,12 @@ export type ArticleCategory =
 // Einheiten
 export type Unit = 'kg' | 'g' | 'l' | 'ml' | 'Stück' | 'Packung' | 'Dose' | 'Glas' | 'Bund' | 'Portion';
 
+// Preis-Historie-Eintrag
+export interface PriceHistoryEntry {
+  date: string; // ISO-format string
+  pricePerUnit: number;
+}
+
 // Artikel
 export interface Article extends BaseEntity {
   name: string;
@@ -94,7 +100,9 @@ export interface Article extends BaseEntity {
     salt?: number; // g pro 100g
     alcohol?: number; // % Alkoholgehalt
   };
+  alcohol?: number; // TEST: Alkoholgehalt in % (als eigenständiges Feld)
   openFoodFactsCode?: string; // Open Food Facts Produkt-Code für Rückverfolgbarkeit
+  pricePerUnitHistory?: PriceHistoryEntry[]; // Historie der Preisänderungen
   notes?: string;
 }
 
@@ -145,6 +153,7 @@ export interface Recipe extends BaseEntity {
   markupPercentage: number; // Standard: 300%
   vatRate: number; // MwSt-Satz
   sellingPrice: number;
+  sellingPriceHistory?: PriceHistoryEntry[]; // Historie der Verkaufspreis-Änderungen
   totalNutritionInfo: {
     calories: number;
     kilojoules: number;

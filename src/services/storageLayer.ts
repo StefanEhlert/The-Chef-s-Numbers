@@ -13,7 +13,7 @@ interface JWTToken {
 // Storage Entity Interface mit Hybrid-ID-System
 export interface StorageEntity {
   id: string; // Frontend-ID
-  dbId?: string; // DB-ID für Datenbank-Operationen
+  db_id?: string; // DB-ID für Datenbank-Operationen (Primary Key)
   isDirty?: boolean; // Wurde geändert?
   isNew?: boolean; // Neuer Datensatz?
   syncStatus?: 'synced' | 'pending' | 'error' | 'conflict';
@@ -322,6 +322,63 @@ class PostgreSQLAdapter implements StorageAdapter {
 
   constructor(private connectionData: any) {
     console.log('🐘 PostgreSQLAdapter erstellt mit ConnectionData:', connectionData);
+    
+    // Schema-Initialisierung erfolgt jetzt nur noch bei Konfigurationsübernahme in StorageManagement.tsx
+  }
+
+  // NEU: Schema-Initialisierung (Phase 2)
+  private async initializeSchema(): Promise<void> {
+    try {
+      console.log('🔧 Starte Schema-Initialisierung für PostgreSQL...');
+      
+      // Lade das Init-Script vom Server (öffentliche Assets werden von / aus serviert)
+      const response = await fetch('/init-scripts/init-chef-numbers-postgresql.sql');
+      if (!response.ok) {
+        console.warn('⚠️ Init-Script nicht gefunden (404) - überspringe Schema-Init');
+        console.warn(`   Pfad: /init-scripts/init-chef-numbers-postgresql.sql`);
+        return;
+      }
+      
+      const sqlScript = await response.text();
+      console.log('✅ Init-Script geladen, starte Schema-Initialisierung...');
+      console.log(`📏 Script-Länge: ${sqlScript.length} Zeichen`);
+      
+      // Warte kurz auf PostgREST
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Führe das Schema-Script über execute_safe_sql aus
+      const result = await this.executeSQL(sqlScript);
+      console.log('✅ Schema-Initialisierung Ergebnis:', result);
+      
+    } catch (error) {
+      console.error('❌ Schema-Initialisierung fehlgeschlagen:', error);
+      console.log('⚠️ Adapter funktioniert weiterhin ohne Schema-Init');
+    }
+  }
+  
+  // Führe SQL über RPC aus
+  private async executeSQL(sql: string): Promise<any> {
+    try {
+      const response = await fetch(`${this.getBaseUrl()}/rpc/execute_safe_sql`, {
+        method: 'POST',
+        headers: {
+          ...this.getAuthHeaders(),
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({ sql_text: sql })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`SQL-Execution fehlgeschlagen: ${errorText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Fehler bei SQL-Execution:', error);
+      throw error;
+    }
   }
 
   private async createNewJWTToken(): Promise<{ token: string; expires: number } | null> {
@@ -337,9 +394,10 @@ class PostgreSQLAdapter implements StorageAdapter {
       const secretKey = new TextEncoder().encode(jwtSecret);
 
       // Erstelle neues JWT-Token
+      // WICHTIG: Verwende 'anon' role für PostgREST (nicht 'service_role')
       const { SignJWT } = await import('jose');
       const jwt = await new SignJWT({
-        role: 'service_role'
+        role: 'anon'
       })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
@@ -522,11 +580,11 @@ class PostgreSQLAdapter implements StorageAdapter {
                 const generatedDbId = responseData[0].db_id;
                 console.log(`🆕 PostgreSQL hat db_id generiert: ${generatedDbId} für Frontend-ID: ${item.id}`);
                 
-                // Finde das ursprüngliche Item und aktualisiere die dbId
+                // Finde das ursprüngliche Item und aktualisiere die db_id
                 const originalItem = data.find(orig => orig.id === item.id);
                 if (originalItem) {
-                  originalItem.dbId = generatedDbId;
-                  console.log(`✅ dbId für Frontend-ID ${item.id} aktualisiert: ${generatedDbId}`);
+                  originalItem.db_id = generatedDbId;
+                  console.log(`✅ db_id für Frontend-ID ${item.id} aktualisiert: ${generatedDbId}`);
                 }
               }
             } catch (e) {
@@ -587,18 +645,21 @@ class PostgreSQLAdapter implements StorageAdapter {
     return data.map(item => {
       const transformed: any = { ...item };
       
-      // Trennung von dbId und id:
-      // - dbId: Wird von PostgreSQL automatisch generiert (bei neuen Datensätzen)
+      // Trennung von db_id und id:
+      // - db_id: Wird von PostgreSQL automatisch generiert (bei neuen Datensätzen)
       // - id: Frontend-ID für State-Management (bleibt unverändert)
-      if (transformed.dbId) {
-        // Bestehender Datensatz: Verwende dbId für Datenbank-Operationen
-        transformed.db_id = transformed.dbId;
-        delete transformed.dbId;
+      if (transformed.db_id) {
+        // Bestehender Datensatz: Verwende db_id für Datenbank-Operationen
         console.log(`🔄 PostgreSQL Transform: Update für bestehenden Datensatz mit db_id: ${transformed.db_id}, Frontend-ID: ${transformed.id}`);
       } else {
         // Neuer Datensatz: KEINE db_id senden - PostgreSQL generiert sie automatisch via DEFAULT gen_random_uuid()
-        delete transformed.dbId; // Stelle sicher, dass dbId nicht mitgesendet wird
+        delete transformed.db_id; // Stelle sicher, dass db_id nicht mitgesendet wird
         console.log(`🆕 PostgreSQL Transform: Neuer Datensatz mit Frontend-ID: ${transformed.id}, db_id wird von PostgreSQL generiert`);
+      }
+      
+      // Entferne veraltetes dbId-Feld falls vorhanden
+      if (transformed.dbId) {
+        delete transformed.dbId;
       }
       
       // Entferne Sync-Felder (werden nicht in DB gespeichert)
@@ -616,8 +677,17 @@ class PostgreSQLAdapter implements StorageAdapter {
       delete transformed.supplier;
       
       // Feldnamen-Mapping für PostgreSQL
+      // supplier_id verweist auf die Frontend-ID (supplier.id), nicht db_id
       if (transformed.supplierId) {
-        transformed.supplier_id = transformed.supplierId;
+        // Validierung: Nur wenn supplierId ein gültiges UUID-Format hat
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(transformed.supplierId)) {
+          transformed.supplier_id = transformed.supplierId;
+        } else {
+          // PostgreSQL benötigt NOT NULL - verwende einen Dummy-Supplier wenn ungültig
+          console.warn(`⚠️ Invalid supplier_id format: "${transformed.supplierId}" - using dummy supplier`);
+          transformed.supplier_id = '00000000-0000-0000-0000-000000000000';
+        }
         delete transformed.supplierId;
       }
       
@@ -835,21 +905,24 @@ class PostgreSQLAdapter implements StorageAdapter {
     return data.map(item => {
       const transformed: any = { ...item };
       
-      // Trennung von dbId und id:
-      // - db_id aus Datenbank wird zu dbId gespeichert (für zukünftige Updates)
+      // Trennung von db_id und id:
+      // - db_id aus Datenbank bleibt als db_id (für zukünftige Updates)
       // - id bleibt unverändert als Frontend-ID für State-Management
-      transformed.dbId = transformed.db_id; // DB-ID für zukünftige Updates speichern
       
       // WICHTIG: id NICHT überschreiben!
       // Die Frontend-ID (id) bleibt unverändert für State-Konsistenz
       // Sie ist bereits im Datensatz vorhanden und sollte nicht modifiziert werden
       
+      // db_id bleibt erhalten (wird für Updates benötigt)
+      
       transformed.isDirty = false;
       transformed.isNew = false;
       transformed.syncStatus = 'synced';
       
-      // Entferne db_id aus dem Frontend-Format (wurde zu dbId gemappt)
-      delete transformed.db_id;
+      // Entferne veraltetes dbId-Feld falls vorhanden
+      if (transformed.dbId) {
+        delete transformed.dbId;
+      }
       
       // Feldnamen-Mapping von PostgreSQL zu Frontend
       if (transformed.supplier_id) {
@@ -917,9 +990,9 @@ class PostgreSQLAdapter implements StorageAdapter {
         // WICHTIG: PostgREST liefert manchmal JSONB als String zurück!
         if (typeof nutritionData === 'string') {
           try {
-            console.log('🔄 Nutrition Info ist ein String, parse zu Objekt...');
+            
             nutritionData = JSON.parse(nutritionData);
-            console.log('✅ Nutrition Info erfolgreich geparst:', nutritionData);
+            
           } catch (e) {
             console.error('❌ Fehler beim Parsen von nutrition_info:', e);
             nutritionData = null;
@@ -939,8 +1012,7 @@ class PostgreSQLAdapter implements StorageAdapter {
             sugar: nutritionData.sugar,
             salt: nutritionData.salt
           };
-          
-          console.log('✅ Nutrition Info transformiert:', transformed.nutritionInfo);
+                    
         } else {
           console.warn('⚠️ Nutrition Info ist kein gültiges Objekt:', nutritionData);
           // Setze leeres Nährwert-Objekt
@@ -1242,77 +1314,73 @@ class PostgreSQLAdapter implements StorageAdapter {
       console.log('🐘 PostgreSQL: Verbindungstest');
       console.log(`🐘 Teste Verbindung zu: ${this.getBaseUrl()}/`);
       
-      // Debug JWT-Token
-      let jwtToken = this.connectionData.jwtToken;
-      if (jwtToken) {
-        try {
-          // Dekodiere JWT-Token um Ablaufzeit zu prüfen
-          const payload = JSON.parse(atob(jwtToken.split('.')[1]));
-          const now = Math.floor(Date.now() / 1000);
-          const expires = payload.exp;
-          
-          console.log(`🐘 JWT-Token Details:`);
-          console.log(`🐘 - Issued at: ${new Date(payload.iat * 1000).toISOString()}`);
-          console.log(`🐘 - Expires at: ${new Date(payload.exp * 1000).toISOString()}`);
-          console.log(`🐘 - Current time: ${new Date().toISOString()}`);
-          console.log(`🐘 - Time until expiry: ${expires - now} seconds`);
-          console.log(`🐘 - Token expired: ${now >= expires}`);
-          
-          if (now >= expires) {
-            console.warn('⚠️ JWT-Token ist abgelaufen!');
-            console.warn('🔄 Versuche automatische Token-Erneuerung...');
-            
-            // Automatische Token-Erneuerung
-            try {
-              const newToken = await this.createNewJWTToken();
-              if (newToken) {
-                this.connectionData.jwtToken = newToken.token;
-                this.connectionData.jwtTokenExpires = newToken.expires;
-                console.log('✅ JWT-Token automatisch erneuert');
-                return true;
-              }
-            } catch (error) {
-              console.error('❌ Automatische Token-Erneuerung fehlgeschlagen:', error);
-            }
-            
-            console.warn('⚠️ Automatische Token-Erneuerung fehlgeschlagen - führen Sie einen neuen Verbindungstest durch');
-            return false;
-          }
-        } catch (e) {
-          console.error('❌ Fehler beim Dekodieren des JWT-Tokens:', e);
+      // NEU: Schritt 1 - Teste ob Container läuft (ohne Auth)
+      try {
+        console.log('🔍 Schritt 1: Teste ob Container läuft...');
+        const healthCheck = await fetch(`${this.getBaseUrl()}/`, {
+          method: 'GET'
+        });
+        
+        console.log(`🔍 Health-Check Status: ${healthCheck.status} ${healthCheck.statusText}`);
+        
+        if (!healthCheck.ok && healthCheck.status !== 401) {
+          console.error('❌ Container läuft nicht oder PostgREST nicht verfügbar');
+          return false;
         }
-      } else {
-        console.error('❌ Kein JWT-Token vorhanden!');
+        
+        console.log('✅ Container läuft!');
+      } catch (error) {
+        console.error('❌ Container Health-Check fehlgeschlagen:', error);
         return false;
       }
       
-      console.log(`🐘 Auth Headers:`, this.getAuthHeaders());
+      // NEU: Schritt 2 - Teste RPC-Funktion execute_safe_sql
+      console.log('🔍 Schritt 2: Teste RPC-Funktion execute_safe_sql...');
       
-      // Verwende den gleichen Endpoint wie der erfolgreiche Verbindungstest
-      const response = await fetch(`${this.getBaseUrl()}/`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
-
-      console.log(`🐘 Response Status: ${response.status} ${response.statusText}`);
-      
-      // Debug Response Details bei Fehlern
-      if (!response.ok) {
-        try {
-          const errorText = await response.text();
-          console.log(`🐘 Response Body:`, errorText);
-        } catch (e) {
-          console.log(`🐘 Could not read response body:`, e);
+      try {
+        const rpcResponse = await fetch(`${this.getBaseUrl()}/rpc/execute_safe_sql`, {
+          method: 'POST',
+          headers: {
+            ...this.getAuthHeaders(),
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            sql_text: 'SELECT 1 as test'
+          })
+        });
+        
+        console.log(`🔍 RPC-Response Status: ${rpcResponse.status} ${rpcResponse.statusText}`);
+        
+        if (rpcResponse.ok) {
+          const result = await rpcResponse.json();
+          console.log('✅ RPC-Funktion execute_safe_sql funktioniert!');
+          console.log('✅ Result:', result);
+          
+          if (result.success || !result.error) {
+            console.log('✅ PostgreSQL-Verbindung erfolgreich getestet!');
+            return true;
+          } else {
+            console.warn('⚠️ RPC-Funktion meldete Fehler:', result.error);
+            return false;
+          }
+        } else {
+          console.error('❌ RPC-Funktion test fehlgeschlagen:', rpcResponse.statusText);
+          
+          // Debug: Zeige Response-Body
+          try {
+            const errorText = await rpcResponse.text();
+            console.log('❌ Response-Body:', errorText);
+          } catch (e) {
+            // Ignoriere
+          }
+          
+          return false;
         }
+      } catch (error) {
+        console.error('❌ RPC-Funktion Test fehlgeschlagen:', error);
+        return false;
       }
-      
-      if (response.ok) {
-        // Teste auch die verfügbaren Tabellen
-        await this.testTables();
-        return true;
-      }
-      
-      return false;
     } catch (error) {
       console.error('❌ PostgreSQL Verbindungstest fehlgeschlagen:', error);
       return false;
@@ -1327,6 +1395,77 @@ class PrismaAdapter implements StorageAdapter {
 
   constructor(private connectionData: any, private dbType: 'mariadb' | 'mysql') {
     console.log(`🔧 ${this.dbType.toUpperCase()}Adapter erstellt mit ConnectionData:`, connectionData);
+    
+    // Schema-Initialisierung erfolgt jetzt nur noch bei Konfigurationsübernahme in StorageManagement.tsx
+  }
+
+  // NEU: Schema-Initialisierung (Phase 2)
+  private async initializeSchema(): Promise<void> {
+    try {
+      console.log(`🔧 Starte Schema-Initialisierung für ${this.dbType.toUpperCase()}...`);
+      
+      // Lade das Init-Script vom Server
+      const scriptName = this.dbType === 'mariadb' 
+        ? '/init-scripts/init-chef-numbers-mariadb.sql'
+        : '/init-scripts/init-chef-numbers-mysql.sql';
+      
+      const response = await fetch(scriptName);
+      if (!response.ok) {
+        console.warn(`⚠️ Init-Script nicht gefunden (404) - überspringe Schema-Init`);
+        console.warn(`   Pfad: ${scriptName}`);
+        return;
+      }
+      
+      const sqlScript = await response.text();
+      console.log(`✅ Init-Script geladen, starte Schema-Initialisierung...`);
+      console.log(`📏 Script-Länge: ${sqlScript.length} Zeichen`);
+      
+      // Warte kurz auf Prisma API
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Führe das Schema-Script über die Prisma API aus
+      const result = await this.executeSQL(sqlScript);
+      console.log(`✅ Schema-Initialisierung Ergebnis:`, result);
+      
+    } catch (error) {
+      console.error('❌ Schema-Initialisierung fehlgeschlagen:', error);
+      console.log('⚠️ Adapter funktioniert weiterhin ohne Schema-Init');
+    }
+  }
+  
+  // Führe SQL über Prisma API aus
+  // JETZT MIT NATIVEM MYSQL-TREIBER in der Prisma API!
+  private async executeSQL(sql: string): Promise<any> {
+    try {
+      // Entferne USE-Statements (werden nicht benötigt)
+      let cleanedSQL = sql
+        .replace(/^\s*USE\s+\w+;?\s*$/gmi, '')
+        .replace(/^\s*USE\s+\w+;?\s*\n/gmi, '')
+        .trim();
+      
+      console.log(`📝 Führe SQL-Script aus (${cleanedSQL.length} Zeichen)...`);
+      
+      // Führe kompletten SQL-Block aus (Multi-Statement wird vom MySQL-Treiber unterstützt)
+      const response = await fetch(`${this.getBaseUrl()}/api/execute-sql`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ sql: cleanedSQL })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ SQL-Execution fehlgeschlagen:`, errorText.substring(0, 500));
+        throw new Error(`SQL-Execution fehlgeschlagen: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log(`✅ SQL-Execution erfolgreich`);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Fehler bei SQL-Execution:', error);
+      throw error;
+    }
   }
 
   private getBaseUrl(): string {
@@ -1357,17 +1496,30 @@ class PrismaAdapter implements StorageAdapter {
   }
 
   // Transformiere Daten für MariaDB/MySQL via Prisma API
-  // WICHTIG: Prisma erwartet camelCase-Feldnamen, NICHT snake_case!
+  // WICHTIG: Prisma verwendet db_id direkt (keine camelCase-Konvertierung!)
   // Die Prisma-Schema-Mappings (@map) kümmern sich um die DB-Konvertierung
   private transformDataForMySQL<T extends StorageEntity>(data: T[]): any[] {
     return data.map(item => {
       const transformed: any = {};
       
+      // WICHTIG: db_id bleibt als db_id (keine Konvertierung zu dbId!)
+      if (item.db_id) {
+        transformed.db_id = item.db_id;
+        console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Verwende db_id: ${item.db_id}`);
+      }
+      
       // Kopiere nur camelCase Felder (filtere alle snake_case Felder raus!)
+      // ABER: db_id ist eine Ausnahme und wird direkt übernommen
       for (const [key, value] of Object.entries(item)) {
-        // Ignoriere snake_case Felder komplett (enthalten "_")
-        if (key.includes('_')) {
+        // Ignoriere snake_case Felder (enthalten "_") - ABER db_id wurde bereits behandelt
+        if (key.includes('_') && key !== 'db_id') {
           console.log(`🗑️ Ignoriere snake_case Feld: ${key}`);
+          continue;
+        }
+        
+        // Ignoriere dbId (falls vorhanden - sollte nicht mehr verwendet werden)
+        if (key === 'dbId') {
+          console.log(`🗑️ Ignoriere veraltetes dbId Feld (verwende db_id stattdessen)`);
           continue;
         }
         
@@ -1383,16 +1535,17 @@ class PrismaAdapter implements StorageAdapter {
           continue;
         }
         
-        // Kopiere das Feld (camelCase)
+        // Kopiere das Feld (camelCase, außer db_id)
         transformed[key] = value;
       }
       
-      // db_id/id Handling für Prisma (camelCase!)
-      if (transformed.dbId) {
-        console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Update für bestehenden Datensatz mit dbId: ${transformed.dbId}`);
-      } else {
-        delete transformed.dbId;
-        console.log(`🆕 ${this.dbType.toUpperCase()} Transform: Neuer Datensatz, dbId wird vom Server generiert`);
+      // db_id/id Handling für Prisma
+      // WICHTIG: db_id ist der Primary Key, id ist die Frontend-ID
+      if (!transformed.db_id && transformed.id) {
+        // Neuer Datensatz: db_id wird vom Server generiert, lass es weg
+        console.log(`🆕 ${this.dbType.toUpperCase()} Transform: Neuer Datensatz, db_id wird vom Server generiert (Frontend-ID: ${transformed.id})`);
+      } else if (transformed.db_id) {
+        console.log(`🔄 ${this.dbType.toUpperCase()} Transform: Update für bestehenden Datensatz mit db_id: ${transformed.db_id}`);
       }
       
       // Merge nutrition und nutritionInfo (falls beide vorhanden)
@@ -1409,16 +1562,21 @@ class PrismaAdapter implements StorageAdapter {
   }
 
   // Transformiere Daten von MariaDB/MySQL (via Prisma) zurück zu Frontend-Format
-  // Prisma gibt bereits camelCase zurück, daher minimale Transformation
+  // Prisma gibt db_id direkt zurück (keine camelCase-Konvertierung)
   private transformDataFromMySQL(data: any[]): any[] {
     return data.map(item => {
       const transformed: any = { ...item };
       
-      // Prisma gibt dbId zurück (nicht db_id) - bereits korrekt!
+      // Prisma gibt db_id zurück - bereits korrekt!
       // Füge nur Frontend-Felder hinzu
       transformed.isDirty = false;
       transformed.isNew = false;
       transformed.syncStatus = 'synced';
+      
+      // Entferne dbId falls vorhanden (veraltetes Feld)
+      if (transformed.dbId) {
+        delete transformed.dbId;
+      }
       
       // WICHTIG: Konvertiere Prisma Decimal-Objekte zu JavaScript Numbers
       // Prisma gibt Decimal als spezielle Objekte zurück, die .toFixed() nicht unterstützen
@@ -1490,11 +1648,11 @@ class PrismaAdapter implements StorageAdapter {
           onProgress(i, transformedData.length);
         }
         
-        // Bestimme ob Update oder Insert (Prisma verwendet dbId, nicht db_id)
-        const isUpdate = !!item.dbId;
+        // Bestimme ob Update oder Insert (Prisma verwendet db_id direkt)
+        const isUpdate = !!item.db_id;
         const method = isUpdate ? 'PUT' : 'POST';
         const url = isUpdate
-          ? `${this.getBaseUrl()}/api/${tableName}/${item.dbId}`
+          ? `${this.getBaseUrl()}/api/${tableName}/${item.db_id}`
           : `${this.getBaseUrl()}/api/${tableName}`;
         
         console.log(`🔧 ${this.dbType.toUpperCase()} ${method}: ${url}`);
@@ -1513,19 +1671,21 @@ class PrismaAdapter implements StorageAdapter {
           break;
         }
         
-        // Bei POST: Lese generierte dbId (Prisma gibt camelCase zurück!)
+        // Bei POST: Lese generierte db_id
         if (!isUpdate) {
           try {
             const responseData = await response.json();
-            if (responseData && responseData.dbId) {
+            // Prisma gibt db_id zurück
+            const generatedDbId = responseData?.db_id;
+            if (generatedDbId) {
               const originalItem = data.find(orig => orig.id === item.id);
               if (originalItem) {
-                originalItem.dbId = responseData.dbId;
-                console.log(`✅ dbId generiert: ${responseData.dbId} für Frontend-ID: ${item.id}`);
+                originalItem.db_id = generatedDbId;
+                console.log(`✅ db_id generiert: ${generatedDbId} für Frontend-ID: ${item.id}`);
               }
             }
           } catch (e) {
-            console.warn('⚠️ Konnte generierte dbId nicht lesen:', e);
+            console.warn('⚠️ Konnte generierte db_id nicht lesen:', e);
           }
         }
       }
@@ -1628,7 +1788,220 @@ class SupabaseAdapter implements StorageAdapter {
       hasAnonKey: !!connectionData?.anonKey,
       hasServiceKey: !!connectionData?.serviceRoleKey
     });
+    
+    // Schema-Initialisierung erfolgt jetzt nur noch bei Konfigurationsübernahme in StorageManagement.tsx
   }
+
+  // NEU: Schema-Initialisierung (Phase 2)
+  // Teilt das SQL-Script in logische Abschnitte auf, um Deadlocks zu vermeiden
+  private async initializeSchema(): Promise<void> {
+    try {
+      console.log('☁️ Starte Schema-Initialisierung für Supabase...');
+      
+      // Warte kurz auf Supabase
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Lade das Init-Script vom Server
+      const response = await fetch('/init-scripts/init-chef-numbers-supabase.sql');
+      if (!response.ok) {
+        console.warn('⚠️ Init-Script nicht gefunden (404) - überspringe Schema-Init');
+        console.warn(`   Pfad: /init-scripts/init-chef-numbers-supabase.sql`);
+        return;
+      }
+      
+      const sqlScript = await response.text();
+      console.log('✅ Init-Script geladen, teile in logische Abschnitte auf...');
+      console.log(`📏 Script-Länge: ${sqlScript.length} Zeichen`);
+      
+      // Teile das Script in logische Abschnitte auf
+      // Jeder Abschnitt wird separat ausgeführt, um Deadlocks zu vermeiden
+      const sections = this.splitScriptIntoSections(sqlScript);
+      console.log(`📦 Script in ${sections.length} Abschnitte aufgeteilt`);
+      
+      // Führe jeden Abschnitt sequenziell aus
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i];
+        const sectionLabel = section.label || `Abschnitt ${i + 1}`;
+        
+        try {
+          console.log(`☁️ Führe ${sectionLabel} aus (${i + 1}/${sections.length})...`);
+          console.log(`📏 Abschnitt-Länge: ${section.sql.length} Zeichen`);
+          
+          // Verwende execute_sql_dynamic RPC-Funktion
+          const rpcResponse = await fetch(`${this.getBaseUrl()}/rpc/execute_sql_dynamic`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ sql_statement: section.sql })
+          });
+          
+          if (rpcResponse.ok) {
+            const result = await rpcResponse.json();
+            
+            if (result.success) {
+              console.log(`✅ ${sectionLabel} erfolgreich ausgeführt`);
+              successCount++;
+            } else {
+              // Prüfe ob Fehler kritisch ist (deadlock, timeout, etc.)
+              const errorMsg = result.error || result.message || '';
+              const isCriticalError = 
+                errorMsg.toLowerCase().includes('deadlock') ||
+                errorMsg.toLowerCase().includes('timeout') ||
+                errorMsg.toLowerCase().includes('connection');
+              
+              if (isCriticalError) {
+                console.warn(`⚠️ ${sectionLabel} meldete kritischen Fehler:`, errorMsg);
+                console.warn('⚠️ Überspringe diesen Abschnitt und fahre fort...');
+                errorCount++;
+                // Kurze Pause bei kritischen Fehlern
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              } else {
+                // Bei nicht-kritischen Fehlern (z.B. "already exists") als Erfolg werten
+                console.log(`ℹ️ ${sectionLabel} meldete nicht-kritischen Fehler (vermutlich idempotent):`, errorMsg);
+                successCount++;
+              }
+            }
+          } else {
+            const errorText = await rpcResponse.text();
+            
+            // Prüfe ob RPC-Funktion existiert
+            if (rpcResponse.status === 404 || errorText.includes('does not exist')) {
+              console.warn('⚠️ RPC-Funktion execute_sql_dynamic nicht verfügbar');
+              console.warn('⚠️ Das Schema-Script definiert diese Funktion - bitte führen Sie es einmalig aus');
+              console.warn('   Datei: /init-scripts/init-chef-numbers-supabase.sql');
+              console.warn('   Danach wird die automatische Schema-Initialisierung funktionieren');
+              return;
+            } else {
+              console.warn(`⚠️ ${sectionLabel} fehlgeschlagen:`, errorText.substring(0, 200));
+              errorCount++;
+            }
+          }
+          
+          // Kleine Pause zwischen Abschnitten, um Deadlocks zu vermeiden
+          if (i < sections.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+        } catch (error: any) {
+          console.error(`❌ Fehler beim Ausführen von ${sectionLabel}:`, error);
+          errorCount++;
+          
+          // Bei kritischen Fehlern: Pause und weiter
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      console.log(`📊 Schema-Initialisierung abgeschlossen: ${successCount} erfolgreich, ${errorCount} Fehler`);
+      
+      if (errorCount > 0 && successCount === 0) {
+        console.warn('⚠️ Alle Abschnitte fehlgeschlagen - Schema könnte nicht initialisiert sein');
+        console.warn('⚠️ Bitte führen Sie init-chef-numbers-supabase.sql manuell im Supabase SQL Editor aus');
+      } else if (errorCount > 0) {
+        console.warn('⚠️ Einige Abschnitte fehlgeschlagen, aber viele Statements sind idempotent');
+        console.warn('⚠️ Schema sollte größtenteils korrekt sein');
+      } else {
+        console.log('✅ Schema-Initialisierung vollständig erfolgreich!');
+      }
+      
+    } catch (error) {
+      console.error('❌ Schema-Initialisierung fehlgeschlagen:', error);
+      console.log('⚠️ Adapter funktioniert weiterhin ohne Schema-Init');
+      console.log('⚠️ Bitte führen Sie init-chef-numbers-supabase.sql manuell im Supabase SQL Editor aus');
+    }
+  }
+
+  // Hilfsfunktion: Teilt SQL-Script in logische Abschnitte auf
+  private splitScriptIntoSections(sqlScript: string): Array<{ label: string; sql: string }> {
+    const sections: Array<{ label: string; sql: string }> = [];
+    
+    // Finde alle Abschnitt-Markierungen (-- ======================================== gefolgt von -- Text)
+    // Pattern erkennt: "-- ========================================" gefolgt von einer leeren Zeile und "-- Label"
+    const markerPattern = /-- ========================================\s*\r?\n\s*-- (.+?)\s*\r?\n/g;
+    const foundMarkers: Array<{ position: number; label: string }> = [];
+    
+    let match;
+    while ((match = markerPattern.exec(sqlScript)) !== null) {
+      const label = match[1].trim();
+      // Vereinheitliche Labels
+      let normalizedLabel = label;
+      if (label.includes('Enum-Typen')) {
+        normalizedLabel = '1. Enum-Typen';
+      } else if (label.includes('System-Tabellen')) {
+        normalizedLabel = '2. System-Tabellen';
+      } else if (label.includes('Haupt-Tabellen')) {
+        normalizedLabel = '3. Haupt-Tabellen';
+      } else if (label.startsWith('Tabelle:')) {
+        const tableName = label.match(/Tabelle: (\w+)/)?.[1] || 'unbekannt';
+        normalizedLabel = `4. Tabelle: ${tableName}`;
+      } else if (label.includes('ALTER-Statements')) {
+        normalizedLabel = '5. ALTER-Statements';
+      } else if (label.includes('Trigger')) {
+        normalizedLabel = '6. Trigger';
+      } else if (label.includes('System-Informationen')) {
+        normalizedLabel = '7. System-Info';
+      } else if (label.includes('Dynamische RPC-Functions')) {
+        normalizedLabel = '8. RPC-Functions';
+      }
+      
+      foundMarkers.push({
+        position: match.index,
+        label: normalizedLabel
+      });
+    }
+    
+    // Sortiere Marker nach Position
+    foundMarkers.sort((a, b) => a.position - b.position);
+    
+    // Erstelle Abschnitte basierend auf Markierungen
+    if (foundMarkers.length === 0) {
+      // Fallback: Wenn keine Marker gefunden wurden, teile in gleichmäßige Chunks
+      console.warn('⚠️ Keine Abschnitt-Marker gefunden, teile Script in Chunks auf');
+      const chunkSize = 50000; // 50KB pro Chunk
+      for (let i = 0; i < sqlScript.length; i += chunkSize) {
+        const chunk = sqlScript.substring(i, i + chunkSize).trim();
+        if (chunk.length > 0) {
+          sections.push({
+            label: `Chunk ${Math.floor(i / chunkSize) + 1}`,
+            sql: chunk
+          });
+        }
+      }
+      return sections;
+    }
+    
+    // Erstelle Abschnitte zwischen den Markern
+    for (let i = 0; i < foundMarkers.length; i++) {
+      const marker = foundMarkers[i];
+      const nextMarker = foundMarkers[i + 1];
+      
+      const sectionStart = marker.position;
+      const sectionEnd = nextMarker ? nextMarker.position : sqlScript.length;
+      const sectionSQL = sqlScript.substring(sectionStart, sectionEnd).trim();
+      
+      if (sectionSQL.length > 0) {
+        sections.push({
+          label: marker.label,
+          sql: sectionSQL
+        });
+      }
+    }
+    
+    // Füge Einleitung hinzu, wenn vorhanden
+    if (foundMarkers.length > 0 && foundMarkers[0].position > 0) {
+      const introSQL = sqlScript.substring(0, foundMarkers[0].position).trim();
+      if (introSQL.length > 0) {
+        sections.unshift({
+          label: '0. Einleitung',
+          sql: introSQL
+        });
+      }
+    }
+    
+    return sections;
+  }
+  
 
   private getBaseUrl(): string {
     return `${this.connectionData.url}/rest/v1`;
@@ -1653,8 +2026,17 @@ class SupabaseAdapter implements StorageAdapter {
     const transformed: any = {};
     
     for (const [key, value] of Object.entries(obj)) {
-      const snakeKey = this.camelToSnake(key);
-      transformed[snakeKey] = value;
+      // WICHTIG: db_id bleibt als db_id (wird nicht konvertiert)
+      if (key === 'db_id') {
+        transformed.db_id = value;
+      } else if (key === 'dbId') {
+        // Veraltetes Feld dbId ignorieren (verwende db_id)
+        console.log('🗑️ Ignoriere veraltetes dbId-Feld (verwende db_id stattdessen)');
+        continue;
+      } else {
+        const snakeKey = this.camelToSnake(key);
+        transformed[snakeKey] = value;
+      }
     }
     
     return transformed;
@@ -1665,8 +2047,13 @@ class SupabaseAdapter implements StorageAdapter {
     const transformed: any = {};
     
     for (const [key, value] of Object.entries(obj)) {
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      transformed[camelKey] = value;
+      // WICHTIG: db_id bleibt als db_id (wird nicht zu dbId konvertiert)
+      if (key === 'db_id') {
+        transformed.db_id = value;
+      } else {
+        const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+        transformed[camelKey] = value;
+      }
     }
     
     return transformed;
@@ -1685,12 +2072,89 @@ class SupabaseAdapter implements StorageAdapter {
       for (const item of items) {
         let itemData = { ...item };
         
+        // UUID-Validierung: Prüfe ob ein String eine gültige UUID ist
+        const isValidUUID = (value: any): boolean => {
+          if (!value || typeof value !== 'string') return false;
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(value);
+        };
+        
+        // Bereinige alle UUID-Felder: Setze ungültige UUIDs auf null oder entferne sie
+        const cleanUUIDFields = async (data: any, entityType: string): Promise<any> => {
+          const cleaned = { ...data };
+          
+          // Liste der UUID-Felder, die NULL erlaubt sind (können auf null gesetzt werden)
+          const nullableUUIDFields = ['created_by', 'updated_by', 'last_modified_by', 'createdBy', 'updatedBy', 'lastModifiedBy'];
+          
+          // Liste der UUID-Felder, die NOT NULL sein können (benötigen besondere Behandlung)
+          const requiredUUIDFields = ['id', 'supplier_id', 'supplierId'];
+          
+          // Bereinige nullable UUID-Felder
+          for (const field of nullableUUIDFields) {
+            if (cleaned[field] !== undefined && cleaned[field] !== null && !isValidUUID(cleaned[field])) {
+              console.warn(`⚠️ Ungültige UUID in Feld "${field}": "${cleaned[field]}" - setze auf null`);
+              cleaned[field] = null;
+            }
+          }
+          
+          // Bereinige required UUID-Felder
+          for (const field of requiredUUIDFields) {
+            if (cleaned[field] !== undefined && cleaned[field] !== null && !isValidUUID(cleaned[field])) {
+              console.warn(`⚠️ Ungültige UUID in Feld "${field}": "${cleaned[field]}"`);
+              
+              if (field === 'id') {
+                // ID ist kritisch - versuche Migration zu UUID
+                console.warn(`⚠️ ID "${cleaned[field]}" ist nicht im UUID-Format - generiere neue UUID`);
+                try {
+                  const { v5: uuidv5 } = await import('uuid');
+                  const NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+                  cleaned[field] = uuidv5(String(cleaned[field]), NAMESPACE);
+                  console.log(`✅ ID migriert zu UUID: ${cleaned[field]}`);
+                } catch (error) {
+                  console.warn('⚠️ uuid-Modul nicht verfügbar - verwende UUIDUtils');
+                  const { UUIDUtils } = await import('../utils/uuidUtils');
+                  cleaned[field] = UUIDUtils.generateId();
+                  console.log(`✅ ID generiert mit UUIDUtils: ${cleaned[field]}`);
+                }
+              } else if (field === 'supplier_id' || field === 'supplierId') {
+                // supplier_id ist NOT NULL - verwende Fallback UUID wenn ungültig
+                console.warn(`⚠️ Ungültige supplier_id "${cleaned[field]}" - verwende Fallback UUID`);
+                cleaned[field] = '00000000-0000-0000-0000-000000000000'; // Null-UUID als Fallback
+              }
+            }
+          }
+          
+          return cleaned;
+        };
+        
+        // Bereinige UUID-Felder BEVOR weitere Transformationen
+        itemData = await cleanUUIDFields(itemData, entityType);
+        
         // Entferne Frontend-spezifische Felder
-        delete (itemData as any).dbId;
+        // db_id wird behalten (wird als Primary Key verwendet)
+        // dbId (veraltetes Feld) explizit entfernen
         delete (itemData as any).isDirty;
         delete (itemData as any).isNew;
         delete (itemData as any).syncStatus;
         delete (itemData as any).nutrition; // Veraltetes Feld, nur nutritionInfo wird verwendet
+        
+        // Entferne veraltetes dbId-Feld falls vorhanden
+        if ((itemData as any).dbId) {
+          delete (itemData as any).dbId;
+          console.log('🗑️ Entferne veraltetes dbId-Feld (verwende db_id)');
+        }
+        
+        // WICHTIG: Entferne nutritionInfo/nutrition_info bei Suppliers (nur Articles haben das)
+        if (entityType === 'suppliers') {
+          if ((itemData as any).nutritionInfo) {
+            delete (itemData as any).nutritionInfo;
+            console.log('🗑️ Entferne nutritionInfo bei Supplier (nur Articles haben Nährwerte)');
+          }
+          if ((itemData as any).nutrition_info) {
+            delete (itemData as any).nutrition_info;
+            console.log('🗑️ Entferne nutrition_info bei Supplier (nur Articles haben Nährwerte)');
+          }
+        }
         
         // Setze Timestamps für INSERT (wenn nicht vorhanden)
         if (!(itemData as any).createdAt) {
@@ -1702,6 +2166,30 @@ class SupabaseAdapter implements StorageAdapter {
         
         // Transformiere camelCase → snake_case für Supabase
         itemData = this.transformToSnakeCase(itemData) as any;
+        
+        // ZUSÄTZLICHE Prüfung nach Transformation: Bereinige UUID-Felder erneut
+        // (da transformToSnakeCase camelCase → snake_case konvertiert hat)
+        const snakeCaseUUIDFields = ['created_by', 'updated_by', 'last_modified_by', 'supplier_id'];
+        for (const field of snakeCaseUUIDFields) {
+          if ((itemData as any)[field] !== undefined && (itemData as any)[field] !== null && !isValidUUID((itemData as any)[field])) {
+            if (field === 'supplier_id') {
+              // supplier_id ist NOT NULL - verwende Fallback UUID
+              console.warn(`⚠️ Ungültige UUID in "${field}": "${(itemData as any)[field]}" - verwende Fallback UUID`);
+              (itemData as any)[field] = '00000000-0000-0000-0000-000000000000';
+            } else {
+              // Andere Felder können NULL sein
+              console.warn(`⚠️ Ungültige UUID in "${field}": "${(itemData as any)[field]}" - setze auf null`);
+              (itemData as any)[field] = null;
+            }
+          }
+        }
+        
+        // ZUSÄTZLICHE Prüfung nach Transformation: Entferne nutrition_info bei suppliers
+        // (falls es durch die Transformation entstanden ist)
+        if (entityType === 'suppliers' && (itemData as any).nutrition_info) {
+          delete (itemData as any).nutrition_info;
+          console.log('🗑️ Entferne nutrition_info nach Transformation bei Supplier');
+        }
 
         // Prüfe ob UPDATE oder INSERT (basierend auf id)
         const existingCheck = await fetch(`${baseUrl}/${entityType}?id=eq.${item.id}`, {
@@ -1722,9 +2210,26 @@ class SupabaseAdapter implements StorageAdapter {
             });
 
             if (!response.ok) {
-              const error = await response.text();
-              console.error(`❌ UPDATE fehlgeschlagen:`, error);
-              throw new Error(`UPDATE fehlgeschlagen: ${response.status}`);
+              const errorText = await response.text();
+              let errorJson: any = null;
+              try {
+                errorJson = JSON.parse(errorText);
+              } catch {
+                // Fehler ist kein JSON
+              }
+              
+              const errorMessage = errorJson?.message || errorText;
+              const errorCode = errorJson?.code || '';
+              
+              // Prüfe auf UUID-Fehler (22P02 = invalid input syntax for type)
+              if (errorCode === '22P02' && errorMessage?.includes('uuid')) {
+                console.error(`❌ UPDATE fehlgeschlagen: Ungültige UUID in Daten`, errorMessage);
+                console.warn(`⚠️ Überspringe Datensatz mit id=${item.id} aufgrund ungültiger UUID`);
+                continue; // Überspringe diesen Datensatz
+              } else {
+                console.error(`❌ UPDATE fehlgeschlagen:`, errorMessage);
+                throw new Error(`UPDATE fehlgeschlagen: ${response.status} - ${errorMessage}`);
+              }
             }
           } else {
             // INSERT
@@ -1736,15 +2241,34 @@ class SupabaseAdapter implements StorageAdapter {
             });
 
             if (!response.ok) {
-              const error = await response.text();
-              console.error(`❌ INSERT fehlgeschlagen:`, error);
-              throw new Error(`INSERT fehlgeschlagen: ${response.status}`);
+              const errorText = await response.text();
+              let errorJson: any = null;
+              try {
+                errorJson = JSON.parse(errorText);
+              } catch {
+                // Fehler ist kein JSON
+              }
+              
+              const errorMessage = errorJson?.message || errorText;
+              const errorCode = errorJson?.code || '';
+              
+              // Prüfe auf UUID-Fehler (22P02 = invalid input syntax for type)
+              if (errorCode === '22P02' && errorMessage?.includes('uuid')) {
+                console.error(`❌ INSERT fehlgeschlagen: Ungültige UUID in Daten`, errorMessage);
+                console.warn(`⚠️ Überspringe Datensatz mit id=${item.id} aufgrund ungültiger UUID`);
+                continue; // Überspringe diesen Datensatz
+              } else {
+                console.error(`❌ INSERT fehlgeschlagen:`, errorMessage);
+                throw new Error(`INSERT fehlgeschlagen: ${response.status} - ${errorMessage}`);
+              }
             }
           }
+        } else {
+          console.warn(`⚠️ Konnte Existenz-Prüfung für ${entityType} mit id=${item.id} nicht durchführen`);
         }
       }
 
-      console.log(`✅ SUPABASE: ${items.length} ${entityType} erfolgreich gespeichert`);
+      console.log(`✅ SUPABASE: ${items.length} ${entityType} verarbeitet (einige Datensätze könnten übersprungen worden sein)`);
       return true;
     } catch (error) {
       console.error(`❌ SUPABASE Fehler beim Speichern von ${entityType}:`, error);
@@ -1773,7 +2297,14 @@ class SupabaseAdapter implements StorageAdapter {
       const data = await response.json();
       
       // Transformiere snake_case → camelCase für Frontend
-      const transformedData = data.map((item: any) => this.transformToCamelCase(item));
+      const transformedData = data.map((item: any) => {
+        const camel = this.transformToCamelCase(item);
+        // Entferne dbId (veraltetes Feld) falls vorhanden, behalte db_id
+        if ((camel as any).dbId) {
+          delete (camel as any).dbId;
+        }
+        return camel;
+      });
       
       console.log(`✅ SUPABASE: ${transformedData.length} ${entityType} geladen`);
       return transformedData as T[];
@@ -2004,11 +2535,41 @@ class FirebaseAdapter implements StorageAdapter {
         let itemData = { ...item };
         
         // Entferne Frontend-spezifische Felder
-        delete (itemData as any).dbId;
+        // db_id wird behalten (wird als Primary Key verwendet)
         delete (itemData as any).isDirty;
         delete (itemData as any).isNew;
         delete (itemData as any).syncStatus;
         delete (itemData as any).nutrition; // Veraltetes Feld
+        
+        // Entferne veraltetes dbId-Feld (verwende db_id stattdessen)
+        // Dies verhindert auch undefined-Werte für dbId
+        if ('dbId' in itemData) {
+          delete (itemData as any).dbId;
+          console.log('🗑️ Entferne veraltetes dbId-Feld für Firestore (verwende db_id)');
+        }
+        
+        // WICHTIG: Entferne alle undefined-Werte aus dem Objekt
+        // Firestore unterstützt keine undefined-Werte - diese müssen entfernt werden
+        const removeUndefinedValues = (obj: any): any => {
+          if (obj === null || obj === undefined) {
+            return null;
+          }
+          if (Array.isArray(obj)) {
+            return obj.map(removeUndefinedValues).filter(item => item !== undefined);
+          }
+          if (typeof obj === 'object') {
+            const cleaned: any = {};
+            for (const [key, value] of Object.entries(obj)) {
+              if (value !== undefined) {
+                cleaned[key] = removeUndefinedValues(value);
+              }
+            }
+            return cleaned;
+          }
+          return obj;
+        };
+        
+        itemData = removeUndefinedValues(itemData) as any;
         
         // Setze Timestamps (Firestore erwartet ISO Strings oder Timestamp-Objekte)
         if (!(itemData as any).createdAt) {
@@ -2292,8 +2853,11 @@ class CouchDBAdapter implements StorageAdapter {
       // CouchDB verwendet _id als Document-ID (nicht id)
       transformed._id = item.id;
       
-      // dbId nicht benötigt (CouchDB verwendet _id und _rev automatisch)
-      delete transformed.dbId;
+      // Entferne veraltetes dbId-Feld (falls vorhanden)
+      // db_id kann behalten werden, wird aber nicht verwendet (CouchDB verwendet _id und _rev automatisch)
+      if (transformed.dbId) {
+        delete transformed.dbId;
+      }
 
       // Entferne Frontend-spezifische Felder
       delete transformed.isDirty;

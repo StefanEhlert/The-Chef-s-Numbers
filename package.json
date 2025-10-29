@@ -34,9 +34,11 @@
     "webpack": "^5.90.0"
   },
   "scripts": {
+    "prebuild": "npm run generate-schema",
     "start": "react-app-rewired start",
     "build": "react-app-rewired build",
     "build:dev": "react-app-rewired build",
+    "generate-schema": "npx tsx scripts/autoSchemaGenerator.ts",
     "generate-auto-schema": "npx tsx scripts/autoSchemaGenerator.ts",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",

@@ -1,182 +1,23 @@
 {
-  "EinkaufsItem": {
-    "tableName": "einkaufsitems",
-    "interfaceName": "EinkaufsItem",
-    "columns": [
-      {
-        "name": "db_id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": true,
-        "defaultValue": "gen_random_uuid()",
-        "description": "Datenbank-ID für DB-Operationen (Primary Key)",
-        "tsType": "string"
-      },
-      {
-        "name": "id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": false,
-        "description": "Frontend-ID für State-Management",
-        "tsType": "string"
-      },
-      {
-        "name": "artikel_name",
-        "type": "TEXT",
-        "nullable": false,
-        "primary": false,
-        "description": "artikelName property",
-        "tsType": "string"
-      },
-      {
-        "name": "menge",
-        "type": "DECIMAL",
-        "nullable": true,
-        "primary": false,
-        "description": "menge property",
-        "tsType": "number"
-      },
-      {
-        "name": "einheit",
-        "type": "TEXT",
-        "nullable": true,
-        "primary": false,
-        "description": "einheit property",
-        "tsType": "string"
-      },
-      {
-        "name": "lieferant",
-        "type": "TEXT",
-        "nullable": true,
-        "primary": false,
-        "description": "lieferant property",
-        "tsType": "string"
-      },
-      {
-        "name": "preis",
-        "type": "DECIMAL",
-        "nullable": true,
-        "primary": false,
-        "description": "preis property",
-        "tsType": "number"
-      },
-      {
-        "name": "bestelldatum",
-        "type": "TIMESTAMP",
-        "nullable": true,
-        "primary": false,
-        "description": "bestelldatum property",
-        "tsType": "Date"
-      },
-      {
-        "name": "lieferdatum",
-        "type": "TIMESTAMP",
-        "nullable": true,
-        "primary": false,
-        "description": "lieferdatum property",
-        "tsType": "Date"
-      },
-      {
-        "name": "status",
-        "type": "TEXT",
-        "nullable": true,
-        "primary": false,
-        "description": "status property",
-        "tsType": "EinkaufsStatus"
-      },
-      {
-        "name": "is_dirty",
-        "type": "BOOLEAN",
-        "nullable": true,
-        "primary": false,
-        "defaultValue": false,
-        "description": "Wurde geändert?",
-        "tsType": "boolean"
-      },
-      {
-        "name": "is_new",
-        "type": "BOOLEAN",
-        "nullable": true,
-        "primary": false,
-        "defaultValue": false,
-        "description": "Neuer Datensatz?",
-        "tsType": "boolean"
-      },
-      {
-        "name": "sync_status",
-        "type": "sync_status_enum",
-        "nullable": true,
-        "primary": false,
-        "defaultValue": "pending",
-        "description": "Sync-Status",
-        "tsType": "SyncStatus"
-      },
-      {
-        "name": "created_at",
-        "type": "TIMESTAMP",
-        "nullable": false,
-        "primary": false,
-        "defaultValue": "CURRENT_TIMESTAMP",
-        "description": "Erstellungsdatum",
-        "tsType": "Date"
-      },
-      {
-        "name": "updated_at",
-        "type": "TIMESTAMP",
-        "nullable": false,
-        "primary": false,
-        "defaultValue": "CURRENT_TIMESTAMP",
-        "description": "Aktualisierungsdatum",
-        "tsType": "Date"
-      },
-      {
-        "name": "created_by",
-        "type": "UUID",
-        "nullable": true,
-        "primary": false,
-        "description": "Benutzer-ID der erstellt hat",
-        "tsType": "string"
-      },
-      {
-        "name": "updated_by",
-        "type": "UUID",
-        "nullable": true,
-        "primary": false,
-        "description": "Benutzer-ID der zuletzt geändert hat",
-        "tsType": "string"
-      },
-      {
-        "name": "last_modified_by",
-        "type": "UUID",
-        "nullable": true,
-        "primary": false,
-        "description": "Benutzer-ID der zuletzt modifiziert hat",
-        "tsType": "string"
-      }
-    ],
-    "baseInterfaces": [
-      "BaseEntity"
-    ]
-  },
   "Supplier": {
     "tableName": "suppliers",
     "interfaceName": "Supplier",
     "columns": [
       {
-        "name": "db_id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": true,
-        "defaultValue": "gen_random_uuid()",
-        "description": "Datenbank-ID für DB-Operationen (Primary Key)",
-        "tsType": "string"
-      },
-      {
         "name": "id",
         "type": "UUID",
         "nullable": false,
         "primary": false,
         "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
         "tsType": "string"
       },
       {
@@ -217,7 +58,7 @@
         "nullable": true,
         "primary": false,
         "description": "address property",
-        "tsType": "{\n    street: string;\n    zipCode: string;\n    city: string;\n    country: string;\n  }"
+        "tsType": "{\r\n    street: string;\r\n    zipCode: string;\r\n    city: string;\r\n    country: string;\r\n  }"
       },
       {
         "name": "phone_numbers",
@@ -314,20 +155,20 @@
     "interfaceName": "Article",
     "columns": [
       {
-        "name": "db_id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": true,
-        "defaultValue": "gen_random_uuid()",
-        "description": "Datenbank-ID für DB-Operationen (Primary Key)",
-        "tsType": "string"
-      },
-      {
         "name": "id",
         "type": "UUID",
         "nullable": false,
         "primary": false,
         "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
         "tsType": "string"
       },
       {
@@ -429,7 +270,7 @@
       },
       {
         "name": "allergens",
-        "type": "TEXT[]",
+        "type": "JSONB",
         "nullable": true,
         "primary": false,
         "description": "allergens property",
@@ -437,7 +278,7 @@
       },
       {
         "name": "additives",
-        "type": "TEXT[]",
+        "type": "JSONB",
         "nullable": true,
         "primary": false,
         "description": "additives property",
@@ -457,7 +298,15 @@
         "nullable": true,
         "primary": false,
         "description": "nutritionInfo property",
-        "tsType": "{\n    calories: number; // kcal pro 100g\n    kilojoules: number; // kJ pro 100g\n    protein: number; // g pro 100g\n    fat: number; // g pro 100g\n    carbohydrates: number; // g pro 100g\n    fiber: number; // g pro 100g\n    sugar?: number; // g pro 100g\n    salt?: number; // g pro 100g\n  }"
+        "tsType": "{\r\n    calories: number; // kcal pro 100g\r\n    kilojoules: number; // kJ pro 100g\r\n    protein: number; // g pro 100g\r\n    fat: number; // g pro 100g\r\n    carbohydrates: number; // g pro 100g\r\n    fiber: number; // g pro 100g\r\n    sugar?: number; // g pro 100g\r\n    salt?: number; // g pro 100g\r\n    alcohol?: number; // % Alkoholgehalt\r\n  }"
+      },
+      {
+        "name": "alcohol",
+        "type": "DECIMAL",
+        "nullable": true,
+        "primary": false,
+        "description": "alcohol property",
+        "tsType": "number"
       },
       {
         "name": "open_food_facts_code",
@@ -466,6 +315,14 @@
         "primary": false,
         "description": "openFoodFactsCode property",
         "tsType": "string"
+      },
+      {
+        "name": "price_per_unit_history",
+        "type": "JSONB",
+        "nullable": true,
+        "primary": false,
+        "description": "pricePerUnitHistory property",
+        "tsType": "PriceHistoryEntry[]"
       },
       {
         "name": "notes",
@@ -554,20 +411,20 @@
     "interfaceName": "Recipe",
     "columns": [
       {
-        "name": "db_id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": true,
-        "defaultValue": "gen_random_uuid()",
-        "description": "Datenbank-ID für DB-Operationen (Primary Key)",
-        "tsType": "string"
-      },
-      {
         "name": "id",
         "type": "UUID",
         "nullable": false,
         "primary": false,
         "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
         "tsType": "string"
       },
       {
@@ -686,16 +543,24 @@
         "tsType": "number"
       },
       {
+        "name": "selling_price_history",
+        "type": "JSONB",
+        "nullable": true,
+        "primary": false,
+        "description": "sellingPriceHistory property",
+        "tsType": "PriceHistoryEntry[]"
+      },
+      {
         "name": "total_nutrition_info",
         "type": "JSONB",
         "nullable": true,
         "primary": false,
         "description": "totalNutritionInfo property",
-        "tsType": "{\n    calories: number;\n    kilojoules: number;\n    protein: number;\n    fat: number;\n    carbohydrates: number;\n    fiber: number;\n    sugar?: number;\n    salt?: number;\n  }"
+        "tsType": "{\r\n    calories: number;\r\n    kilojoules: number;\r\n    protein: number;\r\n    fat: number;\r\n    carbohydrates: number;\r\n    fiber: number;\r\n    sugar?: number;\r\n    salt?: number;\r\n    alcohol?: number; // % Alkoholgehalt\r\n  }"
       },
       {
         "name": "allergens",
-        "type": "TEXT[]",
+        "type": "JSONB",
         "nullable": true,
         "primary": false,
         "description": "allergens property",
@@ -707,173 +572,6 @@
         "nullable": true,
         "primary": false,
         "description": "notes property",
-        "tsType": "string"
-      },
-      {
-        "name": "is_dirty",
-        "type": "BOOLEAN",
-        "nullable": true,
-        "primary": false,
-        "defaultValue": false,
-        "description": "Wurde geändert?",
-        "tsType": "boolean"
-      },
-      {
-        "name": "is_new",
-        "type": "BOOLEAN",
-        "nullable": true,
-        "primary": false,
-        "defaultValue": false,
-        "description": "Neuer Datensatz?",
-        "tsType": "boolean"
-      },
-      {
-        "name": "sync_status",
-        "type": "sync_status_enum",
-        "nullable": true,
-        "primary": false,
-        "defaultValue": "pending",
-        "description": "Sync-Status",
-        "tsType": "SyncStatus"
-      },
-      {
-        "name": "created_at",
-        "type": "TIMESTAMP",
-        "nullable": false,
-        "primary": false,
-        "defaultValue": "CURRENT_TIMESTAMP",
-        "description": "Erstellungsdatum",
-        "tsType": "Date"
-      },
-      {
-        "name": "updated_at",
-        "type": "TIMESTAMP",
-        "nullable": false,
-        "primary": false,
-        "defaultValue": "CURRENT_TIMESTAMP",
-        "description": "Aktualisierungsdatum",
-        "tsType": "Date"
-      },
-      {
-        "name": "created_by",
-        "type": "UUID",
-        "nullable": true,
-        "primary": false,
-        "description": "Benutzer-ID der erstellt hat",
-        "tsType": "string"
-      },
-      {
-        "name": "updated_by",
-        "type": "UUID",
-        "nullable": true,
-        "primary": false,
-        "description": "Benutzer-ID der zuletzt geändert hat",
-        "tsType": "string"
-      },
-      {
-        "name": "last_modified_by",
-        "type": "UUID",
-        "nullable": true,
-        "primary": false,
-        "description": "Benutzer-ID der zuletzt modifiziert hat",
-        "tsType": "string"
-      }
-    ],
-    "baseInterfaces": [
-      "BaseEntity"
-    ]
-  },
-  "InventurItem": {
-    "tableName": "inventuritems",
-    "interfaceName": "InventurItem",
-    "columns": [
-      {
-        "name": "db_id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": true,
-        "defaultValue": "gen_random_uuid()",
-        "description": "Datenbank-ID für DB-Operationen (Primary Key)",
-        "tsType": "string"
-      },
-      {
-        "name": "id",
-        "type": "UUID",
-        "nullable": false,
-        "primary": false,
-        "description": "Frontend-ID für State-Management",
-        "tsType": "string"
-      },
-      {
-        "name": "artikel_name",
-        "type": "TEXT",
-        "nullable": false,
-        "primary": false,
-        "description": "artikelName property",
-        "tsType": "string"
-      },
-      {
-        "name": "kategorie",
-        "type": "TEXT",
-        "nullable": false,
-        "primary": false,
-        "description": "kategorie property",
-        "tsType": "string"
-      },
-      {
-        "name": "soll_bestand",
-        "type": "DECIMAL",
-        "nullable": true,
-        "primary": false,
-        "description": "sollBestand property",
-        "tsType": "number"
-      },
-      {
-        "name": "ist_bestand",
-        "type": "DECIMAL",
-        "nullable": true,
-        "primary": false,
-        "description": "istBestand property",
-        "tsType": "number"
-      },
-      {
-        "name": "einheit",
-        "type": "TEXT",
-        "nullable": true,
-        "primary": false,
-        "description": "einheit property",
-        "tsType": "string"
-      },
-      {
-        "name": "preis",
-        "type": "DECIMAL",
-        "nullable": true,
-        "primary": false,
-        "description": "preis property",
-        "tsType": "number"
-      },
-      {
-        "name": "inventur_datum",
-        "type": "TIMESTAMP",
-        "nullable": true,
-        "primary": false,
-        "description": "inventurDatum property",
-        "tsType": "Date"
-      },
-      {
-        "name": "differenz",
-        "type": "DECIMAL",
-        "nullable": true,
-        "primary": false,
-        "description": "differenz property",
-        "tsType": "number"
-      },
-      {
-        "name": "bemerkung",
-        "type": "TEXT",
-        "nullable": true,
-        "primary": false,
-        "description": "bemerkung property",
         "tsType": "string"
       },
       {

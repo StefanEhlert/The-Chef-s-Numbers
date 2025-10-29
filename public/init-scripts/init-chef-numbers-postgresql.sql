@@ -1,7 +1,7 @@
 -- Chef Numbers Database Initialization Script (PostgreSQL)
 -- Wird beim ersten Start der PostgreSQL-Datenbank ausgeführt
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-13T15:52:59.839Z
+-- Automatisch generiert am: 2025-10-29T20:35:35.906Z
 
 -- Erstelle Rollen für PostgreSQL
 DO $$
@@ -102,82 +102,8 @@ CREATE TABLE IF NOT EXISTS system_info (
 -- ========================================
 
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-13T15:52:59.839Z
+-- Generiert am: 2025-10-29T20:35:35.906Z
 -- Automatische Schema-Generierung mit ts-morph
-
--- ========================================
--- Tabelle: einkaufsitems (Interface: EinkaufsItem)
--- ========================================
-
--- Erstelle Tabelle: einkaufsitems (Interface: EinkaufsItem)
-CREATE TABLE IF NOT EXISTS einkaufsitems (
-db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-id UUID NOT NULL,
-artikel_name TEXT NOT NULL,
-menge DECIMAL,
-einheit TEXT,
-lieferant TEXT,
-preis DECIMAL,
-bestelldatum TIMESTAMP,
-lieferdatum TIMESTAMP,
-status TEXT,
-is_dirty BOOLEAN DEFAULT false,
-is_new BOOLEAN DEFAULT false,
-sync_status sync_status_enum DEFAULT 'pending',
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-created_by UUID,
-updated_by UUID,
-last_modified_by UUID
-);
-
--- Indizes für einkaufsitems
--- Index für Frontend-ID (id)
-CREATE INDEX IF NOT EXISTS idx_einkaufsitems_id ON einkaufsitems(id);
--- Index für Primary Key (db_id)
-CREATE INDEX IF NOT EXISTS idx_einkaufsitems_db_id ON einkaufsitems(db_id);
--- Index für Erstellungsdatum
-CREATE INDEX IF NOT EXISTS idx_einkaufsitems_created_at ON einkaufsitems(created_at);
--- Index für Aktualisierungsdatum
-CREATE INDEX IF NOT EXISTS idx_einkaufsitems_updated_at ON einkaufsitems(updated_at);
-
--- Kommentare für Spalten in einkaufsitems
--- Kommentar für Spalte: db_id
-COMMENT ON COLUMN einkaufsitems.db_id IS 'Datenbank-ID für DB-Operationen (Primary Key) (TS: string)';
--- Kommentar für Spalte: id
-COMMENT ON COLUMN einkaufsitems.id IS 'Frontend-ID für State-Management (TS: string)';
--- Kommentar für Spalte: artikel_name
-COMMENT ON COLUMN einkaufsitems.artikel_name IS 'artikelName property (TS: string)';
--- Kommentar für Spalte: menge
-COMMENT ON COLUMN einkaufsitems.menge IS 'menge property (TS: number)';
--- Kommentar für Spalte: einheit
-COMMENT ON COLUMN einkaufsitems.einheit IS 'einheit property (TS: string)';
--- Kommentar für Spalte: lieferant
-COMMENT ON COLUMN einkaufsitems.lieferant IS 'lieferant property (TS: string)';
--- Kommentar für Spalte: preis
-COMMENT ON COLUMN einkaufsitems.preis IS 'preis property (TS: number)';
--- Kommentar für Spalte: bestelldatum
-COMMENT ON COLUMN einkaufsitems.bestelldatum IS 'bestelldatum property (TS: Date)';
--- Kommentar für Spalte: lieferdatum
-COMMENT ON COLUMN einkaufsitems.lieferdatum IS 'lieferdatum property (TS: Date)';
--- Kommentar für Spalte: status
-COMMENT ON COLUMN einkaufsitems.status IS 'status property (TS: EinkaufsStatus)';
--- Kommentar für Spalte: is_dirty
-COMMENT ON COLUMN einkaufsitems.is_dirty IS 'Wurde geändert? (TS: boolean)';
--- Kommentar für Spalte: is_new
-COMMENT ON COLUMN einkaufsitems.is_new IS 'Neuer Datensatz? (TS: boolean)';
--- Kommentar für Spalte: sync_status
-COMMENT ON COLUMN einkaufsitems.sync_status IS 'Sync-Status (TS: SyncStatus)';
--- Kommentar für Spalte: created_at
-COMMENT ON COLUMN einkaufsitems.created_at IS 'Erstellungsdatum (TS: Date)';
--- Kommentar für Spalte: updated_at
-COMMENT ON COLUMN einkaufsitems.updated_at IS 'Aktualisierungsdatum (TS: Date)';
--- Kommentar für Spalte: created_by
-COMMENT ON COLUMN einkaufsitems.created_by IS 'Benutzer-ID der erstellt hat (TS: string)';
--- Kommentar für Spalte: updated_by
-COMMENT ON COLUMN einkaufsitems.updated_by IS 'Benutzer-ID der zuletzt geändert hat (TS: string)';
--- Kommentar für Spalte: last_modified_by
-COMMENT ON COLUMN einkaufsitems.last_modified_by IS 'Benutzer-ID der zuletzt modifiziert hat (TS: string)';
 
 -- ========================================
 -- Tabelle: suppliers (Interface: Supplier)
@@ -185,8 +111,8 @@ COMMENT ON COLUMN einkaufsitems.last_modified_by IS 'Benutzer-ID der zuletzt mod
 
 -- Erstelle Tabelle: suppliers (Interface: Supplier)
 CREATE TABLE IF NOT EXISTS suppliers (
-db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 name TEXT NOT NULL,
 contact_person TEXT,
 email TEXT,
@@ -214,55 +140,14 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_created_at ON suppliers(created_at);
 -- Index für Aktualisierungsdatum
 CREATE INDEX IF NOT EXISTS idx_suppliers_updated_at ON suppliers(updated_at);
 
--- Kommentare für Spalten in suppliers
--- Kommentar für Spalte: db_id
-COMMENT ON COLUMN suppliers.db_id IS 'Datenbank-ID für DB-Operationen (Primary Key) (TS: string)';
--- Kommentar für Spalte: id
-COMMENT ON COLUMN suppliers.id IS 'Frontend-ID für State-Management (TS: string)';
--- Kommentar für Spalte: name
-COMMENT ON COLUMN suppliers.name IS 'name property (TS: string)';
--- Kommentar für Spalte: contact_person
-COMMENT ON COLUMN suppliers.contact_person IS 'contactPerson property (TS: string)';
--- Kommentar für Spalte: email
-COMMENT ON COLUMN suppliers.email IS 'email property (TS: string)';
--- Kommentar für Spalte: website
-COMMENT ON COLUMN suppliers.website IS 'website property (TS: string)';
--- Kommentar für Spalte: address
-COMMENT ON COLUMN suppliers.address IS 'address property (TS: {
-    street: string;
-    zipCode: string;
-    city: string;
-    country: string;
-  })';
--- Kommentar für Spalte: phone_numbers
-COMMENT ON COLUMN suppliers.phone_numbers IS 'phoneNumbers property (TS: PhoneNumber[])';
--- Kommentar für Spalte: notes
-COMMENT ON COLUMN suppliers.notes IS 'notes property (TS: string)';
--- Kommentar für Spalte: is_dirty
-COMMENT ON COLUMN suppliers.is_dirty IS 'Wurde geändert? (TS: boolean)';
--- Kommentar für Spalte: is_new
-COMMENT ON COLUMN suppliers.is_new IS 'Neuer Datensatz? (TS: boolean)';
--- Kommentar für Spalte: sync_status
-COMMENT ON COLUMN suppliers.sync_status IS 'Sync-Status (TS: SyncStatus)';
--- Kommentar für Spalte: created_at
-COMMENT ON COLUMN suppliers.created_at IS 'Erstellungsdatum (TS: Date)';
--- Kommentar für Spalte: updated_at
-COMMENT ON COLUMN suppliers.updated_at IS 'Aktualisierungsdatum (TS: Date)';
--- Kommentar für Spalte: created_by
-COMMENT ON COLUMN suppliers.created_by IS 'Benutzer-ID der erstellt hat (TS: string)';
--- Kommentar für Spalte: updated_by
-COMMENT ON COLUMN suppliers.updated_by IS 'Benutzer-ID der zuletzt geändert hat (TS: string)';
--- Kommentar für Spalte: last_modified_by
-COMMENT ON COLUMN suppliers.last_modified_by IS 'Benutzer-ID der zuletzt modifiziert hat (TS: string)';
-
 -- ========================================
 -- Tabelle: articles (Interface: Article)
 -- ========================================
 
 -- Erstelle Tabelle: articles (Interface: Article)
 CREATE TABLE IF NOT EXISTS articles (
-db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 name TEXT NOT NULL,
 category TEXT NOT NULL,
 supplier_id UUID NOT NULL,
@@ -275,11 +160,13 @@ content_unit TEXT,
 content_ean_code TEXT,
 price_per_unit DECIMAL,
 vat_rate DECIMAL DEFAULT 19,
-allergens TEXT[],
-additives TEXT[],
+allergens JSONB,
+additives JSONB,
 ingredients TEXT,
 nutrition_info JSONB,
+alcohol DECIMAL,
 open_food_facts_code TEXT,
+price_per_unit_history JSONB,
 notes TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
@@ -305,81 +192,14 @@ CREATE INDEX IF NOT EXISTS idx_articles_supplier_id ON articles(supplier_id);
 -- Index für Kategorie
 CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);
 
--- Kommentare für Spalten in articles
--- Kommentar für Spalte: db_id
-COMMENT ON COLUMN articles.db_id IS 'Datenbank-ID für DB-Operationen (Primary Key) (TS: string)';
--- Kommentar für Spalte: id
-COMMENT ON COLUMN articles.id IS 'Frontend-ID für State-Management (TS: string)';
--- Kommentar für Spalte: name
-COMMENT ON COLUMN articles.name IS 'name property (TS: string)';
--- Kommentar für Spalte: category
-COMMENT ON COLUMN articles.category IS 'category property (TS: ArticleCategory)';
--- Kommentar für Spalte: supplier_id
-COMMENT ON COLUMN articles.supplier_id IS 'supplierId property (TS: string)';
--- Kommentar für Spalte: supplier_article_number
-COMMENT ON COLUMN articles.supplier_article_number IS 'supplierArticleNumber property (TS: string)';
--- Kommentar für Spalte: bundle_unit
-COMMENT ON COLUMN articles.bundle_unit IS 'bundleUnit property (TS: Unit)';
--- Kommentar für Spalte: bundle_price
-COMMENT ON COLUMN articles.bundle_price IS 'bundlePrice property (TS: number)';
--- Kommentar für Spalte: bundle_ean_code
-COMMENT ON COLUMN articles.bundle_ean_code IS 'bundleEanCode property (TS: string)';
--- Kommentar für Spalte: content
-COMMENT ON COLUMN articles.content IS 'content property (TS: number)';
--- Kommentar für Spalte: content_unit
-COMMENT ON COLUMN articles.content_unit IS 'contentUnit property (TS: Unit)';
--- Kommentar für Spalte: content_ean_code
-COMMENT ON COLUMN articles.content_ean_code IS 'contentEanCode property (TS: string)';
--- Kommentar für Spalte: price_per_unit
-COMMENT ON COLUMN articles.price_per_unit IS 'pricePerUnit property (TS: number)';
--- Kommentar für Spalte: vat_rate
-COMMENT ON COLUMN articles.vat_rate IS 'vatRate property (TS: number)';
--- Kommentar für Spalte: allergens
-COMMENT ON COLUMN articles.allergens IS 'allergens property (TS: string[])';
--- Kommentar für Spalte: additives
-COMMENT ON COLUMN articles.additives IS 'additives property (TS: string[])';
--- Kommentar für Spalte: ingredients
-COMMENT ON COLUMN articles.ingredients IS 'ingredients property (TS: string)';
--- Kommentar für Spalte: nutrition_info
-COMMENT ON COLUMN articles.nutrition_info IS 'nutritionInfo property (TS: {
-    calories: number; // kcal pro 100g
-    kilojoules: number; // kJ pro 100g
-    protein: number; // g pro 100g
-    fat: number; // g pro 100g
-    carbohydrates: number; // g pro 100g
-    fiber: number; // g pro 100g
-    sugar?: number; // g pro 100g
-    salt?: number; // g pro 100g
-  })';
--- Kommentar für Spalte: open_food_facts_code
-COMMENT ON COLUMN articles.open_food_facts_code IS 'openFoodFactsCode property (TS: string)';
--- Kommentar für Spalte: notes
-COMMENT ON COLUMN articles.notes IS 'notes property (TS: string)';
--- Kommentar für Spalte: is_dirty
-COMMENT ON COLUMN articles.is_dirty IS 'Wurde geändert? (TS: boolean)';
--- Kommentar für Spalte: is_new
-COMMENT ON COLUMN articles.is_new IS 'Neuer Datensatz? (TS: boolean)';
--- Kommentar für Spalte: sync_status
-COMMENT ON COLUMN articles.sync_status IS 'Sync-Status (TS: SyncStatus)';
--- Kommentar für Spalte: created_at
-COMMENT ON COLUMN articles.created_at IS 'Erstellungsdatum (TS: Date)';
--- Kommentar für Spalte: updated_at
-COMMENT ON COLUMN articles.updated_at IS 'Aktualisierungsdatum (TS: Date)';
--- Kommentar für Spalte: created_by
-COMMENT ON COLUMN articles.created_by IS 'Benutzer-ID der erstellt hat (TS: string)';
--- Kommentar für Spalte: updated_by
-COMMENT ON COLUMN articles.updated_by IS 'Benutzer-ID der zuletzt geändert hat (TS: string)';
--- Kommentar für Spalte: last_modified_by
-COMMENT ON COLUMN articles.last_modified_by IS 'Benutzer-ID der zuletzt modifiziert hat (TS: string)';
-
 -- ========================================
 -- Tabelle: recipes (Interface: Recipe)
 -- ========================================
 
 -- Erstelle Tabelle: recipes (Interface: Recipe)
 CREATE TABLE IF NOT EXISTS recipes (
-db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 name TEXT NOT NULL,
 description TEXT,
 portions DECIMAL DEFAULT 1,
@@ -394,8 +214,9 @@ material_costs DECIMAL,
 markup_percentage DECIMAL DEFAULT 300,
 vat_rate DECIMAL DEFAULT 19,
 selling_price DECIMAL,
+selling_price_history JSONB,
 total_nutrition_info JSONB,
-allergens TEXT[],
+allergens JSONB,
 notes TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
@@ -417,148 +238,6 @@ CREATE INDEX IF NOT EXISTS idx_recipes_created_at ON recipes(created_at);
 -- Index für Aktualisierungsdatum
 CREATE INDEX IF NOT EXISTS idx_recipes_updated_at ON recipes(updated_at);
 
--- Kommentare für Spalten in recipes
--- Kommentar für Spalte: db_id
-COMMENT ON COLUMN recipes.db_id IS 'Datenbank-ID für DB-Operationen (Primary Key) (TS: string)';
--- Kommentar für Spalte: id
-COMMENT ON COLUMN recipes.id IS 'Frontend-ID für State-Management (TS: string)';
--- Kommentar für Spalte: name
-COMMENT ON COLUMN recipes.name IS 'name property (TS: string)';
--- Kommentar für Spalte: description
-COMMENT ON COLUMN recipes.description IS 'description property (TS: string)';
--- Kommentar für Spalte: portions
-COMMENT ON COLUMN recipes.portions IS 'portions property (TS: number)';
--- Kommentar für Spalte: preparation_time
-COMMENT ON COLUMN recipes.preparation_time IS 'preparationTime property (TS: number)';
--- Kommentar für Spalte: difficulty
-COMMENT ON COLUMN recipes.difficulty IS 'difficulty property (TS: Difficulty)';
--- Kommentar für Spalte: energy
-COMMENT ON COLUMN recipes.energy IS 'energy property (TS: number)';
--- Kommentar für Spalte: image
-COMMENT ON COLUMN recipes.image IS 'image property (TS: File)';
--- Kommentar für Spalte: ingredients
-COMMENT ON COLUMN recipes.ingredients IS 'ingredients property (TS: RecipeIngredient[])';
--- Kommentar für Spalte: used_recipes
-COMMENT ON COLUMN recipes.used_recipes IS 'usedRecipes property (TS: UsedRecipe[])';
--- Kommentar für Spalte: preparation_steps
-COMMENT ON COLUMN recipes.preparation_steps IS 'preparationSteps property (TS: PreparationStep[])';
--- Kommentar für Spalte: material_costs
-COMMENT ON COLUMN recipes.material_costs IS 'materialCosts property (TS: number)';
--- Kommentar für Spalte: markup_percentage
-COMMENT ON COLUMN recipes.markup_percentage IS 'markupPercentage property (TS: number)';
--- Kommentar für Spalte: vat_rate
-COMMENT ON COLUMN recipes.vat_rate IS 'vatRate property (TS: number)';
--- Kommentar für Spalte: selling_price
-COMMENT ON COLUMN recipes.selling_price IS 'sellingPrice property (TS: number)';
--- Kommentar für Spalte: total_nutrition_info
-COMMENT ON COLUMN recipes.total_nutrition_info IS 'totalNutritionInfo property (TS: {
-    calories: number;
-    kilojoules: number;
-    protein: number;
-    fat: number;
-    carbohydrates: number;
-    fiber: number;
-    sugar?: number;
-    salt?: number;
-  })';
--- Kommentar für Spalte: allergens
-COMMENT ON COLUMN recipes.allergens IS 'allergens property (TS: string[])';
--- Kommentar für Spalte: notes
-COMMENT ON COLUMN recipes.notes IS 'notes property (TS: string)';
--- Kommentar für Spalte: is_dirty
-COMMENT ON COLUMN recipes.is_dirty IS 'Wurde geändert? (TS: boolean)';
--- Kommentar für Spalte: is_new
-COMMENT ON COLUMN recipes.is_new IS 'Neuer Datensatz? (TS: boolean)';
--- Kommentar für Spalte: sync_status
-COMMENT ON COLUMN recipes.sync_status IS 'Sync-Status (TS: SyncStatus)';
--- Kommentar für Spalte: created_at
-COMMENT ON COLUMN recipes.created_at IS 'Erstellungsdatum (TS: Date)';
--- Kommentar für Spalte: updated_at
-COMMENT ON COLUMN recipes.updated_at IS 'Aktualisierungsdatum (TS: Date)';
--- Kommentar für Spalte: created_by
-COMMENT ON COLUMN recipes.created_by IS 'Benutzer-ID der erstellt hat (TS: string)';
--- Kommentar für Spalte: updated_by
-COMMENT ON COLUMN recipes.updated_by IS 'Benutzer-ID der zuletzt geändert hat (TS: string)';
--- Kommentar für Spalte: last_modified_by
-COMMENT ON COLUMN recipes.last_modified_by IS 'Benutzer-ID der zuletzt modifiziert hat (TS: string)';
-
--- ========================================
--- Tabelle: inventuritems (Interface: InventurItem)
--- ========================================
-
--- Erstelle Tabelle: inventuritems (Interface: InventurItem)
-CREATE TABLE IF NOT EXISTS inventuritems (
-db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-id UUID NOT NULL,
-artikel_name TEXT NOT NULL,
-kategorie TEXT NOT NULL,
-soll_bestand DECIMAL,
-ist_bestand DECIMAL,
-einheit TEXT,
-preis DECIMAL,
-inventur_datum TIMESTAMP,
-differenz DECIMAL,
-bemerkung TEXT,
-is_dirty BOOLEAN DEFAULT false,
-is_new BOOLEAN DEFAULT false,
-sync_status sync_status_enum DEFAULT 'pending',
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-created_by UUID,
-updated_by UUID,
-last_modified_by UUID
-);
-
--- Indizes für inventuritems
--- Index für Frontend-ID (id)
-CREATE INDEX IF NOT EXISTS idx_inventuritems_id ON inventuritems(id);
--- Index für Primary Key (db_id)
-CREATE INDEX IF NOT EXISTS idx_inventuritems_db_id ON inventuritems(db_id);
--- Index für Erstellungsdatum
-CREATE INDEX IF NOT EXISTS idx_inventuritems_created_at ON inventuritems(created_at);
--- Index für Aktualisierungsdatum
-CREATE INDEX IF NOT EXISTS idx_inventuritems_updated_at ON inventuritems(updated_at);
-
--- Kommentare für Spalten in inventuritems
--- Kommentar für Spalte: db_id
-COMMENT ON COLUMN inventuritems.db_id IS 'Datenbank-ID für DB-Operationen (Primary Key) (TS: string)';
--- Kommentar für Spalte: id
-COMMENT ON COLUMN inventuritems.id IS 'Frontend-ID für State-Management (TS: string)';
--- Kommentar für Spalte: artikel_name
-COMMENT ON COLUMN inventuritems.artikel_name IS 'artikelName property (TS: string)';
--- Kommentar für Spalte: kategorie
-COMMENT ON COLUMN inventuritems.kategorie IS 'kategorie property (TS: string)';
--- Kommentar für Spalte: soll_bestand
-COMMENT ON COLUMN inventuritems.soll_bestand IS 'sollBestand property (TS: number)';
--- Kommentar für Spalte: ist_bestand
-COMMENT ON COLUMN inventuritems.ist_bestand IS 'istBestand property (TS: number)';
--- Kommentar für Spalte: einheit
-COMMENT ON COLUMN inventuritems.einheit IS 'einheit property (TS: string)';
--- Kommentar für Spalte: preis
-COMMENT ON COLUMN inventuritems.preis IS 'preis property (TS: number)';
--- Kommentar für Spalte: inventur_datum
-COMMENT ON COLUMN inventuritems.inventur_datum IS 'inventurDatum property (TS: Date)';
--- Kommentar für Spalte: differenz
-COMMENT ON COLUMN inventuritems.differenz IS 'differenz property (TS: number)';
--- Kommentar für Spalte: bemerkung
-COMMENT ON COLUMN inventuritems.bemerkung IS 'bemerkung property (TS: string)';
--- Kommentar für Spalte: is_dirty
-COMMENT ON COLUMN inventuritems.is_dirty IS 'Wurde geändert? (TS: boolean)';
--- Kommentar für Spalte: is_new
-COMMENT ON COLUMN inventuritems.is_new IS 'Neuer Datensatz? (TS: boolean)';
--- Kommentar für Spalte: sync_status
-COMMENT ON COLUMN inventuritems.sync_status IS 'Sync-Status (TS: SyncStatus)';
--- Kommentar für Spalte: created_at
-COMMENT ON COLUMN inventuritems.created_at IS 'Erstellungsdatum (TS: Date)';
--- Kommentar für Spalte: updated_at
-COMMENT ON COLUMN inventuritems.updated_at IS 'Aktualisierungsdatum (TS: Date)';
--- Kommentar für Spalte: created_by
-COMMENT ON COLUMN inventuritems.created_by IS 'Benutzer-ID der erstellt hat (TS: string)';
--- Kommentar für Spalte: updated_by
-COMMENT ON COLUMN inventuritems.updated_by IS 'Benutzer-ID der zuletzt geändert hat (TS: string)';
--- Kommentar für Spalte: last_modified_by
-COMMENT ON COLUMN inventuritems.last_modified_by IS 'Benutzer-ID der zuletzt modifiziert hat (TS: string)';
-
 -- ========================================
 -- Foreign Key Constraints (DEAKTIVIERT)
 -- ========================================
@@ -574,21 +253,59 @@ COMMENT ON COLUMN inventuritems.last_modified_by IS 'Benutzer-ID der zuletzt mod
 -- Check Constraints
 -- ========================================
 
--- Check Constraint für positive Preise in articles
-ALTER TABLE articles ADD CONSTRAINT chk_articles_positive_prices 
-  CHECK (bundle_price >= 0 AND price_per_unit >= 0);
+-- Check Constraints für articles (Idempotent)
+DO $$
+BEGIN
+    -- Prüfe ob Constraint chk_articles_positive_prices existiert
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_articles_positive_prices'
+    ) THEN
+        ALTER TABLE articles ADD CONSTRAINT chk_articles_positive_prices 
+          CHECK (bundle_price >= 0 AND price_per_unit >= 0);
+        RAISE NOTICE '✅ Constraint chk_articles_positive_prices erstellt';
+    ELSE
+        RAISE NOTICE '✓ Constraint chk_articles_positive_prices existiert bereits';
+    END IF;
 
--- Check Constraint für positive content in articles
-ALTER TABLE articles ADD CONSTRAINT chk_articles_positive_content 
-  CHECK (content > 0);
+    -- Prüfe ob Constraint chk_articles_positive_content existiert
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_articles_positive_content'
+    ) THEN
+        ALTER TABLE articles ADD CONSTRAINT chk_articles_positive_content 
+          CHECK (content > 0);
+        RAISE NOTICE '✅ Constraint chk_articles_positive_content erstellt';
+    ELSE
+        RAISE NOTICE '✓ Constraint chk_articles_positive_content existiert bereits';
+    END IF;
 
--- Check Constraint für positive Preise in recipes
-ALTER TABLE recipes ADD CONSTRAINT chk_recipes_positive_prices 
-  CHECK (selling_price >= 0);
+END $$;
 
--- Check Constraint für positive portions in recipes
-ALTER TABLE recipes ADD CONSTRAINT chk_recipes_positive_portions 
-  CHECK (portions > 0);
+-- Check Constraints für recipes (Idempotent)
+DO $$
+BEGIN
+    -- Prüfe ob Constraint chk_recipes_positive_prices existiert
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_recipes_positive_prices'
+    ) THEN
+        ALTER TABLE recipes ADD CONSTRAINT chk_recipes_positive_prices 
+          CHECK (selling_price >= 0);
+        RAISE NOTICE '✅ Constraint chk_recipes_positive_prices erstellt';
+    ELSE
+        RAISE NOTICE '✓ Constraint chk_recipes_positive_prices existiert bereits';
+    END IF;
+
+    -- Prüfe ob Constraint chk_recipes_positive_portions existiert
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_recipes_positive_portions'
+    ) THEN
+        ALTER TABLE recipes ADD CONSTRAINT chk_recipes_positive_portions 
+          CHECK (portions > 0);
+        RAISE NOTICE '✅ Constraint chk_recipes_positive_portions erstellt';
+    ELSE
+        RAISE NOTICE '✓ Constraint chk_recipes_positive_portions existiert bereits';
+    END IF;
+
+END $$;
 
 -- ========================================
 -- Migration Notes
@@ -602,157 +319,849 @@ ALTER TABLE recipes ADD CONSTRAINT chk_recipes_positive_portions
 
 -- Ende der automatisch generierten SQL-Befehle
 
--- Design-Tabelle für UI-Einstellungen
-CREATE TABLE IF NOT EXISTS design (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    theme TEXT DEFAULT 'light',
-    primary_color TEXT DEFAULT '#007bff',
-    secondary_color TEXT DEFAULT '#6c757d',
-    accent_color TEXT DEFAULT '#28a745',
-    background_color TEXT DEFAULT '#ffffff',
-    text_color TEXT DEFAULT '#212529',
-    card_color TEXT DEFAULT '#f8f9fa',
-    border_color TEXT DEFAULT '#dee2e6',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Shopping List Tabelle
-CREATE TABLE IF NOT EXISTS shopping_list (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    items JSONB DEFAULT '[]',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Inventory Tabelle
-CREATE TABLE IF NOT EXISTS inventory (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    article_id UUID,
-    quantity DECIMAL DEFAULT 0,
-    unit TEXT DEFAULT 'Stück',
-    expiry_date DATE,
-    location TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- ========================================
--- Schema-Migrations-System
--- Version: 2.0.0 → 2.2.2
--- Automatisch generiert - Migrationen werden nur einmal ausgeführt
+-- ALTER-Statements für alle Tabellen (Idempotent)
+-- Führt für jede Spalte eine Prüfung durch und fügt sie hinzu falls nicht vorhanden
 -- ========================================
 
--- Migrationen für bestehende Tabellen
+-- Prüfe und füge Spalten für suppliers hinzu
 DO $$
-DECLARE
-    current_schema_version TEXT;
 BEGIN
-    -- Hole aktuelle Schema-Version
-    SELECT value INTO current_schema_version 
-    FROM system_info 
-    WHERE key = 'schema_version' 
-    LIMIT 1;
-    
-    RAISE NOTICE '=========================================';
-    RAISE NOTICE 'Schema-Migrations-System';
-    RAISE NOTICE 'Aktuelle Version: %', COALESCE(current_schema_version, 'keine');
-    RAISE NOTICE 'Ziel-Version: 2.2.2';
-    RAISE NOTICE '=========================================';
-    
-    -- Migration 1: Typ-Konvertierungen (v2.0.0 → v2.2.2)
-    IF current_schema_version IS NULL OR current_schema_version::DECIMAL < 2.2.2 THEN
-        RAISE NOTICE 'Führe Typ-Konvertierungen aus...';
-        
-        -- suppliers.address: TEXT → JSONB
-        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'suppliers') THEN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'suppliers' 
-                AND column_name = 'address' 
-                AND data_type = 'text'
-            ) THEN
-                ALTER TABLE suppliers ALTER COLUMN address TYPE JSONB USING 
-                    CASE 
-                        WHEN address IS NULL THEN NULL
-                        WHEN address = '' THEN NULL
-                        WHEN address LIKE '{%}' THEN address::jsonb
-                        ELSE NULL
-                    END;
-                RAISE NOTICE '✅ suppliers.address: TEXT → JSONB konvertiert';
-            ELSE
-                RAISE NOTICE '✓ suppliers.address ist bereits JSONB';
-            END IF;
-        END IF;
-        
+    -- Spalte: id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'id'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte id zu suppliers hinzugefügt';
     END IF;
-    
-    -- Migration 2: db_id mit DEFAULT gen_random_uuid()
-    IF current_schema_version IS NULL OR current_schema_version::DECIMAL < 2.2.2 THEN
-        RAISE NOTICE 'Prüfe db_id DEFAULT-Werte...';
-        
-        DECLARE
-            table_name TEXT;
-        BEGIN
-            FOR table_name IN SELECT unnest(ARRAY['einkaufsitems', 'suppliers', 'articles', 'recipes', 'inventuritems'])
-            LOOP
-                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND tables.table_name = table_name) THEN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND columns.table_name = table_name 
-                        AND column_name = 'db_id' 
-                        AND column_default LIKE '%gen_random_uuid%'
-                    ) THEN
-                        EXECUTE format('ALTER TABLE %I ALTER COLUMN db_id SET DEFAULT gen_random_uuid()', table_name);
-                        RAISE NOTICE '✅ %.db_id: DEFAULT gen_random_uuid() hinzugefügt', table_name;
-                    ELSE
-                        RAISE NOTICE '✓ %.db_id hat bereits DEFAULT', table_name;
-                    END IF;
-                END IF;
-            END LOOP;
-        END;
+
+    -- Spalte: db_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'db_id'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
+        RAISE NOTICE '✅ Spalte db_id zu suppliers hinzugefügt';
     END IF;
-    
-    -- Migration 3: created_at und updated_at mit DEFAULT CURRENT_TIMESTAMP
-    IF current_schema_version IS NULL OR current_schema_version::DECIMAL < 2.2.2 THEN
-        RAISE NOTICE 'Prüfe Timestamp DEFAULT-Werte...';
-        
-        DECLARE
-            table_name TEXT;
-        BEGIN
-            FOR table_name IN SELECT unnest(ARRAY['einkaufsitems', 'suppliers', 'articles', 'recipes', 'inventuritems'])
-            LOOP
-                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND tables.table_name = table_name) THEN
-                    -- Prüfe created_at DEFAULT
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND columns.table_name = table_name 
-                        AND column_name = 'created_at' 
-                        AND column_default IS NOT NULL
-                    ) THEN
-                        EXECUTE format('ALTER TABLE %I ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP', table_name);
-                        RAISE NOTICE '✅ %.created_at: DEFAULT CURRENT_TIMESTAMP hinzugefügt', table_name;
-                    END IF;
-                    
-                    -- Prüfe updated_at DEFAULT
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND columns.table_name = table_name 
-                        AND column_name = 'updated_at' 
-                        AND column_default IS NOT NULL
-                    ) THEN
-                        EXECUTE format('ALTER TABLE %I ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP', table_name);
-                        RAISE NOTICE '✅ %.updated_at: DEFAULT CURRENT_TIMESTAMP hinzugefügt', table_name;
-                    END IF;
-                END IF;
-            END LOOP;
-        END;
+
+    -- Spalte: name
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'name'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN name TEXT  NOT NULL;
+        RAISE NOTICE '✅ Spalte name zu suppliers hinzugefügt';
     END IF;
-    
+
+    -- Spalte: contact_person
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'contact_person'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN contact_person TEXT  NULL;
+        RAISE NOTICE '✅ Spalte contact_person zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: email
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'email'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN email TEXT  NULL;
+        RAISE NOTICE '✅ Spalte email zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: website
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'website'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN website TEXT  NULL;
+        RAISE NOTICE '✅ Spalte website zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: address
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'address'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN address JSONB  NULL;
+        RAISE NOTICE '✅ Spalte address zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: phone_numbers
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'phone_numbers'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN phone_numbers JSONB  NULL;
+        RAISE NOTICE '✅ Spalte phone_numbers zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: notes
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'notes'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN notes TEXT  NULL;
+        RAISE NOTICE '✅ Spalte notes zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: is_dirty
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'is_dirty'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_dirty zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: is_new
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'is_new'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_new zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: sync_status
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'sync_status'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
+        RAISE NOTICE '✅ Spalte sync_status zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: created_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte created_at zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte updated_at zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: created_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'created_by'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN created_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte created_by zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'updated_by'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN updated_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte updated_by zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: last_modified_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'last_modified_by'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN last_modified_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte last_modified_by zu suppliers hinzugefügt';
+    END IF;
+
+END $$;
+
+-- Prüfe und füge Spalten für articles hinzu
+DO $$
+BEGIN
+    -- Spalte: id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'id'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte id zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: db_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'db_id'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
+        RAISE NOTICE '✅ Spalte db_id zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: name
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'name'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN name TEXT  NOT NULL;
+        RAISE NOTICE '✅ Spalte name zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: category
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'category'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN category TEXT  NOT NULL;
+        RAISE NOTICE '✅ Spalte category zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: supplier_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'supplier_id'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN supplier_id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte supplier_id zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: supplier_article_number
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'supplier_article_number'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN supplier_article_number TEXT  NULL;
+        RAISE NOTICE '✅ Spalte supplier_article_number zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: bundle_unit
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'bundle_unit'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN bundle_unit TEXT  NULL;
+        RAISE NOTICE '✅ Spalte bundle_unit zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: bundle_price
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'bundle_price'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN bundle_price DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte bundle_price zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: bundle_ean_code
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'bundle_ean_code'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN bundle_ean_code TEXT  NULL;
+        RAISE NOTICE '✅ Spalte bundle_ean_code zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: content
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'content'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN content DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte content zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: content_unit
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'content_unit'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN content_unit TEXT  NULL;
+        RAISE NOTICE '✅ Spalte content_unit zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: content_ean_code
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'content_ean_code'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN content_ean_code TEXT  NULL;
+        RAISE NOTICE '✅ Spalte content_ean_code zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: price_per_unit
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'price_per_unit'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN price_per_unit DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte price_per_unit zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: vat_rate
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'vat_rate'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN vat_rate DECIMAL DEFAULT 19 NULL;
+        RAISE NOTICE '✅ Spalte vat_rate zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: allergens
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'allergens'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN allergens JSONB  NULL;
+        RAISE NOTICE '✅ Spalte allergens zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: additives
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'additives'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN additives JSONB  NULL;
+        RAISE NOTICE '✅ Spalte additives zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: ingredients
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'ingredients'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN ingredients TEXT  NULL;
+        RAISE NOTICE '✅ Spalte ingredients zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: nutrition_info
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'nutrition_info'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN nutrition_info JSONB  NULL;
+        RAISE NOTICE '✅ Spalte nutrition_info zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: alcohol
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'alcohol'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN alcohol DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte alcohol zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: open_food_facts_code
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'open_food_facts_code'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN open_food_facts_code TEXT  NULL;
+        RAISE NOTICE '✅ Spalte open_food_facts_code zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: price_per_unit_history
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'price_per_unit_history'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN price_per_unit_history JSONB  NULL;
+        RAISE NOTICE '✅ Spalte price_per_unit_history zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: notes
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'notes'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN notes TEXT  NULL;
+        RAISE NOTICE '✅ Spalte notes zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: is_dirty
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'is_dirty'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_dirty zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: is_new
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'is_new'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_new zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: sync_status
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'sync_status'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
+        RAISE NOTICE '✅ Spalte sync_status zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: created_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte created_at zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte updated_at zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: created_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'created_by'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN created_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte created_by zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'updated_by'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN updated_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte updated_by zu articles hinzugefügt';
+    END IF;
+
+    -- Spalte: last_modified_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'articles' 
+        AND column_name = 'last_modified_by'
+    ) THEN
+        ALTER TABLE articles ADD COLUMN last_modified_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte last_modified_by zu articles hinzugefügt';
+    END IF;
+
+END $$;
+
+-- Prüfe und füge Spalten für recipes hinzu
+DO $$
+BEGIN
+    -- Spalte: id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'id'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte id zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: db_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'db_id'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
+        RAISE NOTICE '✅ Spalte db_id zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: name
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'name'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN name TEXT  NOT NULL;
+        RAISE NOTICE '✅ Spalte name zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: description
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'description'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN description TEXT  NULL;
+        RAISE NOTICE '✅ Spalte description zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: portions
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'portions'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN portions DECIMAL DEFAULT 1 NULL;
+        RAISE NOTICE '✅ Spalte portions zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: preparation_time
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'preparation_time'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN preparation_time DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte preparation_time zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: difficulty
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'difficulty'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN difficulty INTEGER  NULL;
+        RAISE NOTICE '✅ Spalte difficulty zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: energy
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'energy'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN energy DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte energy zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: image
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'image'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN image TEXT  NULL;
+        RAISE NOTICE '✅ Spalte image zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: ingredients
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'ingredients'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN ingredients JSONB  NULL;
+        RAISE NOTICE '✅ Spalte ingredients zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: used_recipes
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'used_recipes'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN used_recipes JSONB  NULL;
+        RAISE NOTICE '✅ Spalte used_recipes zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: preparation_steps
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'preparation_steps'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN preparation_steps JSONB  NULL;
+        RAISE NOTICE '✅ Spalte preparation_steps zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: material_costs
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'material_costs'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN material_costs DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte material_costs zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: markup_percentage
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'markup_percentage'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN markup_percentage DECIMAL DEFAULT 300 NULL;
+        RAISE NOTICE '✅ Spalte markup_percentage zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: vat_rate
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'vat_rate'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN vat_rate DECIMAL DEFAULT 19 NULL;
+        RAISE NOTICE '✅ Spalte vat_rate zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: selling_price
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'selling_price'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN selling_price DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte selling_price zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: selling_price_history
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'selling_price_history'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN selling_price_history JSONB  NULL;
+        RAISE NOTICE '✅ Spalte selling_price_history zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: total_nutrition_info
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'total_nutrition_info'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN total_nutrition_info JSONB  NULL;
+        RAISE NOTICE '✅ Spalte total_nutrition_info zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: allergens
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'allergens'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN allergens JSONB  NULL;
+        RAISE NOTICE '✅ Spalte allergens zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: notes
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'notes'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN notes TEXT  NULL;
+        RAISE NOTICE '✅ Spalte notes zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: is_dirty
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'is_dirty'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_dirty zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: is_new
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'is_new'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_new zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: sync_status
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'sync_status'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
+        RAISE NOTICE '✅ Spalte sync_status zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: created_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte created_at zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte updated_at zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: created_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'created_by'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN created_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte created_by zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'updated_by'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN updated_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte updated_by zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: last_modified_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'last_modified_by'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN last_modified_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte last_modified_by zu recipes hinzugefügt';
+    END IF;
+
 END $$;
 
 -- Füge System-Informationen hinzu (mit aktualisierter Schema-Version)
@@ -777,56 +1186,104 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Füge updated_at Trigger zu allen Tabellen hinzu
-CREATE TRIGGER update_einkaufsitems_updated_at BEFORE UPDATE ON einkaufsitems FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_suppliers_updated_at BEFORE UPDATE ON suppliers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_articles_updated_at BEFORE UPDATE ON articles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_recipes_updated_at BEFORE UPDATE ON recipes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_inventuritems_updated_at BEFORE UPDATE ON inventuritems FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_design_updated_at BEFORE UPDATE ON design FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_shopping_list_updated_at BEFORE UPDATE ON shopping_list FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON inventory FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Füge updated_at Trigger zu allen Tabellen hinzu (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_suppliers_updated_at') THEN
+        CREATE TRIGGER update_suppliers_updated_at BEFORE UPDATE ON suppliers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_suppliers_updated_at erstellt';
+    ELSE
+        RAISE NOTICE '✓ Trigger update_suppliers_updated_at existiert bereits';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_articles_updated_at') THEN
+        CREATE TRIGGER update_articles_updated_at BEFORE UPDATE ON articles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_articles_updated_at erstellt';
+    ELSE
+        RAISE NOTICE '✓ Trigger update_articles_updated_at existiert bereits';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_recipes_updated_at') THEN
+        CREATE TRIGGER update_recipes_updated_at BEFORE UPDATE ON recipes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_recipes_updated_at erstellt';
+    ELSE
+        RAISE NOTICE '✓ Trigger update_recipes_updated_at existiert bereits';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_system_info_updated_at') THEN
+        CREATE TRIGGER update_system_info_updated_at BEFORE UPDATE ON system_info FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_system_info_updated_at erstellt';
+    ELSE
+        RAISE NOTICE '✓ Trigger update_system_info_updated_at existiert bereits';
+    END IF;
+END $$;
 
 -- ========================================
 -- Row Level Security (RLS) Setup
 -- ========================================
 
 -- Aktiviere Row Level Security für alle generierten Tabellen
-ALTER TABLE einkaufsitems ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE inventuritems ENABLE ROW LEVEL SECURITY;
-ALTER TABLE design ENABLE ROW LEVEL SECURITY;
-ALTER TABLE shopping_list ENABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_info ENABLE ROW LEVEL SECURITY;
 
 -- ========================================
 -- RLS Policies (erlaube alle Operationen für alle Rollen)
 -- ========================================
 
--- RLS Policy für einkaufsitems
-CREATE POLICY "Enable all operations for all users" ON einkaufsitems FOR ALL USING (true);
+-- RLS Policy für suppliers (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'suppliers' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON suppliers FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für suppliers erstellt';
+    ELSE
+        RAISE NOTICE '✓ RLS Policy für suppliers existiert bereits';
+    END IF;
+END $$;
 
--- RLS Policy für suppliers
-CREATE POLICY "Enable all operations for all users" ON suppliers FOR ALL USING (true);
+-- RLS Policy für articles (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'articles' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON articles FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für articles erstellt';
+    ELSE
+        RAISE NOTICE '✓ RLS Policy für articles existiert bereits';
+    END IF;
+END $$;
 
--- RLS Policy für articles
-CREATE POLICY "Enable all operations for all users" ON articles FOR ALL USING (true);
+-- RLS Policy für recipes (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'recipes' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON recipes FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für recipes erstellt';
+    ELSE
+        RAISE NOTICE '✓ RLS Policy für recipes existiert bereits';
+    END IF;
+END $$;
 
--- RLS Policy für recipes
-CREATE POLICY "Enable all operations for all users" ON recipes FOR ALL USING (true);
-
--- RLS Policy für inventuritems
-CREATE POLICY "Enable all operations for all users" ON inventuritems FOR ALL USING (true);
-
--- RLS Policies für System-Tabellen
-CREATE POLICY "Enable all operations for all users" ON design FOR ALL USING (true);
-CREATE POLICY "Enable all operations for all users" ON shopping_list FOR ALL USING (true);
-CREATE POLICY "Enable all operations for all users" ON inventory FOR ALL USING (true);
-CREATE POLICY "Enable all operations for all users" ON system_info FOR ALL USING (true);
+-- RLS Policy für system_info (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'system_info' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON system_info FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für system_info erstellt';
+    ELSE
+        RAISE NOTICE '✓ RLS Policy für system_info existiert bereits';
+    END IF;
+END $$;
 
 -- WICHTIG: Explizite Berechtigungen für alle bestehenden Tabellen (PostgREST benötigt diese!)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
@@ -837,6 +1294,47 @@ GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role, postgres;
+
+-- ========================================
+-- SQL-Execution RPC Function (Phase 2)
+-- ========================================
+
+-- RPC-Funktion für sichere SQL-Execution (nur ALTER/CREATE TABLE IF NOT EXISTS)
+CREATE OR REPLACE FUNCTION execute_safe_sql(sql_text TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    result JSON;
+BEGIN
+    -- Führe SQL aus und gib Ergebnis zurück
+    EXECUTE sql_text;
+    
+    -- Gebe Erfolg zurück
+    result := json_build_object(
+        'success', true,
+        'message', 'SQL erfolgreich ausgeführt',
+        'timestamp', CURRENT_TIMESTAMP
+    );
+    
+    RETURN result;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Gebe Fehler zurück
+        result := json_build_object(
+            'success', false,
+            'error', SQLERRM,
+            'sqlstate', SQLSTATE,
+            'timestamp', CURRENT_TIMESTAMP
+        );
+        
+        RETURN result;
+END;
+$$;
+
+-- Berechtigungen für RPC-Funktion
+GRANT EXECUTE ON FUNCTION execute_safe_sql(TEXT) TO anon, authenticated, service_role, postgres;
 
 -- Erfolgsmeldung
 SELECT 'PostgreSQL-Initialisierung erfolgreich abgeschlossen!' as status;

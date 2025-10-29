@@ -207,8 +207,7 @@ export class FrontendConnectionTests {
       
       // Erwartete Chef's Numbers Tabellen
       const expectedTables = [
-        'articles', 'recipes', 'suppliers', 'inventory', 
-        'purchases', 'calculations', 'categories', 'additives'
+        'articles', 'recipes', 'suppliers'
       ];
       
       // Gefundene Tabellen extrahieren
@@ -305,62 +304,6 @@ CREATE TABLE IF NOT EXISTS suppliers (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Inventar-Tabelle
-CREATE TABLE IF NOT EXISTS inventory (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  article_id UUID REFERENCES articles(id),
-  quantity DECIMAL(10,2),
-  unit VARCHAR(50),
-  expiry_date DATE,
-  location VARCHAR(100),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Einkäufe-Tabelle
-CREATE TABLE IF NOT EXISTS purchases (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  supplier_id UUID REFERENCES suppliers(id),
-  article_id UUID REFERENCES articles(id),
-  quantity DECIMAL(10,2),
-  unit_price DECIMAL(10,2),
-  total_price DECIMAL(10,2),
-  purchase_date DATE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Kalkulationen-Tabelle
-CREATE TABLE IF NOT EXISTS calculations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipe_id UUID REFERENCES recipes(id),
-  article_id UUID REFERENCES articles(id),
-  quantity DECIMAL(10,2),
-  unit VARCHAR(50),
-  cost DECIMAL(10,2),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Kategorien-Tabelle
-CREATE TABLE IF NOT EXISTS categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) NOT NULL UNIQUE,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Zusatzstoffe-Tabelle
-CREATE TABLE IF NOT EXISTS additives (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,
-  e_number VARCHAR(20),
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Erfolgsmeldung
 SELECT 'Chef''s Numbers Datenbankschema erfolgreich angelegt!' as status;`;
       
@@ -438,52 +381,6 @@ SELECT 'Chef''s Numbers Datenbankschema erfolgreich angelegt!' as status;`;
   email VARCHAR(255),
   phone VARCHAR(50),
   address TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
-        inventory: `CREATE TABLE IF NOT EXISTS inventory (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  article_id UUID REFERENCES articles(id),
-  quantity DECIMAL(10,2),
-  unit VARCHAR(50),
-  expiry_date DATE,
-  location VARCHAR(100),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
-        purchases: `CREATE TABLE IF NOT EXISTS purchases (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  supplier_id UUID REFERENCES suppliers(id),
-  article_id UUID REFERENCES articles(id),
-  quantity DECIMAL(10,2),
-  unit_price DECIMAL(10,2),
-  total_price DECIMAL(10,2),
-  purchase_date DATE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
-        calculations: `CREATE TABLE IF NOT EXISTS calculations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipe_id UUID REFERENCES recipes(id),
-  article_id UUID REFERENCES articles(id),
-  quantity DECIMAL(10,2),
-  unit VARCHAR(50),
-  cost DECIMAL(10,2),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
-        categories: `CREATE TABLE IF NOT EXISTS categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) NOT NULL UNIQUE,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
-        additives: `CREATE TABLE IF NOT EXISTS additives (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,
-  e_number VARCHAR(20),
-  description TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`
