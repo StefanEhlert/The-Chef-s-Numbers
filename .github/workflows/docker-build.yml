@@ -21,6 +21,7 @@ on:
       - 'nginx.conf'
       - 'tailwind.config.js'
       - 'postcss.config.js'
+      - '.github/workflows/**'
   workflow_dispatch:  # Ermöglicht manuellen Start
 
 env:
