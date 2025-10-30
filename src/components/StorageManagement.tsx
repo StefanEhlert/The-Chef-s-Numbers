@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { FaDatabase, FaCloud, FaServer, FaSync, FaDownload, FaCog, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaKey, FaWifi, FaSpinner, FaEye, FaEyeSlash, FaShieldAlt, FaCheck, FaTimes, FaNetworkWired, FaExternalLinkAlt, FaTrash, FaFolder, FaFlask, FaDocker } from 'react-icons/fa';
 import { StorageMode, CloudStorageType } from '../services/storageLayer';
 import { StorageConfig, StorageData, StoragePicture, DEFAULT_STORAGE_CONFIGS } from '../types/storage';
@@ -2621,8 +2621,8 @@ const StorageManagement: React.FC = () => {
     }
   };
 
-  // Prüfe ob sich die Konfiguration von der aktuellen unterscheidet
-  const isConfigurationDifferent = () => {
+  // Prüfe ob sich die Konfiguration von der aktuellen unterscheidet (mit useMemo cached)
+  const isConfigurationDifferent = useMemo(() => {
     const current = storageManagement.currentStorage;
     const selected = storageManagement.selectedStorage;
 
@@ -2635,7 +2635,6 @@ const StorageManagement: React.FC = () => {
 
     // Fall 1: Speicher-Typen haben sich geändert → Button aktiv
     if (storageTypesChanged) {
-      console.log('🔍 isConfigurationDifferent: Speicher-Typen geändert');
       return true;
     }
 
@@ -2643,20 +2642,26 @@ const StorageManagement: React.FC = () => {
     // → Der User will die getestete Konfiguration übernehmen
     // (z.B. neue Supabase-Keys bei gleicher Speicherkonfiguration)
     if (selected.isTested) {
-      console.log('🔍 isConfigurationDifferent: Konfiguration wurde erfolgreich getestet');
       return true;
     }
 
     // Fall 3: Konfiguration ist nicht aktiv
     // → Es wurde etwas geändert, aber noch nicht aktiviert
     if (!current.isActive) {
-      console.log('🔍 isConfigurationDifferent: Konfiguration nicht aktiv');
       return true;
     }
 
-    console.log('🔍 isConfigurationDifferent: Keine Änderung erkannt');
     return false;
-  };
+  }, [
+    storageManagement.currentStorage.currentStorageMode,
+    storageManagement.currentStorage.currentDataStorage,
+    storageManagement.currentStorage.currentPictureStorage,
+    storageManagement.currentStorage.isActive,
+    storageManagement.selectedStorage.selectedStorageMode,
+    storageManagement.selectedStorage.selectedDataStorage,
+    storageManagement.selectedStorage.selectedPictureStorage,
+    storageManagement.selectedStorage.isTested
+  ]);
 
   // Hilfsfunktion: Prüft ob sich Verbindungsdaten geändert haben
   const hasConnectionDataChanged = (): boolean => {
@@ -5472,7 +5477,7 @@ const StorageManagement: React.FC = () => {
       // Debug: Prüfe nach einem Moment ob isTested gesetzt wurde
       setTimeout(() => {
         console.log('🔍 DEBUG NACH Update: isTested =', storageManagement.selectedStorage.isTested);
-        console.log('🔍 DEBUG: Button sollte aktiv sein?', isConfigurationDifferent());
+        console.log('🔍 DEBUG: Button sollte aktiv sein?', isConfigurationDifferent);
       }, 100);
 
     } catch (error) {
@@ -9863,19 +9868,19 @@ const StorageManagement: React.FC = () => {
 
                 {/* Rechts: Konfiguration übernehmen Button */}
                 <button
-                  className={`btn ${(storageManagement.selectedStorage.isTested && isConfigurationDifferent() && !isCloudHostedWithDockerConfig()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                  disabled={!storageManagement.selectedStorage.isTested || !isConfigurationDifferent() || isCloudHostedWithDockerConfig()}
+                  className={`btn ${(storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                  disabled={!storageManagement.selectedStorage.isTested || !isConfigurationDifferent || isCloudHostedWithDockerConfig()}
                   onClick={handleConfigApply}
                   style={{
-                    opacity: (storageManagement.selectedStorage.isTested && isConfigurationDifferent() && !isCloudHostedWithDockerConfig()) ? 1 : 0.6,
-                    cursor: (storageManagement.selectedStorage.isTested && isConfigurationDifferent() && !isCloudHostedWithDockerConfig()) ? 'pointer' : 'not-allowed'
+                    opacity: (storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 1 : 0.6,
+                    cursor: (storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 'pointer' : 'not-allowed'
                   }}
                   title={
                     isCloudHostedWithDockerConfig()
                       ? 'Docker-Konfigurationen können nicht auf cloud-gehosteten Apps aktiviert werden. Bitte verwenden Sie eine selbst-gehostete Installation.'
                       : !storageManagement.selectedStorage.isTested
                         ? 'Alle Verbindungen müssen erfolgreich getestet werden'
-                        : !isConfigurationDifferent()
+                        : !isConfigurationDifferent
                           ? 'Die ausgewählte Konfiguration ist identisch mit der aktuellen'
                           : 'Konfiguration übernehmen'
                   }
