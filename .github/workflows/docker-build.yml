@@ -2,6 +2,7 @@
 # GitHub Action: Docker Image automatisch bauen
 # Wird ausgeführt bei jedem Push auf main
 # ============================================
+# Trigger: Neue Build-Version nach Bootstrap-Entfernung
 
 name: Build and Push Docker Image
 
