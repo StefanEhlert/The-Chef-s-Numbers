@@ -1277,7 +1277,7 @@ input[type="radio"] {
   background-size: contain;
   border: 1px solid var(--theme-card-border);
   appearance: none;
-  color-adjust: exact;
+  print-color-adjust: exact;
   border-radius: 50% !important; /* Macht Radiobuttons rund - !important um Überschreibungen zu verhindern */
 }
 
