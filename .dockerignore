@@ -68,6 +68,3 @@ dist/
 .parcel-cache
 .eslintcache
 
-# Development
-scripts/autoSchemaGenerator.ts
-
