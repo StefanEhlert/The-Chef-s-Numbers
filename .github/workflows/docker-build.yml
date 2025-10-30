@@ -13,9 +13,14 @@ on:
     paths:
       - 'src/**'
       - 'public/**'
+      - 'scripts/**'
       - 'package.json'
+      - 'package-lock.json'
       - 'Dockerfile'
+      - '.dockerignore'
       - 'nginx.conf'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
   workflow_dispatch:  # Ermöglicht manuellen Start
 
 env:
