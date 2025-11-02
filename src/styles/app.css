@@ -294,7 +294,10 @@ table.table tbody tr:hover {
   opacity: 1;
   box-shadow: 0 4px 12px var(--theme-text)30;
 }
-button, .btn {
+/* Base Button Styles - erhöhte Spezifität */
+button.btn,
+button:not([type]),
+.btn {
   cursor: pointer;
   border: none;
   padding: 0.5rem 1rem;
@@ -315,21 +318,25 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Button Varianten */
-.btn-primary {
+/* Button Varianten - erhöhte Spezifität */
+button.btn-primary,
+.btn.btn-primary {
   background-color: var(--theme-sidebar);
   color: var(--theme-text) !important;
   border: 1px solid var(--theme-sidebar);
 }
 
-.btn-outline-primary {
+button.btn-outline-primary,
+.btn.btn-outline-primary {
   background-color: transparent;
   color: var(--theme-accent);
   border: 1px solid var(--theme-accent);
 }
 
-.btn-outline-primary:hover,
-.btn-outline-primary:focus {
+button.btn-outline-primary:hover,
+button.btn-outline-primary:focus,
+.btn.btn-outline-primary:hover,
+.btn.btn-outline-primary:focus {
   background-color: var(--theme-accent);
   color: var(--theme-text) !important;
   border-color: var(--theme-accent);
@@ -337,7 +344,8 @@ button:disabled {
   box-shadow: none !important;
 }
 
-.btn-outline-secondary {
+button.btn-outline-secondary,
+.btn.btn-outline-secondary {
   background-color: transparent;
   color: var(--theme-text-secondary);
   border: 1px solid var(--theme-text-secondary);
@@ -345,13 +353,16 @@ button:disabled {
   border-style: solid;
 }
 
-.btn-outline-secondary:hover,
-.btn-outline-secondary:focus {
+button.btn-outline-secondary:hover,
+button.btn-outline-secondary:focus,
+.btn.btn-outline-secondary:hover,
+.btn.btn-outline-secondary:focus {
   background-color: var(--theme-text-secondary);
   color: var(--theme-text) !important;
   border-color: var(--theme-text-secondary);  
   outline: none !important;
-  box-shadow: none !important;}
+  box-shadow: none !important;
+}
 
 /* Spezielle Klasse um Hover-Effekt zu deaktivieren */
 .btn-outline-secondary.no-hover:hover {
@@ -360,20 +371,23 @@ button:disabled {
   border-color: var(--theme-text-secondary);
 }
 
-.btn-outline-info {
+button.btn-outline-info,
+.btn.btn-outline-info {
   background-color: transparent;
   color: var(--theme-accent);
   border: 1px solid var(--theme-accent);
   transition: all 0.2s ease;
 }
 
-.btn-outline-info:hover {
+button.btn-outline-info:hover,
+.btn.btn-outline-info:hover {
   background-color: var(--theme-accent) !important;
   color: var(--theme-text) !important;
   border-color: var(--theme-accent) !important;
 }
 
-.btn-outline {
+button.btn-outline,
+.btn.btn-outline {
   background-color: transparent;
   color: var(--theme-accent);
   border: 1px solid var(--theme-accent);
@@ -381,14 +395,16 @@ button:disabled {
   border-style: solid;
 }
 
-.btn-outline:hover {
+button.btn-outline:hover,
+.btn.btn-outline:hover {
   background-color: var(--theme-accent);
   color: var(--theme-text) !important;
   border-color: var(--theme-accent);
 }
 
-/* Outline-Buttons für Eingabegruppen (Ping/Port/Password) */
-.btn-outline-input {
+/* Outline-Buttons für Eingabegruppen (Ping/Port/Password) - erhöhte Spezifität */
+button.btn-outline-input,
+.btn.btn-outline-input {
   background-color: transparent;
   color: var(--theme-text) !important;
   border-left: 1px solid var(--theme-card-border) !important;
@@ -403,12 +419,14 @@ button:disabled {
   gap: 0;
 }
 
-.btn-outline-input:hover {
+button.btn-outline-input:hover,
+.btn.btn-outline-input:hover {
   background-color: var(--theme-secondary);
   color: var(--theme-text) !important;
 }
 
-.btn-outline-input:focus {
+button.btn-outline-input:focus,
+.btn.btn-outline-input:focus {
   background-color: var(--theme-secondary) !important;  
 }
 
@@ -816,12 +834,16 @@ table.table tbody tr td div.theme-color-sample {
   border: 1px solid var(--theme-card-border);
 }
 
-/* Modal Close Button */
-.card-header .btn-link {
+/* Modal Close Button - erhöhte Spezifität */
+.card-header button.btn-link,
+.card-header .btn-link,
+button.btn-link.btn-action {
   color: var(--theme-primary) !important;
 }
 
-.card-header .btn-link:hover {
+.card-header button.btn-link:hover,
+.card-header .btn-link:hover,
+button.btn-link.btn-action:hover {
   color: var(--theme-accent) !important;
 }
 
@@ -1022,7 +1044,10 @@ table.table tbody tr td div.theme-color-sample {
   justify-content: right;
 }
 
-.btn-action {
+/* Action Buttons - erhöhte Spezifität für Production */
+button.btn-action,
+.btn.btn-action,
+a.btn-action {
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
   transition: all 0.2s ease;
@@ -1031,18 +1056,23 @@ table.table tbody tr td div.theme-color-sample {
   font-size: 0.9rem;
 }
 
-.btn-action:hover {
+button.btn-action:hover,
+.btn.btn-action:hover,
+a.btn-action:hover {
   background-color: var(--theme-accent)20;
   color: var(--theme-accent);
   text-decoration: none;
 }
 
-.btn-action.btn-danger {
+button.btn-action.btn-danger,
+.btn.btn-action.btn-danger,
+a.btn-action.btn-danger {
   color: #dc3545;
 }
 
-.btn-action.btn-danger:hover {
-  
+button.btn-action.btn-danger:hover,
+.btn.btn-action.btn-danger:hover,
+a.btn-action.btn-danger:hover {
   color: #dc3545;
 }
 

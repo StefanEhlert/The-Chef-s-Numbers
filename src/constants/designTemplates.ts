@@ -36,7 +36,7 @@ export const designTemplates = {
     }
   },
   dracula: {
-    name: "Dracula (DaisyUI)",
+    name: "Dracula",
     description: "Dunkles Design mit violetten Akzenten",
     colors: {
       primary: "#ff79c6",
@@ -54,7 +54,7 @@ export const designTemplates = {
     }
   },
   autumn: {
-    name: "Autumn (DaisyUI)",
+    name: "Autumn",
     description: "Herbstliche warme Farben",
     colors: {
       primary: "#ea580c",
@@ -72,7 +72,7 @@ export const designTemplates = {
     }
   },
   aqua: {
-    name: "Aqua (DaisyUI)",
+    name: "Aqua",
     description: "Frische Aqua-Farben",
     colors: {
       primary: "#0891b2",
@@ -90,7 +90,7 @@ export const designTemplates = {
     }
   },
   cyberpunk: {
-    name: "Cyberpunk (DaisyUI)",
+    name: "Cyberpunk",
     description: "Futuristisches Neon-Design",
     colors: {
       primary: "#ff7598",

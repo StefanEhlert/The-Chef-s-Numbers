@@ -1340,13 +1340,6 @@ function AppContent() {
                                 onClick={() => {
                                   dispatch({ type: 'SET_CURRENT_DESIGN', payload: key });
                                   dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false });
-                                  
-                                  // DaisyUI-Theme wechseln
-                                  if (['cupcake', 'corporate', 'retro', 'light'].includes(key)) {
-                                    document.documentElement.setAttribute('data-theme', key);
-                                  } else {
-                                    document.documentElement.removeAttribute('data-theme');
-                                  }
                                 }}
                               >
                                 <div className="card-body" style={{ color: template.colors.text }}>
