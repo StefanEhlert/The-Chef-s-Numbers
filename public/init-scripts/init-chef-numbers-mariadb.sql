@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (MariaDB)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-29T20:35:35.917Z
+-- Automatisch generiert am: 2025-11-03T01:06:18.450Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -94,7 +94,9 @@ CREATE TABLE IF NOT EXISTS recipes (
     selling_price DECIMAL NULL,
     selling_price_history JSON NULL,
     total_nutrition_info JSON NULL,
+    alcohol DECIMAL NULL,
     allergens JSON NULL,
+    ingredients_text TEXT NULL,
     notes TEXT NULL,
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
@@ -1140,6 +1142,21 @@ PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- Spalte: alcohol
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'recipes' 
+  AND column_name = 'alcohol';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE recipes ADD COLUMN alcohol ', 'DECIMAL', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- Spalte: allergens
 SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
@@ -1150,6 +1167,21 @@ WHERE table_schema = 'chef_numbers'
 
 SET @query = IF(@col_exists = 0, 
   CONCAT('ALTER TABLE recipes ADD COLUMN allergens ', 'JSON', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: ingredients_text
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'recipes' 
+  AND column_name = 'ingredients_text';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE recipes ADD COLUMN ingredients_text ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;

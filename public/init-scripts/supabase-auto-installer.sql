@@ -2,7 +2,7 @@
 -- SUPABASE AUTO-INSTALLER: RPC-Functions
 -- ============================================
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-29T20:35:35.972Z
+-- Automatisch generiert am: 2025-11-03T01:06:18.483Z
 --
 -- Diese RPC-Functions ermöglichen die automatische Schema-Installation
 -- per REST API ohne manuelle Benutzerinteraktion!

@@ -38,88 +38,69 @@ const MessageDialog: React.FC<MessageDialogProps> = ({ show, type, title, messag
   if (!show) return null;
 
   return (
-    <>
+    <div 
+      className="fixed top-0 left-0 w-full h-full" 
+      style={{ 
+        background: 'rgba(0,0,0,0.5)', 
+        zIndex: 1060,
+        top: 56,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}
+      onClick={onClose}
+    >
       <div 
-        className="modal fade show" 
+        className="card" 
         style={{ 
-          display: 'block', 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100vw', 
-          height: '100vh', 
-          zIndex: 1060,
-          backgroundColor: 'rgba(0,0,0,0.5)'
+          backgroundColor: colors.card, 
+          border: `1px solid ${colors.cardBorder}`,
+          maxWidth: '500px',
+          width: '90vw',
+          maxHeight: '90vh',
+          overflow: 'hidden'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '500px' }}>
-          <div className="modal-content" style={{ backgroundColor: colors.card }}>
-            {/* Header */}
-            <div className="modal-header" style={{ 
-              backgroundColor: type === 'success' ? '#d4edda' : '#f8d7da',
-              borderColor: type === 'success' ? '#c3e6cb' : '#f5c6cb'
-            }}>
-              <h5 className="modal-title d-flex align-items-center" style={{ 
-                color: type === 'success' ? '#155724' : '#721c24'
-              }}>
-                {type === 'success' ? (
-                  <FaCheckCircle className="me-2" style={{ fontSize: '1.2rem' }} />
-                ) : (
-                  <FaExclamationTriangle className="me-2" style={{ fontSize: '1.2rem' }} />
-                )}
-                {title}
-              </h5>
-              <button 
-                type="button" 
-                className="btn-close" 
-                onClick={onClose}
-                style={{ filter: type === 'success' ? 'invert(0.3)' : 'invert(0.4)' }}
-              ></button>
-            </div>
-            
-            {/* Body */}
-            <div className="modal-body" style={{ color: colors.text }}>
-              <div style={{ whiteSpace: 'pre-line' }}>
-                {message}
-              </div>
-            </div>
-            
-            {/* Footer */}
-            <div className="modal-footer" style={{ 
-              backgroundColor: colors.cardBorder,
-              borderColor: type === 'success' ? '#c3e6cb' : '#f5c6cb'
-            }}>
-              <button 
-                type="button" 
-                className="btn btn-primary"
-                onClick={onClose}
-                style={{ 
-                  backgroundColor: type === 'success' ? '#28a745' : '#dc3545',
-                  borderColor: type === 'success' ? '#28a745' : '#dc3545',
-                  color: 'white',
-                  minWidth: '100px'
-                }}
-              >
-                OK
-              </button>
-            </div>
+        {/* Header */}
+        <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+          <h5 className="mb-0 form-label-themed d-flex align-items-center" style={{ flex: 1 }}>
+            {type === 'success' ? (
+              <FaCheckCircle className="me-2" style={{ color: colors.accent, fontSize: '1.2rem', flexShrink: 0 }} />
+            ) : (
+              <FaExclamationTriangle className="me-2" style={{ color: colors.accent, fontSize: '1.2rem', flexShrink: 0 }} />
+            )}
+            <span>{title}</span>
+          </h5>
+          <button 
+            type="button" 
+            className="btn btn-link p-0"
+            onClick={onClose}
+            style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
+          >
+            <FaTimes />
+          </button>
+        </div>
+        
+        {/* Body */}
+        <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem' }}>
+          <div style={{ whiteSpace: 'pre-line', color: colors.textSecondary }}>
+            {message}
           </div>
         </div>
+        
+        {/* Footer */}
+        <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+          <button 
+            type="button" 
+            className="btn btn-outline-primary"
+            onClick={onClose}
+          >
+            OK
+          </button>
+        </div>
       </div>
-      <div 
-        className="modal-backdrop fade show" 
-        style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100vw', 
-          height: '100vh', 
-          zIndex: 1050,
-          backgroundColor: 'rgba(0,0,0,0.5)'
-        }}
-        onClick={onClose}
-      ></div>
-    </>
+    </div>
   );
 };
 
@@ -1620,39 +1601,52 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  if (!show) return null;
+
   return (
     <>
       <div 
-        className="modal fade show" 
+        className="fixed top-0 left-0 w-full h-full" 
         style={{ 
-          display: 'block', 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100vw', 
-          height: '100vh', 
+          background: 'rgba(0,0,0,0.5)', 
           zIndex: 1050,
-          backgroundColor: 'rgba(0,0,0,0.5)'
+          top: 56,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}
+        onClick={onClose}
       >
-                 <div className="modal-dialog" style={{ maxWidth: '900px', width: '90vw' }}>
-           <div className="modal-content" style={{ backgroundColor: colors.card, maxHeight: '80vh' }}>
-            {/* Header */}
-            <div className="modal-header" style={{ backgroundColor: colors.secondary }}>
-              <h5 className="modal-title" style={{ color: colors.text }}>
-                <FaFileUpload className="me-2" />
-                Artikel Import/Export
-              </h5>
-              <button 
-                type="button" 
-                className="btn-close" 
-                onClick={onClose}
-                style={{ filter: 'invert(1)' }}
-              ></button>
-            </div>
-            
-                         {/* Body */}
-             <div className="modal-body" style={{ overflowY: 'auto', height: 'calc(80vh - 120px)', minHeight: '500px' }}>
+        <div 
+          className="card" 
+          style={{ 
+            backgroundColor: colors.card, 
+            border: `1px solid ${colors.cardBorder}`,
+            maxWidth: '900px',
+            width: '90vw',
+            maxHeight: '90vh',
+            overflow: 'hidden'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+            <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+              <FaFileUpload className="me-2" style={{ color: colors.accent }} />
+              Artikel Import/Export
+            </h5>
+            <button 
+              type="button" 
+              className="btn btn-link p-0" 
+              onClick={onClose}
+              style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
+            >
+              <FaTimes />
+            </button>
+          </div>
+          
+          {/* Body */}
+          <div className="card-body" style={{ overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', minHeight: '500px', color: colors.text }}>
                {/* Tab Navigation */}
                <div className="d-flex mb-4" style={{ borderBottom: `2px solid ${colors.accent}` }}>
                 <div
@@ -2628,62 +2622,49 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
                   </div>
                 )}
               </div>
-            </div>
-            
-            {/* Footer */}
-            <div className="modal-footer" style={{ backgroundColor: colors.cardBorder }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary me-2" 
-                onClick={onClose}
-                style={{ 
-                  backgroundColor: colors.secondary, 
-                  borderColor: colors.secondary,
-                  color: colors.text,
-                  minWidth: '120px'
-                }}
-              >
-                <FaTimes className="me-2" />
-                Abbrechen
-              </button>
-                             <button 
-                 type="button" 
-                 className="btn btn-primary"
-                 disabled={
-                   (activeTab === 'import' && !isImportValid()) ||
-                   (activeTab === 'export' && getFilteredArticles().length === 0)
-                 }
-                 onClick={activeTab === 'import' ? handleImport : handleExport}
-                 style={{ 
-                   backgroundColor: (
-                     (activeTab === 'import' && !isImportValid()) ||
-                     (activeTab === 'export' && getFilteredArticles().length === 0)
-                   ) ? colors.textSecondary : colors.primary, 
-                   borderColor: (
-                     (activeTab === 'import' && !isImportValid()) ||
-                     (activeTab === 'export' && getFilteredArticles().length === 0)
-                   ) ? colors.textSecondary : colors.primary,
-                   color: 'white',
-                   minWidth: '120px',
-                   opacity: (
-                     (activeTab === 'import' && !isImportValid()) ||
-                     (activeTab === 'export' && getFilteredArticles().length === 0)
-                   ) ? 0.6 : 1
-                 }}
-               >
-                 {activeTab === 'import' ? (
-                   <>
-                     <FaFileUpload className="me-2" />
-                     Import
-                   </>
-                 ) : (
-                   <>
-                     <FaDownload className="me-2" />
-                     Export
-                   </>
-                 )}
-               </button>
-            </div>
+          </div>
+          
+          {/* Footer */}
+          <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+            <button 
+              type="button" 
+              className="btn btn-outline-secondary" 
+              onClick={onClose}
+            >
+              <FaTimes className="me-2" />
+              Abbrechen
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-outline-primary"
+              disabled={
+                (activeTab === 'import' && !isImportValid()) ||
+                (activeTab === 'export' && getFilteredArticles().length === 0)
+              }
+              onClick={activeTab === 'import' ? handleImport : handleExport}
+              style={{
+                opacity: (
+                  (activeTab === 'import' && !isImportValid()) ||
+                  (activeTab === 'export' && getFilteredArticles().length === 0)
+                ) ? 0.6 : 1,
+                cursor: (
+                  (activeTab === 'import' && !isImportValid()) ||
+                  (activeTab === 'export' && getFilteredArticles().length === 0)
+                ) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {activeTab === 'import' ? (
+                <>
+                  <FaFileUpload className="me-2" />
+                  Import
+                </>
+              ) : (
+                <>
+                  <FaDownload className="me-2" />
+                  Export
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>

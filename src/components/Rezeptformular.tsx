@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FaTimes as FaClose, FaImage, FaSave, FaArrowLeft, FaPlus, FaPencilAlt } from 'react-icons/fa';
+import { FaTimes as FaClose, FaImage, FaSave, FaArrowLeft, FaPlus, FaPencilAlt, FaLock, FaUnlock } from 'react-icons/fa';
 import { useRecipeForm } from '../hooks/useRecipeForm';
 import { useAppContext } from '../contexts/AppContext';
 import { UUIDUtils } from '../utils/uuidUtils';
 import { storageLayer } from '../services/storageLayer';
 import { Recipe, Unit, Difficulty } from '../types';
+import { ADDITIVES, ALLERGENS } from '../hooks/useArticleForm';
 
 interface RezeptformularProps {
   articles: any[];
@@ -35,6 +36,40 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
 }) => {
   const { state, dispatch } = useAppContext();
   const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
+  
+  // Resize-Funktionalität
+  const [formWidth, setFormWidth] = useState<number | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isInitialMount, setIsInitialMount] = useState(true);
+  const formContainerRef = React.useRef<HTMLDivElement>(null);
+  const resizeHandleRef = React.useRef<HTMLDivElement>(null);
+  const resizeStartX = React.useRef<number>(0);
+  const resizeStartWidth = React.useRef<number>(60);
+  
+  const FORM_WIDTH_STORAGE_KEY = 'recipeFormWidth';
+  
+  const loadSavedWidth = (): number => {
+    try {
+      const saved = localStorage.getItem(FORM_WIDTH_STORAGE_KEY);
+      if (saved) {
+        const width = parseFloat(saved);
+        if (!isNaN(width) && width >= 40 && width <= 90) {
+          return width;
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der gespeicherten Breite:', error);
+    }
+    return 60;
+  };
+  
+  const saveWidth = (width: number) => {
+    try {
+      localStorage.setItem(FORM_WIDTH_STORAGE_KEY, width.toString());
+    } catch (error) {
+      console.error('Fehler beim Speichern der Breite:', error);
+    }
+  };
   
   const {
     // States
@@ -95,6 +130,15 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   });
 
   const colors = getCurrentColors();
+  
+  // State für Dropdowns (nur Anzeige, nicht editierbar)
+  const [showAdditivesDropdown, setShowAdditivesDropdown] = useState(false);
+  const [showAllergensDropdown, setShowAllergensDropdown] = useState(false);
+  
+  // State für editierbares Inhaltsstoffe-Feld
+  const [isEditingIngredients, setIsEditingIngredients] = useState(false);
+  const [ingredientsText, setIngredientsText] = useState('');
+  const [autoUpdateIngredients, setAutoUpdateIngredients] = useState(true); // Automatische Aktualisierung aktiviert
 
   // Aktualisiere Artikeldaten nach der Rückkehr vom Artikelformular
   // WICHTIG: Nur ausführen, wenn sich articles geändert hat (nicht bei jeder ingredients-Änderung!)
@@ -166,6 +210,134 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
     loadSavedImage();
   }, [show, editingRecipe]);
 
+  // Initialisiere Breite beim Öffnen - lade gespeicherte Breite oder verwende 60%
+  useEffect(() => {
+    if (show && formWidth === null) {
+      setIsInitialMount(true);
+      const savedWidth = loadSavedWidth();
+      setFormWidth(savedWidth);
+      const timer = setTimeout(() => {
+        setIsInitialMount(false);
+      }, 50);
+      return () => clearTimeout(timer);
+    } else if (!show) {
+      setFormWidth(null);
+      setIsInitialMount(true);
+      // Schließe Dropdowns beim Schließen des Modals
+      setShowAdditivesDropdown(false);
+      setShowAllergensDropdown(false);
+      // Reset Edit-Modus
+      setIsEditingIngredients(false);
+      setIngredientsText('');
+    }
+  }, [show, formWidth]);
+
+  // Initialisiere ingredientsText wenn Rezept geladen wird oder Zutaten sich ändern
+  useEffect(() => {
+    if (!isEditingIngredients && autoUpdateIngredients) {
+      const ingredients = new Set<string>();
+      
+      // Sammle Inhaltsstoffe von Zutaten
+      recipeForm.ingredients.forEach(ingredient => {
+        if (ingredient.name && ingredient.name.trim() !== '') {
+          const article = articles.find(a => a.name === ingredient.name);
+          if (article && article.ingredients) {
+            const articleIngredients = article.ingredients.split(',').map((ing: string) => ing.trim());
+            articleIngredients.forEach((ing: string) => {
+              if (ing && ing.length > 0) {
+                ingredients.add(ing);
+              }
+            });
+          }
+        }
+      });
+
+      // Sammle Inhaltsstoffe von verwendeten Rezepten
+      recipeForm.usedRecipes.forEach(usedRecipe => {
+        const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
+        if (recipe && recipe.ingredients) {
+          recipe.ingredients.forEach((recipeIngredient: any) => {
+            if (recipeIngredient.name && recipeIngredient.name.trim() !== '') {
+              const article = articles.find(a => a.name === recipeIngredient.name);
+              if (article && article.ingredients) {
+                const articleIngredients = article.ingredients.split(',').map((ing: string) => ing.trim());
+                articleIngredients.forEach((ing: string) => {
+                  if (ing && ing.length > 0) {
+                    ingredients.add(ing);
+                  }
+                });
+              }
+            }
+          });
+        }
+      });
+      
+      // Wenn das Rezept bereits manuell editierte Inhaltsstoffe hat, verwende diese
+      const computedIngredients = Array.from(ingredients).sort().join(', ');
+      if (recipeForm.ingredientsText && recipeForm.ingredientsText.trim() !== '' && !autoUpdateIngredients) {
+        // Wenn automatische Aktualisierung deaktiviert ist, verwende gespeicherten Wert
+        setIngredientsText(recipeForm.ingredientsText);
+      } else {
+        // Wenn automatische Aktualisierung aktiviert ist, berechne neu
+        setIngredientsText(computedIngredients);
+      }
+    } else if (!isEditingIngredients && !autoUpdateIngredients && recipeForm.ingredientsText) {
+      // Wenn automatische Aktualisierung deaktiviert ist, verwende gespeicherten Wert
+      setIngredientsText(recipeForm.ingredientsText);
+    }
+  }, [recipeForm.ingredients, recipeForm.usedRecipes, recipeForm.ingredientsText, articles, recipes, isEditingIngredients, autoUpdateIngredients]);
+
+  // Resize-Handling
+  useEffect(() => {
+    if (!isResizing) return;
+
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!formContainerRef.current) return;
+      
+      const container = formContainerRef.current.parentElement?.parentElement;
+      if (!container) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const deltaX = e.clientX - resizeStartX.current;
+      const containerWidth = containerRect.width;
+      const deltaWidthPercent = (deltaX / containerWidth) * 100;
+      
+      const newWidth = Math.min(Math.max(resizeStartWidth.current + (deltaWidthPercent * 2), 40), 90);
+      
+      setFormWidth(newWidth);
+      saveWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
+  const effectiveWidth = show && formWidth === null ? loadSavedWidth() : formWidth;
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeStartX.current = e.clientX;
+    const currentWidth = formWidth !== null ? formWidth : (show ? loadSavedWidth() : 60);
+    resizeStartWidth.current = currentWidth;
+    setIsResizing(true);
+  };
+
   if (!show) {
     return null;
   }
@@ -207,7 +379,8 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
         difficulty: recipeForm.difficulty as Difficulty, // Type-Assertion für Difficulty
         materialCosts: calculateMaterialCosts(),
         totalNutritionInfo: calculateRecipeNutrition(),
-        allergens: getRecipeAllergens()
+        allergens: getRecipeAllergens(),
+        ingredientsText: recipeForm.ingredientsText || ingredientsText // Speichere manuell editierte Inhaltsstoffe
         // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
         // lastModifiedBy wird später implementiert (User-System)
       };
@@ -275,7 +448,14 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
     >
       <div className="container-fluid h-full p-4">
         <div className="flex justify-center h-full">
-          <div className="w-full xl:w-1/2">
+          <div 
+            ref={formContainerRef}
+            className="relative"
+            style={{ 
+              width: effectiveWidth !== null ? `${effectiveWidth}%` : '100%',
+              transition: (isResizing || isInitialMount) ? 'none' : 'width 0.3s ease'
+            }}
+          >
             <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
               <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
                 <h5 className="mb-0 form-label-themed">
@@ -451,18 +631,26 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                         <label className="form-label form-label-themed">
                           Schwierigkeit
                         </label>
-                        <div className="form-control form-control-themed flex items-center justify-center" style={{ padding: '0' }}>
-                          <div className="flex gap-1 items-center">
+                        <div className="form-control form-control-themed flex items-center justify-center" style={{ 
+                          padding: '0',
+                          height: 'calc(1.5em + 0.75rem + 2px)',
+                          minHeight: 'calc(1.5em + 0.75rem + 2px)'
+                        }}>
+                          <div className="flex items-center justify-center" style={{ gap: '0', width: '100%' }}>
                             {[1, 2, 3, 4, 5].map(star => (
                               <button
                                 key={star}
                                 type="button"
-                                className="btn btn-link p-0"
+                                className="btn btn-link"
                                 onClick={() => setRecipeForm((prev: any) => ({ ...prev, difficulty: star }))}
                                 style={{ 
                                   color: star <= recipeForm.difficulty ? '#ffc107' : colors.cardBorder,
-                                  fontSize: '1.5rem',
-                                  textDecoration: 'none'
+                                  fontSize: '1.7rem',
+                                  textDecoration: 'none',
+                                  lineHeight: '1',
+                                  padding: '0.125rem 0.25rem',
+                                  marginLeft: '3px',
+                                  marginRight: '3px'
                                 }}
                               >
                                 ★
@@ -660,98 +848,289 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                     {(activeTab as string) === 'inhaltsangaben' && (
                       <>
                         <div className="flex flex-wrap -mx-2">
-                          <div className="w-full md:w-1/2 px-2 mb-3">
+                          <div className="w-full md:w-5/12 px-2 mb-3">
                             <label className="form-label form-label-themed">
                               Zusatzstoffe
                             </label>
                             <div className="relative ingredients-dropdown-container">
-                              <div className="form-control form-control-themed flex items-center" style={{ 
-                                minHeight: '38px',
-                                backgroundColor: colors.paper || colors.card
-                              }}>
+                              <div 
+                                className="form-control form-control-themed" 
+                                onClick={() => setShowAdditivesDropdown(!showAdditivesDropdown)}
+                                style={{ 
+                                  borderColor: colors.cardBorder,
+                                  color: colors.text,
+                                  cursor: 'pointer',
+                                  minHeight: '38px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  transition: 'all 0.2s ease',
+                                  backgroundColor: colors.paper || colors.card
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = colors.accent;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = colors.cardBorder;
+                                }}
+                              >
                                 <span style={{ 
                                   fontSize: '0.9rem',
                                   color: getRecipeAdditives().length > 0 ? colors.text : colors.text + '80'
                                 }}>
                                   {formatAdditivesDisplay(getRecipeAdditives())}
                                 </span>
+                                <span style={{ marginLeft: 'auto', color: colors.text + '60' }}>
+                                  {showAdditivesDropdown ? '▲' : '▼'}
+                                </span>
                               </div>
+                              {showAdditivesDropdown && (
+                                <div className="additives-dropdown absolute w-full" style={{
+                                  top: '100%',
+                                  left: 0,
+                                  zIndex: 1000,
+                                  maxHeight: '300px',
+                                  overflowY: 'auto',
+                                  backgroundColor: colors.card,
+                                  border: `1px solid ${colors.cardBorder}`,
+                                  borderRadius: '0 0 0.375rem 0.375rem',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                  padding: '0.5rem'
+                                }}>
+                                  {ADDITIVES.map((additive, index) => {
+                                    const recipeAdditives = getRecipeAdditives();
+                                    const isChecked = recipeAdditives.includes(additive);
+                                    return (
+                                      <div key={`additive-${index}-${additive}`} className="form-check">
+                                        <input
+                                          className="form-check-input"
+                                          type="checkbox"
+                                          id={`recipe-additive-${index}-${additive}`}
+                                          checked={isChecked}
+                                          disabled
+                                          readOnly
+                                          style={{ accentColor: colors.accent, cursor: 'not-allowed', opacity: 0.6 }}
+                                        />
+                                        <label 
+                                          className="form-check-label" 
+                                          htmlFor={`recipe-additive-${index}-${additive}`} 
+                                          style={{ color: colors.text, fontSize: '0.9rem', cursor: 'default' }}
+                                        >
+                                          {additive}
+                                        </label>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="w-full md:w-1/2 px-2 mb-3">
+                          <div className="w-full md:w-5/12 px-2 mb-3">
                             <label className="form-label form-label-themed">
                               Allergene
                             </label>
                             <div className="relative allergens-dropdown-container">
-                              <div className="form-control form-control-themed flex items-center" style={{ 
-                                minHeight: '38px',
-                                backgroundColor: colors.paper || colors.card
-                              }}>
+                              <div 
+                                className="form-control form-control-themed" 
+                                onClick={() => setShowAllergensDropdown(!showAllergensDropdown)}
+                                style={{ 
+                                  borderColor: colors.cardBorder,
+                                  color: colors.text,
+                                  cursor: 'pointer',
+                                  minHeight: '38px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  transition: 'all 0.2s ease',
+                                  backgroundColor: colors.paper || colors.card
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = colors.accent;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = colors.cardBorder;
+                                }}
+                              >
                                 <span style={{ 
                                   fontSize: '0.9rem',
                                   color: getRecipeAllergens().length > 0 ? colors.text : colors.text + '80'
                                 }}>
                                   {formatAllergensDisplay(getRecipeAllergens())}
                                 </span>
+                                <span style={{ marginLeft: 'auto', color: colors.text + '60' }}>
+                                  {showAllergensDropdown ? '▲' : '▼'}
+                                </span>
                               </div>
+                              {showAllergensDropdown && (
+                                <div className="allergens-dropdown absolute w-full" style={{
+                                  top: '100%',
+                                  left: 0,
+                                  zIndex: 1000,
+                                  maxHeight: '300px',
+                                  overflowY: 'auto',
+                                  backgroundColor: colors.card,
+                                  border: `1px solid ${colors.cardBorder}`,
+                                  borderRadius: '0 0 0.375rem 0.375rem',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                  padding: '0.5rem'
+                                }}>
+                                  {ALLERGENS.map((allergen, index) => {
+                                    const recipeAllergens = getRecipeAllergens();
+                                    const isChecked = recipeAllergens.includes(allergen);
+                                    return (
+                                      <div key={`allergen-${index}-${allergen}`} className="form-check">
+                                        <input
+                                          className="form-check-input"
+                                          type="checkbox"
+                                          id={`recipe-allergen-${index}-${allergen}`}
+                                          checked={isChecked}
+                                          disabled
+                                          readOnly
+                                          style={{ accentColor: colors.accent, cursor: 'not-allowed', opacity: 0.6 }}
+                                        />
+                                        <label 
+                                          className="form-check-label" 
+                                          htmlFor={`recipe-allergen-${index}-${allergen}`} 
+                                          style={{ color: colors.text, fontSize: '0.9rem', cursor: 'default' }}
+                                        >
+                                          {allergen}
+                                        </label>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-full md:w-1/6 px-2 mb-3">
+                            <label className="form-label form-label-themed">
+                              Alkoholgehalt
+                            </label>
+                            <div className="input-group">
+                              <input
+                                type="number"
+                                className="form-control form-control-themed form-control-static"
+                                value={(() => {
+                                  const alcoholValue = recipeForm.alcohol || recipeForm.totalNutritionInfo?.alcohol || '';
+                                  console.log('🍷 [Rezeptformular] Alkoholwert für Anzeige:', {
+                                    'recipeForm.alcohol': recipeForm.alcohol,
+                                    'recipeForm.totalNutritionInfo?.alcohol': recipeForm.totalNutritionInfo?.alcohol,
+                                    'final value': alcoholValue,
+                                    'recipeForm': recipeForm
+                                  });
+                                  return alcoholValue;
+                                })()}
+                                readOnly
+                                placeholder="0.00"
+                                tabIndex={-1}
+                              />
+                              <span className="input-group-text" style={{ backgroundColor: colors.secondary, color: colors.text }}>
+                                %
+                              </span>
                             </div>
                           </div>
                         </div>
                         <div className="w-full mb-3">
-                          <label className="form-label form-label-themed">
-                            Inhaltsstoffe
-                          </label>
+                          <div className="flex justify-between items-center mb-2">
+                            <label className="form-label form-label-themed mb-0">
+                              Inhaltsstoffe
+                            </label>
+                            <div className="flex gap-2 items-center">
+                              {!isEditingIngredients ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-action"
+                                  onClick={() => setIsEditingIngredients(true)}
+                                  title="Inhaltsstoffe bearbeiten"
+                                >
+                                  <FaPencilAlt />
+                                </button>
+                              ) : null}
+                              {!isEditingIngredients && (
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-action"
+                                  onClick={() => setAutoUpdateIngredients(!autoUpdateIngredients)}
+                                  title={autoUpdateIngredients ? "Automatische Aktualisierung deaktivieren" : "Automatische Aktualisierung aktivieren"}
+                                  style={{ 
+                                    color: autoUpdateIngredients ? colors.accent : colors.text + '80'
+                                  }}
+                                >
+                                  {autoUpdateIngredients ? <FaUnlock /> : <FaLock />}
+                                </button>
+                              )}
+                              {isEditingIngredients && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-link btn-action"
+                                    onClick={() => {
+                                      setRecipeForm((prev: any) => ({ ...prev, ingredientsText: ingredientsText }));
+                                      setIsEditingIngredients(false);
+                                      setAutoUpdateIngredients(false); // Automatisch sperren beim Speichern
+                                    }}
+                                    title="Änderungen speichern"
+                                  >
+                                    <FaSave />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-link btn-action btn-danger"
+                                    onClick={() => {
+                                      setIsEditingIngredients(false);
+                                      // Setze Text zurück auf berechneten Wert
+                                      const ingredients = new Set<string>();
+                                      recipeForm.ingredients.forEach(ingredient => {
+                                        if (ingredient.name && ingredient.name.trim() !== '') {
+                                          const article = articles.find(a => a.name === ingredient.name);
+                                          if (article && article.ingredients) {
+                                            const articleIngredients = article.ingredients.split(',').map((ing: string) => ing.trim());
+                                            articleIngredients.forEach((ing: string) => {
+                                              if (ing && ing.length > 0) {
+                                                ingredients.add(ing);
+                                              }
+                                            });
+                                          }
+                                        }
+                                      });
+                                      recipeForm.usedRecipes.forEach(usedRecipe => {
+                                        const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
+                                        if (recipe && recipe.ingredients) {
+                                          recipe.ingredients.forEach((recipeIngredient: any) => {
+                                            if (recipeIngredient.name && recipeIngredient.name.trim() !== '') {
+                                              const article = articles.find(a => a.name === recipeIngredient.name);
+                                              if (article && article.ingredients) {
+                                                const articleIngredients = article.ingredients.split(',').map((ing: string) => ing.trim());
+                                                articleIngredients.forEach((ing: string) => {
+                                                  if (ing && ing.length > 0) {
+                                                    ingredients.add(ing);
+                                                  }
+                                                });
+                                              }
+                                            }
+                                          });
+                                        }
+                                      });
+                                      setIngredientsText(Array.from(ingredients).sort().join(', '));
+                                    }}
+                                    title="Änderungen verwerfen"
+                                  >
+                                    <FaClose />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
                           <textarea
                             className="form-control form-control-themed"
-                            value={(() => {
-                              const ingredients = new Set<string>();
-                              
-                              // Sammle Inhaltsstoffe von Zutaten
-                              recipeForm.ingredients.forEach(ingredient => {
-                                if (ingredient.name && ingredient.name.trim() !== '') {
-                                  const article = articles.find(a => a.name === ingredient.name);
-                                  if (article && article.ingredients) {
-                                    // Teile die Inhaltsstoffe auf und füge sie hinzu
-                                    const articleIngredients = article.ingredients.split(',').map((ing: string) => ing.trim());
-                                    articleIngredients.forEach((ing: string) => {
-                                      if (ing && ing.length > 0) {
-                                        ingredients.add(ing);
-                                      }
-                                    });
-                                  }
-                                }
-                              });
-
-                              // Sammle Inhaltsstoffe von verwendeten Rezepten
-                              recipeForm.usedRecipes.forEach(usedRecipe => {
-                                const recipe = recipes.find(r => r.id === usedRecipe.recipeId);
-                                if (recipe && recipe.ingredients) {
-                                  recipe.ingredients.forEach((recipeIngredient: any) => {
-                                    if (recipeIngredient.name && recipeIngredient.name.trim() !== '') {
-                                      const article = articles.find(a => a.name === recipeIngredient.name);
-                                      if (article && article.ingredients) {
-                                        // Teile die Inhaltsstoffe auf und füge sie hinzu
-                                        const articleIngredients = article.ingredients.split(',').map((ing: string) => ing.trim());
-                                        articleIngredients.forEach((ing: string) => {
-                                          if (ing && ing.length > 0) {
-                                            ingredients.add(ing);
-                                          }
-                                        });
-                                      }
-                                    }
-                                  });
-                                }
-                              });
-                              
-                              return Array.from(ingredients).sort().join(', ');
-                            })()}
-                            readOnly
-                            rows={1}
+                            value={ingredientsText}
+                            onChange={(e) => setIngredientsText(e.target.value)}
+                            readOnly={!isEditingIngredients}
+                            rows={isEditingIngredients ? 4 : 1}
                             style={{ 
-                              backgroundColor: colors.paper || colors.card,
-                              resize: 'none'
+                              backgroundColor: isEditingIngredients ? colors.input : (colors.paper || colors.card),
+                              resize: isEditingIngredients ? 'vertical' : 'none',
+                              cursor: isEditingIngredients ? 'text' : 'default'
                             }}
-                            placeholder="Keine Zutaten hinzugefügt"
+                            placeholder={isEditingIngredients ? "Inhaltsstoffe eingeben (kommagetrennt)" : "Keine Zutaten hinzugefügt"}
                           />
                         </div>
                       </>
@@ -1189,6 +1568,42 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
                   <FaSave className="mr-2" />
                   {editingRecipe ? 'Änderungen speichern' : 'Rezept speichern'}
                 </button>
+              </div>
+              {/* Resize-Handle - nur auf größeren Bildschirmen sichtbar */}
+              <div
+                ref={resizeHandleRef}
+                onMouseDown={handleResizeStart}
+                className="hidden md:flex"
+                style={{
+                  position: 'absolute',
+                  right: '-4px',
+                  top: 0,
+                  bottom: 0,
+                  width: '8px',
+                  cursor: 'ew-resize',
+                  backgroundColor: 'transparent',
+                  zIndex: 100,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.accent + '20';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isResizing) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    width: '3px',
+                    height: '60px',
+                    backgroundColor: isResizing ? colors.accent : colors.cardBorder,
+                    borderRadius: '2px',
+                    transition: isResizing ? 'none' : 'background-color 0.2s ease'
+                  }}
+                />
               </div>
             </div>
           </div>

@@ -97,28 +97,16 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                 <div className="btn-group w-full" role="group">
                   <button
                     type="button"
-                    className={`btn ${supplierViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    className={`btn ${supplierViewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setSupplierViewMode('list')}
-                    style={{
-                      backgroundColor: supplierViewMode === 'list' ? colors.accent : 'transparent',
-                      borderColor: supplierViewMode === 'list' ? colors.accent : colors.cardBorder,
-                      color: supplierViewMode === 'list' ? 'white' : colors.text,
-                      borderRadius: '0.375rem 0 0 0.375rem'
-                    }}
                   >
                     <FaList className="me-1" />
                     Liste
                   </button>
                   <button
                     type="button"
-                    className={`btn ${supplierViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    className={`btn ${supplierViewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setSupplierViewMode('grid')}
-                    style={{
-                      backgroundColor: supplierViewMode === 'grid' ? colors.accent : 'transparent',
-                      borderColor: supplierViewMode === 'grid' ? colors.accent : colors.cardBorder,
-                      color: supplierViewMode === 'grid' ? 'white' : colors.text,
-                      borderRadius: '0 0.375rem 0.375rem 0'
-                    }}
                   >
                     <FaTh className="me-1" />
                     Kacheln
@@ -152,10 +140,6 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                 <button
                   className="btn btn-outline-secondary no-hover w-full"
                   onClick={() => setSupplierSortDirection(supplierSortDirection === 'asc' ? 'desc' : 'asc')}
-                  style={{
-                    borderColor: colors.cardBorder,
-                    color: colors.text
-                  }}
                 >
                   <FaSort className="me-1" />
                   {supplierSortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
@@ -240,9 +224,8 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
         {/* Lieferanten-Liste */}
         {supplierViewMode === 'list' ? (
           <div className="card">
-            <div className="card-body p-0">
-              <div className="overflow-x-auto">
-                <table className="table table-hover modern-table mb-0">
+            <div className="overflow-x-auto">
+              <table className="table table-hover modern-table mb-0">
                   <thead>
                     <tr>
                       <th>
@@ -257,7 +240,6 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                       <th>Kontaktperson</th>
                       <th>E-Mail</th>
                       <th>Telefon</th>
-                      <th>Stadt</th>
                       <th>Aktionen</th>
                     </tr>
                   </thead>
@@ -298,9 +280,6 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                           </div>
                         </td>
                         <td>
-                          <div className="city-info">{supplier.address?.city || '-'}</div>
-                        </td>
-                        <td>
                           <div className="action-buttons">
                             <button
                               className="btn btn-link btn-action"
@@ -338,13 +317,12 @@ const Lieferantenverwaltung: React.FC<LieferantenverwaltungProps> = ({
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+              </table>
             </div>
           </div>
         ) : (
           /* Lieferanten-Kacheln */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {filteredSuppliers.map(supplier => (
               <div key={supplier.id} className="mb-3">
                 <div 

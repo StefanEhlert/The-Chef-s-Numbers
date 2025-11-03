@@ -1,5 +1,5 @@
 // Automatisch generierte Schema-Definitionen aus TypeScript-Interfaces
-// Generiert am: 2025-10-29T20:35:35.899Z
+// Generiert am: 2025-11-03T01:06:18.438Z
 // Automatische Schema-Generierung mit ts-morph
 
 export interface ColumnDefinition {
@@ -584,12 +584,28 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
         "tsType": "{\r\n    calories: number;\r\n    kilojoules: number;\r\n    protein: number;\r\n    fat: number;\r\n    carbohydrates: number;\r\n    fiber: number;\r\n    sugar?: number;\r\n    salt?: number;\r\n    alcohol?: number; // % Alkoholgehalt\r\n  }"
       },
       {
+        "name": "alcohol",
+        "type": "DECIMAL",
+        "nullable": true,
+        "primary": false,
+        "description": "alcohol property",
+        "tsType": "number"
+      },
+      {
         "name": "allergens",
         "type": "JSONB",
         "nullable": true,
         "primary": false,
         "description": "allergens property",
         "tsType": "string[]"
+      },
+      {
+        "name": "ingredients_text",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "ingredientsText property",
+        "tsType": "string"
       },
       {
         "name": "notes",
@@ -676,7 +692,7 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
 };
 
 export const AUTO_GENERATED_SQL: string = `-- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-29T20:35:35.882Z
+-- Generiert am: 2025-11-03T01:06:18.417Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -798,7 +814,9 @@ vat_rate DECIMAL DEFAULT 19,
 selling_price DECIMAL,
 selling_price_history JSONB,
 total_nutrition_info JSONB,
+alcohol DECIMAL,
 allergens JSONB,
+ingredients_text TEXT,
 notes TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,

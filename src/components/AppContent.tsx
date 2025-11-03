@@ -105,6 +105,8 @@ function AppContent() {
   
   // Ref für automatischen Fokus auf Artikelname-Feld
   const articleNameInputRef = useRef<HTMLInputElement>(null);
+  const themeButtonRef = useRef<HTMLButtonElement>(null);
+  const [themeDropdownPosition, setThemeDropdownPosition] = useState<{ top: string; right: string } | null>(null);
 
   // Automatischer Fokus auf Artikelname-Feld wenn Modal geöffnet wird
   useEffect(() => {
@@ -117,6 +119,32 @@ function AppContent() {
       }, 100);
     }
   }, [state.showArticleForm]);
+
+  // Berechne Position für Theme-Dropdown
+  useEffect(() => {
+    if (state.showDesignSelector && themeButtonRef.current) {
+      const updatePosition = () => {
+        const rect = themeButtonRef.current?.getBoundingClientRect();
+        if (rect) {
+          setThemeDropdownPosition({
+            top: `${rect.bottom + 8}px`,
+            right: `${window.innerWidth - rect.right}px`
+          });
+        }
+      };
+      
+      updatePosition();
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition);
+      
+      return () => {
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition);
+      };
+    } else {
+      setThemeDropdownPosition(null);
+    }
+  }, [state.showDesignSelector, state.sidebarOpen]);
 
   // Lade gespeicherte Daten beim Start (nur einmal, auch bei React Strict Mode)
   const hasLoadedInitialData = useRef(false);
@@ -1279,115 +1307,161 @@ function AppContent() {
                 <FaUtensils className="me-2" style={{ fontSize: '20px' }} />
                 The Chef's Numbers
               </span>
-              <button 
-                onClick={() => dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: !state.showDesignSelector })}
-                title="Design ändern"
-                style={{ 
-                  color: 'white',
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  padding: '8px',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: '40px',
-                  minHeight: '40px'
-                }}
-              >
-                <FaPalette />
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button 
+                  ref={themeButtonRef}
+                  onClick={() => dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: !state.showDesignSelector })}
+                  title="Design ändern"
+                  style={{ 
+                    color: 'white',
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: '40px',
+                    minHeight: '40px'
+                  }}
+                >
+                  <FaPalette />
+                </button>
+              </div>
             </nav>
 
             {/* Main Content Area */}
-            <div style={{ 
-              marginLeft: state.sidebarOpen ? 224 : 60,
-              marginTop: 56,
-              transition: 'margin-left 0.3s ease',
-              minHeight: 'calc(100vh - 56px)'
-            }}>
+            <div 
+              className="main-content-area"
+              style={{ 
+                marginLeft: state.sidebarOpen ? 224 : 60
+              }}
+            >
               {renderPage()}
             </div>
           </div>
 
-          {/* Design Selector */}
+          {/* Design Selector - Dropdown unterhalb des Buttons */}
           {state.showDesignSelector && (
-            <div className="position-fixed top-0 start-0 w-100 h-100" style={{ 
-              background: 'rgba(0,0,0,0.5)', 
-              zIndex: 3000,
-              top: 56
-            }}>
-              <div className="container mt-4">
-                <div className="row justify-content-center">
-                  <div className="col-md-8">
-                    <div className="card" style={{ backgroundColor: colors.card }}>
-                      <div className="card-header" style={{ backgroundColor: colors.secondary }}>
-                        <h5 className="mb-0" style={{ color: colors.text }}>Design auswählen</h5>
-                      </div>
-                      <div className="card-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                        <div className="row">
-                          {Object.entries(designTemplates).map(([key, template]) => (
-                            <div key={key} className="col-md-6 mb-3">
-                              <div 
-                                className="card cursor-pointer" 
-                                style={{ 
-                                  backgroundColor: template.colors.card,
-                                  border: state.currentDesign === key ? `3px solid ${template.colors.accent}` : `1px solid ${template.colors.cardBorder}`,
-                                  cursor: 'pointer'
-                                }}
-                                onClick={() => {
-                                  dispatch({ type: 'SET_CURRENT_DESIGN', payload: key });
-                                  dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false });
-                                }}
-                              >
-                                <div className="card-body" style={{ color: template.colors.text }}>
-                                  <h6 className="card-title">
-                                    {template.name}
-                                  </h6>
-                                  <p className="card-text small">
-                                    {template.description}
-                                  </p>
-                                  <div className="d-flex gap-2">
-                                    <div style={{ 
-                                      width: 20, 
-                                      height: 20, 
-                                      backgroundColor: template.colors.primary, 
-                                      borderRadius: '50%' 
-                                    }}></div>
-                                    <div style={{ 
-                                      width: 20, 
-                                      height: 20, 
-                                      backgroundColor: template.colors.accent, 
-                                      borderRadius: '50%' 
-                                    }}></div>
-                                    <div style={{ 
-                                      width: 20, 
-                                      height: 20, 
-                                      backgroundColor: template.colors.secondary, 
-                                      borderRadius: '50%' 
-                                    }}></div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+            <>
+              {/* Backdrop zum Schließen */}
+              <div 
+                style={{ 
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 1060,
+                  background: 'transparent'
+                }}
+                onClick={() => dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false })}
+              />
+              {/* Dropdown - position: fixed um über Drawer zu liegen */}
+              {themeDropdownPosition && (
+                <div 
+                  style={{ 
+                    position: 'fixed',
+                    top: themeDropdownPosition.top,
+                    right: themeDropdownPosition.right,
+                    width: '380px',
+                    maxWidth: '90vw',
+                    zIndex: 1061,
+                    backgroundColor: colors.card,
+                    border: `1px solid ${colors.cardBorder}`,
+                    borderRadius: '0.375rem',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    overflow: 'hidden'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                <div style={{ 
+                  maxHeight: '60vh', 
+                  overflowY: 'auto',
+                  padding: '0.75rem'
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.5rem' }}>
+                    {Object.entries(designTemplates).map(([key, template]) => (
+                      <div 
+                        key={key}
+                        className="cursor-pointer" 
+                        style={{ 
+                          backgroundColor: template.colors.card,
+                          border: state.currentDesign === key ? `2px solid ${template.colors.accent}` : `1px solid ${template.colors.cardBorder}`,
+                          borderRadius: '0.375rem',
+                          padding: '0.75rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          opacity: state.currentDesign === key ? 1 : 0.9
+                        }}
+                        onMouseEnter={(e) => {
+                          if (state.currentDesign !== key) {
+                            e.currentTarget.style.opacity = '1';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (state.currentDesign !== key) {
+                            e.currentTarget.style.opacity = '0.9';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }
+                        }}
+                        onClick={() => {
+                          dispatch({ type: 'SET_CURRENT_DESIGN', payload: key });
+                          dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false });
+                        }}
+                      >
+                        <div style={{ 
+                          fontWeight: 600,
+                          fontSize: '0.875rem',
+                          color: template.colors.text,
+                          marginBottom: '0.25rem'
+                        }}>
+                          {template.name}
                         </div>
-                        <div className="text-center mt-3">
-                          <button 
-                            className="btn btn-secondary" 
-                            onClick={() => dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false })}
-                          >
-                            Schließen
-                          </button>
+                        <div style={{ 
+                          fontSize: '0.75rem',
+                          color: template.colors.textSecondary || template.colors.text,
+                          opacity: 0.8,
+                          marginBottom: '0.5rem',
+                          lineHeight: '1.3'
+                        }}>
+                          {template.description}
+                        </div>
+                        <div className="d-flex gap-2" style={{ justifyContent: 'flex-start' }}>
+                          <div style={{ 
+                            width: 16, 
+                            height: 16, 
+                            backgroundColor: template.colors.primary, 
+                            borderRadius: '50%',
+                            border: `1px solid ${template.colors.cardBorder}`
+                          }}></div>
+                          <div style={{ 
+                            width: 16, 
+                            height: 16, 
+                            backgroundColor: template.colors.accent, 
+                            borderRadius: '50%',
+                            border: `1px solid ${template.colors.cardBorder}`
+                          }}></div>
+                          <div style={{ 
+                            width: 16, 
+                            height: 16, 
+                            backgroundColor: template.colors.secondary, 
+                            borderRadius: '50%',
+                            border: `1px solid ${template.colors.cardBorder}`
+                          }}></div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              </div>
-            </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Artikelformular Modal */}

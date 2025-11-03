@@ -29,6 +29,19 @@ interface RecipeForm {
     order: number;
     description: string;
   }>;
+  totalNutritionInfo?: {
+    calories: number;
+    kilojoules: number;
+    protein: number;
+    fat: number;
+    carbohydrates: number;
+    fiber?: number;
+    sugar?: number;
+    salt?: number;
+    alcohol?: number;
+  };
+  alcohol?: number; // % Alkoholgehalt (als eigenständiges Feld)
+  ingredientsText?: string; // Manuell editierte Inhaltsstoffe (überschreibt automatisch berechnete)
 }
 
 interface UseRecipeFormProps {
@@ -90,6 +103,13 @@ export const useRecipeForm = ({
   useEffect(() => {
     if (editingRecipe) {
       console.log('🔄 Synchronisiere editingRecipe mit Formular:', editingRecipe);
+      const loadedAlcohol = editingRecipe.alcohol || editingRecipe.totalNutritionInfo?.alcohol;
+      console.log('🍷 [useEffect editingRecipe] Alkoholwert beim Laden:', {
+        'editingRecipe.alcohol': editingRecipe.alcohol,
+        'editingRecipe.totalNutritionInfo?.alcohol': editingRecipe.totalNutritionInfo?.alcohol,
+        'loaded alcohol': loadedAlcohol,
+        'editingRecipe': editingRecipe
+      });
       setRecipeForm({
         name: editingRecipe.name || '',
         description: editingRecipe.description || '',
@@ -108,11 +128,93 @@ export const useRecipeForm = ({
         usedRecipes: editingRecipe.usedRecipes || [],
         preparationSteps: editingRecipe.preparationSteps && editingRecipe.preparationSteps.length > 0 
           ? editingRecipe.preparationSteps 
-          : [{ id: UUIDUtils.generateId(), order: 1, description: '' }]
+          : [{ id: UUIDUtils.generateId(), order: 1, description: '' }],
+        totalNutritionInfo: editingRecipe.totalNutritionInfo ? {
+          calories: editingRecipe.totalNutritionInfo.calories || 0,
+          kilojoules: editingRecipe.totalNutritionInfo.kilojoules || 0,
+          protein: editingRecipe.totalNutritionInfo.protein || 0,
+          fat: editingRecipe.totalNutritionInfo.fat || 0,
+          carbohydrates: editingRecipe.totalNutritionInfo.carbohydrates || 0,
+          fiber: editingRecipe.totalNutritionInfo.fiber || 0,
+          sugar: editingRecipe.totalNutritionInfo.sugar || 0,
+          salt: editingRecipe.totalNutritionInfo.salt || 0,
+          alcohol: editingRecipe.totalNutritionInfo.alcohol
+        } : undefined,
+        alcohol: loadedAlcohol,
+        ingredientsText: editingRecipe.ingredientsText
       });
       setSellingPriceInput((editingRecipe.sellingPrice || 0).toFixed(2));
     }
   }, [editingRecipe]);
+
+  // Automatisch Alkoholwert aus Zutaten berechnen, wenn sich Zutaten oder verwendete Rezepte ändern
+  // WICHTIG: Berechne IMMER neu, wenn sich Zutaten ändern, auch wenn bereits ein Wert existiert
+  // Der manuelle Wert wird nur durch onChange im Input-Feld gesetzt
+  useEffect(() => {
+    console.log('🍷 [useEffect auto-calculate] Triggered:', {
+      'ingredients count': recipeForm.ingredients.length,
+      'ingredients': recipeForm.ingredients.map(i => ({ name: i.name, amount: i.amount, unit: i.unit })),
+      'current alcohol': recipeForm.alcohol,
+      'current totalNutritionInfo?.alcohol': recipeForm.totalNutritionInfo?.alcohol
+    });
+    
+    if (recipeForm.ingredients.length > 0) {
+      console.log('🍷 [useEffect auto-calculate] Starte Berechnung...');
+      const calculatedNutrition = calculateRecipeNutrition();
+      const calculatedAlcohol = calculatedNutrition.alcohol;
+      
+      console.log('🍷 [useEffect auto-calculate alcohol] Automatische Alkoholberechnung:', {
+        'recipeForm.alcohol (vorher)': recipeForm.alcohol,
+        'calculatedAlcohol': calculatedAlcohol,
+        'calculatedNutrition': calculatedNutrition,
+        'ingredients': recipeForm.ingredients.map(i => ({ 
+          name: i.name, 
+          amount: i.amount, 
+          unit: i.unit,
+          article: articles.find(a => a.name === i.name) ? {
+            name: articles.find(a => a.name === i.name)?.name,
+            alcohol: articles.find(a => a.name === i.name)?.alcohol,
+            nutritionInfo_alcohol: articles.find(a => a.name === i.name)?.nutritionInfo?.alcohol
+          } : null
+        })),
+        'usedRecipes': recipeForm.usedRecipes
+      });
+      
+      // Aktualisiere IMMER mit dem berechneten Wert, wenn vorhanden
+      if (calculatedAlcohol !== undefined) {
+        // Prüfe ob sich der Wert wirklich unterscheidet (mit Toleranz für Rundungsfehler)
+        const tolerance = 0.01; // 0.01% Toleranz
+        const difference = Math.abs((calculatedAlcohol || 0) - (recipeForm.alcohol || 0));
+        
+        if (difference > tolerance) {
+          console.log('🍷 [useEffect auto-calculate] Aktualisiere recipeForm.alcohol von', recipeForm.alcohol, 'zu', calculatedAlcohol, '(Differenz:', difference, ')');
+          setRecipeForm(prev => ({
+            ...prev,
+            alcohol: calculatedAlcohol,
+            totalNutritionInfo: {
+              ...prev.totalNutritionInfo || {
+                calories: 0,
+                kilojoules: 0,
+                protein: 0,
+                fat: 0,
+                carbohydrates: 0,
+                fiber: 0,
+                sugar: 0,
+                salt: 0
+              },
+              alcohol: calculatedAlcohol
+            }
+          }));
+        } else {
+          console.log('🍷 [useEffect auto-calculate] Keine Aktualisierung nötig - Werte sind identisch (Differenz:', difference, '<= Toleranz)');
+        }
+      } else {
+        console.log('🍷 [useEffect auto-calculate] KEIN berechneter Alkoholwert gefunden');
+      }
+    } else {
+      console.log('🍷 [useEffect auto-calculate] Überspringe Berechnung - keine Zutaten vorhanden');
+    }
+  }, [recipeForm.ingredients, recipeForm.usedRecipes, recipeForm.portions, articles, recipes]);
 
   // Preisumrechnung Hilfsfunktionen
   const calculateGrossPrice = (netPrice: number, vatRate: number) => {
@@ -147,7 +249,20 @@ export const useRecipeForm = ({
       sellingPrice: 0,
       ingredients: [{ id: UUIDUtils.generateId(), name: '', amount: 0, unit: 'g', price: 0 }],
       usedRecipes: [],
-      preparationSteps: [{ id: UUIDUtils.generateId(), order: 1, description: '' }]
+      preparationSteps: [{ id: UUIDUtils.generateId(), order: 1, description: '' }],
+      totalNutritionInfo: {
+        calories: 0,
+        kilojoules: 0,
+        protein: 0,
+        fat: 0,
+        carbohydrates: 0,
+        fiber: 0,
+        sugar: 0,
+        salt: 0,
+        alcohol: undefined
+      },
+      alcohol: undefined,
+      ingredientsText: undefined
     } as RecipeForm);
   };
 
@@ -158,7 +273,9 @@ export const useRecipeForm = ({
   };
 
   const calculateMaterialCosts = () => {
-    const ingredientCosts = recipeForm.ingredients.reduce((sum, ingredient) => sum + ingredient.price, 0);
+    const ingredientCosts = recipeForm.ingredients.reduce((sum, ingredient) => {
+      return sum + calculateIngredientPrice(ingredient);
+    }, 0);
     const usedRecipeCosts = recipeForm.usedRecipes.reduce((sum, usedRecipe) => sum + usedRecipe.totalCost, 0);
     return ingredientCosts + usedRecipeCosts;
   };
@@ -291,7 +408,9 @@ export const useRecipeForm = ({
       carbohydrates: 0,
       fiber: 0,
       sugar: 0,
-      salt: 0
+      salt: 0,
+      alcohol: 0, // Alkoholgehalt in %
+      totalWeight: 0 // Gesamtgewicht für Alkoholberechnung
     };
 
     // Hilfsfunktion zur Einheitenumrechnung
@@ -311,6 +430,9 @@ export const useRecipeForm = ({
         case 'ml':
         case 'milliliter':
           return amount; // 1ml ≈ 1g für die meisten Flüssigkeiten
+        case 'cl':
+        case 'centiliter':
+          return amount * 10; // 1cl = 10ml = 10g (für Flüssigkeiten)
         case 'l':
         case 'liter':
           return amount * 1000; // 1l = 1000ml ≈ 1000g
@@ -320,10 +442,29 @@ export const useRecipeForm = ({
       }
     };
 
+    console.log('🍷 [calculateRecipeNutrition] Starte Berechnung mit:', {
+      'ingredients count': recipeForm.ingredients.length,
+      'ingredients': recipeForm.ingredients.map(i => ({ name: i.name, amount: i.amount, unit: i.unit })),
+      'articles available': articles.length
+    });
+    
     // Nährwerte von Zutaten
-    recipeForm.ingredients.forEach(ingredient => {
+    recipeForm.ingredients.forEach((ingredient, index) => {
+      console.log(`🍷 [calculateRecipeNutrition] Verarbeite Zutat ${index + 1}:`, {
+        'name': ingredient.name,
+        'amount': ingredient.amount,
+        'unit': ingredient.unit
+      });
+      
       if (ingredient.name && ingredient.name.trim() !== '' && ingredient.amount > 0) {
         const article = articles.find(a => a.name === ingredient.name);
+        console.log(`🍷 [calculateRecipeNutrition] Gefundener Artikel für "${ingredient.name}":`, {
+          'article found': !!article,
+          'article.alcohol': article?.alcohol,
+          'article.nutritionInfo?.alcohol': article?.nutritionInfo?.alcohol,
+          'article.nutritionInfo exists': !!article?.nutritionInfo
+        });
+        
         if (article && article.nutritionInfo) {
           // Konvertiere die Menge in Gramm
           const amountInGrams = convertToGrams(ingredient.amount, ingredient.unit);
@@ -339,6 +480,57 @@ export const useRecipeForm = ({
             totalNutrition.fiber += (article.nutritionInfo.fiber || 0) * ratio;
             totalNutrition.sugar += (article.nutritionInfo.sugar || 0) * ratio;
             totalNutrition.salt += (article.nutritionInfo.salt || 0) * ratio;
+            
+            // Berechne das Volumen dieser Zutat in Milliliter
+            // WICHTIG: Wir müssen das Gesamtvolumen ALLER Zutaten berechnen, nicht nur der alkoholhaltigen!
+            let amountInMl = amountInGrams; // Standard: Gramm ≈ ml für Flüssigkeiten
+            
+            const normalizedUnit = ingredient.unit.toLowerCase().trim();
+            if (normalizedUnit === 'l' || normalizedUnit === 'liter') {
+              amountInMl = amountInGrams; // Bereits in ml umgerechnet (amount * 1000)
+            } else if (normalizedUnit === 'ml' || normalizedUnit === 'milliliter') {
+              amountInMl = amountInGrams; // Bereits in ml (gleich Gramm)
+            } else if (normalizedUnit === 'cl') {
+              // Centiliter: 1 cl = 10 ml
+              amountInMl = ingredient.amount * 10;
+            }
+            
+            // WICHTIG: Addiere das Gesamtvolumen IMMER, nicht nur bei Alkohol!
+            // Das Gesamtvolumen wird für die finale Berechnung benötigt
+            totalNutrition.totalWeight += amountInMl; // Gesamtvolumen in ml (ALLER Zutaten)
+            
+            // Alkohol: Berechne absolute Alkoholmenge (Volumen * Alkoholgehalt in %)
+            const articleAlcoholPercent = article.alcohol || article.nutritionInfo.alcohol || 0;
+            
+            if (articleAlcoholPercent > 0) {
+              // Berechne absolute Alkoholmenge in ml
+              // Alkoholgehalt % bedeutet: X ml Alkohol pro 100 ml Flüssigkeit
+              const absoluteAlcoholMl = (amountInMl * articleAlcoholPercent) / 100;
+              
+              // Addiere zur Gesamt-Alkoholmenge
+              totalNutrition.alcohol += absoluteAlcoholMl; // Absoluter Alkohol in ml
+              
+              console.log('🍷 [calculateRecipeNutrition] Alkohol von Zutat berechnet:', {
+                'ingredient.name': ingredient.name,
+                'ingredient.amount': ingredient.amount,
+                'ingredient.unit': ingredient.unit,
+                'amountInGrams': amountInGrams,
+                'amountInMl': amountInMl,
+                'article.alcohol': article.alcohol,
+                'article.nutritionInfo.alcohol': article.nutritionInfo.alcohol,
+                'articleAlcoholPercent': articleAlcoholPercent,
+                'absoluteAlcoholMl': absoluteAlcoholMl,
+                'totalNutrition.alcohol (absolut in ml)': totalNutrition.alcohol,
+                'totalNutrition.totalWeight (gesamt in ml)': totalNutrition.totalWeight
+              });
+            } else {
+              // Kein Alkohol in dieser Zutat, aber Volumen trotzdem hinzufügen!
+              console.log('🍷 [calculateRecipeNutrition] Zutat ohne Alkohol, aber Volumen hinzugefügt:', {
+                'ingredient.name': ingredient.name,
+                'amountInMl': amountInMl,
+                'totalNutrition.totalWeight (gesamt in ml)': totalNutrition.totalWeight
+              });
+            }
           }
         }
       }
@@ -358,6 +550,88 @@ export const useRecipeForm = ({
         totalNutrition.fiber += (recipe.totalNutritionInfo.fiber || 0) * ratio;
         totalNutrition.sugar += (recipe.totalNutritionInfo.sugar || 0) * ratio;
         totalNutrition.salt += (recipe.totalNutritionInfo.salt || 0) * ratio;
+        
+        // Berechne das Volumen des verwendeten Rezepts
+        // Versuche, das tatsächliche Volumen aus den Zutaten des Rezepts zu berechnen
+        let recipeTotalVolume = 0;
+        
+        // Berechne Gesamtvolumen aus den Zutaten des verwendeten Rezepts
+        if (recipe.ingredients && recipe.ingredients.length > 0) {
+          recipe.ingredients.forEach((recipeIngredient: any) => {
+            if (recipeIngredient.name && recipeIngredient.amount > 0) {
+              const article = articles.find(a => a.name === recipeIngredient.name);
+              if (article) {
+                const ingredientAmountInGrams = convertToGrams(recipeIngredient.amount, recipeIngredient.unit);
+                if (ingredientAmountInGrams !== null) {
+                  let ingredientVolumeInMl = ingredientAmountInGrams;
+                  const normalizedUnit = recipeIngredient.unit.toLowerCase().trim();
+                  if (normalizedUnit === 'l' || normalizedUnit === 'liter') {
+                    ingredientVolumeInMl = ingredientAmountInGrams; // Bereits in ml
+                  } else if (normalizedUnit === 'ml' || normalizedUnit === 'milliliter') {
+                    ingredientVolumeInMl = ingredientAmountInGrams;
+                  } else if (normalizedUnit === 'cl') {
+                    ingredientVolumeInMl = recipeIngredient.amount * 10;
+                  }
+                  recipeTotalVolume += ingredientVolumeInMl;
+                }
+              }
+            }
+          });
+        }
+        
+        // Falls keine Zutaten vorhanden oder Volumen = 0, verwende Schätzung
+        if (recipeTotalVolume === 0) {
+          // Schätze das Volumen des verwendeten Rezepts basierend auf Portionen
+          // Annahme: 1 Portion ≈ 100 ml (Standard-Näherung)
+          const estimatedVolumePerPortion = 100; // ml
+          recipeTotalVolume = estimatedVolumePerPortion * recipe.portions;
+          console.log('🍷 [calculateRecipeNutrition] Verwendetes Rezept - Schätzung verwendet:', {
+            'recipe.name': recipe.name,
+            'recipe.portions': recipe.portions,
+            'estimatedVolumePerPortion': estimatedVolumePerPortion,
+            'recipeTotalVolume (geschätzt)': recipeTotalVolume
+          });
+        } else {
+          console.log('🍷 [calculateRecipeNutrition] Verwendetes Rezept - Volumen aus Zutaten berechnet:', {
+            'recipe.name': recipe.name,
+            'recipeTotalVolume (berechnet)': recipeTotalVolume,
+            'recipe.ingredients count': recipe.ingredients.length
+          });
+        }
+        
+        // Berechne das Volumen der verwendeten Portionen
+        const usedVolume = (recipeTotalVolume * ratio); // Volumen des verwendeten Teils des Rezepts
+        
+        // WICHTIG: Gesamtvolumen IMMER hinzufügen (auch ohne Alkohol)
+        totalNutrition.totalWeight += usedVolume;
+        
+        // Alkohol: Berechne absolute Alkoholmenge aus dem verwendeten Rezept
+        const recipeAlcoholPercent = recipe.alcohol || recipe.totalNutritionInfo.alcohol || 0;
+        if (recipeAlcoholPercent > 0) {
+          // Berechne absolute Alkoholmenge aus dem verwendeten Rezept
+          const absoluteAlcoholFromRecipe = (usedVolume * recipeAlcoholPercent) / 100;
+          totalNutrition.alcohol += absoluteAlcoholFromRecipe;
+          
+          console.log('🍷 [calculateRecipeNutrition] Alkohol von verwendetem Rezept berechnet:', {
+            'recipe.name': recipe.name,
+            'recipe.alcohol': recipe.alcohol,
+            'recipe.totalNutritionInfo.alcohol': recipe.totalNutritionInfo.alcohol,
+            'recipeAlcoholPercent': recipeAlcoholPercent,
+            'recipeTotalVolume': recipeTotalVolume,
+            'ratio': ratio,
+            'usedVolume': usedVolume,
+            'absoluteAlcoholFromRecipe': absoluteAlcoholFromRecipe,
+            'totalNutrition.alcohol (absolut in ml)': totalNutrition.alcohol,
+            'totalNutrition.totalWeight (gesamt in ml)': totalNutrition.totalWeight
+          });
+        } else {
+          console.log('🍷 [calculateRecipeNutrition] Verwendetes Rezept ohne Alkohol, aber Volumen hinzugefügt:', {
+            'recipe.name': recipe.name,
+            'recipeTotalVolume': recipeTotalVolume,
+            'usedVolume': usedVolume,
+            'totalNutrition.totalWeight (gesamt in ml)': totalNutrition.totalWeight
+          });
+        }
       }
     });
 
@@ -374,6 +648,32 @@ export const useRecipeForm = ({
       salt: totalNutrition.salt / portions
     };
 
+    // Berechne Alkoholgehalt in % (absoluter Alkohol / Gesamtvolumen * 100)
+    let calculatedAlcohol: number | undefined = undefined;
+    if (totalNutrition.totalWeight > 0) {
+      if (totalNutrition.alcohol > 0) {
+        // Alkoholgehalt = (absolute Alkoholmenge in ml / Gesamtvolumen in ml) * 100
+        calculatedAlcohol = (totalNutrition.alcohol / totalNutrition.totalWeight) * 100;
+        calculatedAlcohol = Math.round(calculatedAlcohol * 100) / 100; // Auf 2 Nachkommastellen runden
+      } else {
+        // Kein Alkohol vorhanden
+        calculatedAlcohol = 0;
+      }
+    }
+    
+    // Verwende IMMER den berechneten Wert, wenn vorhanden
+    // Nur wenn kein berechneter Wert existiert, verwende den vorhandenen Wert
+    const alcoholValue = calculatedAlcohol !== undefined ? calculatedAlcohol : (recipeForm.alcohol || recipeForm.totalNutritionInfo?.alcohol);
+    
+    console.log('🍷 [calculateRecipeNutrition] Finale Alkoholberechnung:', {
+      'totalNutrition.alcohol (absolut in ml)': totalNutrition.alcohol,
+      'totalNutrition.totalWeight (gesamt in ml)': totalNutrition.totalWeight,
+      'calculatedAlcohol (%)': calculatedAlcohol,
+      'recipeForm.alcohol': recipeForm.alcohol,
+      'recipeForm.totalNutritionInfo?.alcohol': recipeForm.totalNutritionInfo?.alcohol,
+      'final alcoholValue (%)': alcoholValue
+    });
+    
     return {
       calories: Math.round(nutritionPerPortion.calories),
       kilojoules: Math.round(nutritionPerPortion.kilojoules * 10) / 10,
@@ -382,7 +682,8 @@ export const useRecipeForm = ({
       carbohydrates: Math.round(nutritionPerPortion.carbohydrates * 10) / 10,
       fiber: Math.round(nutritionPerPortion.fiber * 10) / 10,
       sugar: Math.round(nutritionPerPortion.sugar * 10) / 10,
-      salt: Math.round(nutritionPerPortion.salt * 100) / 100
+      salt: Math.round(nutritionPerPortion.salt * 100) / 100,
+      alcohol: alcoholValue
     };
   };
 
@@ -884,6 +1185,7 @@ export const useRecipeForm = ({
       const cleanedIngredients = recipeForm.ingredients
         .filter(ingredient => ingredient.name && ingredient.name.trim() !== '');
 
+      const calculatedNutritionFallback = calculateRecipeNutrition();
       const recipeToSave = {
         ...recipeForm,
         preparationSteps: cleanedPreparationSteps,
@@ -891,11 +1193,18 @@ export const useRecipeForm = ({
         id: editingRecipe ? editingRecipe.id : UUIDUtils.generateId(), // Frontend-ID (eindeutig)
         dbId: editingRecipe?.dbId, // DB-ID falls vorhanden (für Updates)
         materialCosts: calculateMaterialCosts(),
-        totalNutritionInfo: calculateRecipeNutrition(),
-        allergens: getRecipeAllergens()
+        totalNutritionInfo: calculatedNutritionFallback,
+        allergens: getRecipeAllergens(),
+        alcohol: recipeForm.alcohol || calculatedNutritionFallback.alcohol
         // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
         // lastModifiedBy wird später implementiert (User-System)
       };
+      
+      console.log('🍷 [handleSaveRecipe Fallback] Alkoholwert beim Speichern:', {
+        'recipeForm.alcohol': recipeForm.alcohol,
+        'calculatedNutritionFallback.alcohol': calculatedNutritionFallback.alcohol,
+        'recipeToSave.alcohol': recipeToSave.alcohol
+      });
       
       // Fallback: Lokale Speicherung
       if (editingRecipe) {

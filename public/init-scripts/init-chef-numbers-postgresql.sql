@@ -1,7 +1,7 @@
 -- Chef Numbers Database Initialization Script (PostgreSQL)
 -- Wird beim ersten Start der PostgreSQL-Datenbank ausgeführt
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-29T20:35:35.906Z
+-- Automatisch generiert am: 2025-11-03T01:06:18.445Z
 
 -- Erstelle Rollen für PostgreSQL
 DO $$
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS system_info (
 -- ========================================
 
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-29T20:35:35.906Z
+-- Generiert am: 2025-11-03T01:06:18.445Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -216,7 +216,9 @@ vat_rate DECIMAL DEFAULT 19,
 selling_price DECIMAL,
 selling_price_history JSONB,
 total_nutrition_info JSONB,
+alcohol DECIMAL,
 allergens JSONB,
+ingredients_text TEXT,
 notes TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
@@ -1052,6 +1054,17 @@ BEGIN
         RAISE NOTICE '✅ Spalte total_nutrition_info zu recipes hinzugefügt';
     END IF;
 
+    -- Spalte: alcohol
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'alcohol'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN alcohol DECIMAL  NULL;
+        RAISE NOTICE '✅ Spalte alcohol zu recipes hinzugefügt';
+    END IF;
+
     -- Spalte: allergens
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
@@ -1061,6 +1074,17 @@ BEGIN
     ) THEN
         ALTER TABLE recipes ADD COLUMN allergens JSONB  NULL;
         RAISE NOTICE '✅ Spalte allergens zu recipes hinzugefügt';
+    END IF;
+
+    -- Spalte: ingredients_text
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'recipes' 
+        AND column_name = 'ingredients_text'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN ingredients_text TEXT  NULL;
+        RAISE NOTICE '✅ Spalte ingredients_text zu recipes hinzugefügt';
     END IF;
 
     -- Spalte: notes

@@ -306,28 +306,57 @@ services:
   if (!show) return null;
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-lg">
-        <div className="modal-content" style={{ backgroundColor: colors.card, borderColor: colors.cardBorder }}>
-          <div className="modal-header" style={{ borderBottomColor: colors.cardBorder }}>
-            <h5 className="modal-title" style={{ color: colors.text }}>
-              <FaDocker className="me-2" />
-              {serviceConfig.icon} {serviceConfig.title}
-            </h5>
-            <button
-              type="button"
-              className="btn-close"
-              onClick={onClose}
-              style={{ filter: 'invert(1)' }}
-            />
-          </div>
-          
-          <div className="modal-body" style={{ color: colors.text }}>
-            <div className="alert alert-info" style={{ backgroundColor: colors.accent + '20', borderColor: colors.accent }}>
-              <FaInfoCircle className="me-2" />
-              <strong>IP-Adresse erreichbar, aber keine Docker-Container gefunden</strong><br />
-              Die angegebene IP-Adresse ist erreichbar, aber {serviceConfig.services.join(' und ')} {serviceConfig.services.length === 1 ? 'ist' : 'sind'} nicht verfügbar. 
-              Dies deutet darauf hin, dass noch keine Docker-Container installiert sind.
+    <div 
+      className="fixed top-0 left-0 w-full h-full" 
+      style={{ 
+        background: 'rgba(0,0,0,0.5)', 
+        zIndex: 1060,
+        top: 56,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        className="card" 
+        style={{ 
+          backgroundColor: colors.card, 
+          border: `1px solid ${colors.cardBorder}`,
+          maxWidth: '900px',
+          width: '90vw',
+          maxHeight: '90vh',
+          overflow: 'hidden'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+          <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+            <FaDocker className="me-2" style={{ color: colors.accent }} />
+            {serviceConfig.icon} {serviceConfig.title}
+          </h5>
+          <button
+            type="button"
+            className="btn btn-link p-0"
+            onClick={onClose}
+            style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
+          >
+            <FaClose />
+          </button>
+        </div>
+        
+        <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)' }}>
+            <div className="p-3 rounded mb-3" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+              <div className="d-flex align-items-start">
+                <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                <div>
+                  <strong style={{ color: colors.text }}>IP-Adresse erreichbar, aber keine Docker-Container gefunden</strong><br />
+                  <span style={{ color: colors.textSecondary }}>
+                    Die angegebene IP-Adresse ist erreichbar, aber {serviceConfig.services.join(' und ')} {serviceConfig.services.length === 1 ? 'ist' : 'sind'} nicht verfügbar. 
+                    Dies deutet darauf hin, dass noch keine Docker-Container installiert sind.
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="mb-4">
@@ -340,13 +369,8 @@ services:
               </p>
               <div className="d-flex gap-2">
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-outline-primary"
                   onClick={handleDownloadDockerCompose}
-                  style={{
-                    backgroundColor: colors.accent,
-                    borderColor: colors.accent,
-                    color: 'white'
-                  }}
                 >
                   <FaDownload className="me-2" />
                   Herunterladen
@@ -354,10 +378,6 @@ services:
                 <button
                   className="btn btn-outline-primary"
                   onClick={handleCopyToClipboard}
-                  style={{
-                    borderColor: colors.accent,
-                    color: colors.accent
-                  }}
                 >
                   <FaCopy className="me-2" />
                   In Zwischenablage kopieren
@@ -367,164 +387,165 @@ services:
 
             {showInstructions && (
               <div className="mt-4">
-                <h6 className="mb-3">
-                  <FaCheck className="me-2 text-success" />
-                  Datei heruntergeladen: {downloadedFile}
-                </h6>
+                <div className="p-3 rounded mb-3" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                  <div className="d-flex align-items-center">
+                    <FaCheck className="me-2" style={{ color: colors.accent, flexShrink: 0 }} />
+                    <div>
+                      <strong style={{ color: colors.text }}>Datei heruntergeladen:</strong>
+                      <span style={{ color: colors.textSecondary }}> {downloadedFile}</span>
+                    </div>
+                  </div>
+                </div>
                 
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="card" style={{ backgroundColor: colors.paper, borderColor: colors.cardBorder }}>
-                      <div className="card-header" style={{ backgroundColor: colors.card, borderBottomColor: colors.cardBorder }}>
-                        <h6 className="mb-0" style={{ color: colors.text }}>
-                          <FaDocker className="me-2" />
-                          Docker Installation
-                        </h6>
-                      </div>
-                      <div className="card-body">
-                        <ol className="mb-0" style={{ fontSize: '0.9em' }}>
-                          <li>Öffnen Sie ein Terminal/Command Prompt</li>
-                          <li>
-                            <strong>Option A:</strong> Datei direkt herunterladen:
-                            <div className="alert alert-dark mt-2 mb-2" style={{ backgroundColor: '#2b2b2b', border: 'none', padding: '8px 12px' }}>
-                              <code style={{ color: '#00ff00', fontFamily: 'monospace', fontSize: '0.85em' }}>
-                                wget https://raw.githubusercontent.com/StefanEhlert/The-Chef-s-Numbers/main/{serviceConfig.filename}
-                              </code>
-                              <div className="mt-1">oder</div>
-                              <code style={{ color: '#00ff00', fontFamily: 'monospace', fontSize: '0.85em' }}>
-                                curl -O https://raw.githubusercontent.com/StefanEhlert/The-Chef-s-Numbers/main/{serviceConfig.filename}
-                              </code>
-                            </div>
-                            <strong>Option B:</strong> Navigieren Sie zum Ordner mit der heruntergeladenen Datei
-                          </li>
-                          <li>Führen Sie aus: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>docker-compose -f {serviceConfig.filename} up -d</code></li>
-                          <li>Warten Sie bis alle Container gestartet sind</li>
-                          <li>Prüfen Sie mit: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>docker-compose -f {serviceConfig.filename} ps</code></li>
-                          {serviceType === 'postgresql' && (
-                            <>
-                              <li>PostgreSQL wird auf Port {dockerConfig.postgres.port} verfügbar sein</li>
-                              <li>PostgREST API wird auf Port {dockerConfig.postgrest.port} verfügbar sein</li>
-                            </>
-                          )}
-                          {serviceType === 'mariadb' && (
-                            <>
-                              <li>MariaDB wird auf Port {dockerConfig.mariadb.port} verfügbar sein</li>
-                              <li>Prisma API wird auf Port {dockerConfig.mariadb.prismaPort} verfügbar sein</li>
-                            </>
-                          )}
-                          {serviceType === 'mysql' && (
-                            <>
-                              <li>MySQL wird auf Port {dockerConfig.mysql.port} verfügbar sein</li>
-                              <li>Prisma API wird auf Port {dockerConfig.mysql.prismaPort} verfügbar sein</li>
-                            </>
-                          )}
-                          {serviceType === 'couchdb' && dockerConfig.couchdb && (
-                            <>
-                              <li>CouchDB wird auf Port {dockerConfig.couchdb.port} verfügbar sein</li>
-                              <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://localhost:{dockerConfig.couchdb.port}/_utils</code></li>
-                            </>
-                          )}
-                          {serviceType === 'minio' && (
-                            <>
-                              <li>MinIO API wird auf Port {dockerConfig.minio.port} verfügbar sein</li>
-                              <li>MinIO Web-UI wird auf Port {dockerConfig.minio.consolePort} verfügbar sein</li>
-                            </>
-                          )}
-                          {serviceType === 'frontend' && (
-                            <>
-                              <li>Frontend wird auf Port {dockerConfig.frontend?.port || '3000'} verfügbar sein</li>
-                              <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://{dockerConfig.frontend?.host || 'localhost'}:{dockerConfig.frontend?.port || '3000'}</code></li>
-                            </>
-                          )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="card" style={{ backgroundColor: colors.paper || colors.card, border: `1px solid ${colors.cardBorder}` }}>
+                    <div className="card-header" style={{ backgroundColor: colors.card, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 className="mb-0" style={{ color: colors.text }}>
+                        <FaDocker className="me-2" style={{ color: colors.accent }} />
+                        Docker Installation
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <ol className="mb-0" style={{ fontSize: '0.9em', color: colors.textSecondary }}>
+                        <li>Öffnen Sie ein Terminal/Command Prompt</li>
+                        <li>
+                          <strong style={{ color: colors.text }}>Option A:</strong> Datei direkt herunterladen:
+                          <div className="mt-2 mb-2 p-3 rounded" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}`, fontFamily: 'monospace' }}>
+                            <code style={{ color: colors.accent, fontSize: '0.85em', display: 'block', marginBottom: '0.5rem' }}>
+                              wget https://raw.githubusercontent.com/StefanEhlert/The-Chef-s-Numbers/main/{serviceConfig.filename}
+                            </code>
+                            <div className="mt-1 mb-1" style={{ color: colors.textSecondary }}>oder</div>
+                            <code style={{ color: colors.accent, fontSize: '0.85em', display: 'block' }}>
+                              curl -O https://raw.githubusercontent.com/StefanEhlert/The-Chef-s-Numbers/main/{serviceConfig.filename}
+                            </code>
+                          </div>
+                          <strong style={{ color: colors.text }}>Option B:</strong> Navigieren Sie zum Ordner mit der heruntergeladenen Datei
+                        </li>
+                        <li>Führen Sie aus: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>docker-compose -f {serviceConfig.filename} up -d</code></li>
+                        <li>Warten Sie bis alle Container gestartet sind</li>
+                        <li>Prüfen Sie mit: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>docker-compose -f {serviceConfig.filename} ps</code></li>
+                        {serviceType === 'postgresql' && (
+                          <>
+                            <li>PostgreSQL wird auf Port {dockerConfig.postgres.port} verfügbar sein</li>
+                            <li>PostgREST API wird auf Port {dockerConfig.postgrest.port} verfügbar sein</li>
+                          </>
+                        )}
+                        {serviceType === 'mariadb' && (
+                          <>
+                            <li>MariaDB wird auf Port {dockerConfig.mariadb.port} verfügbar sein</li>
+                            <li>Prisma API wird auf Port {dockerConfig.mariadb.prismaPort} verfügbar sein</li>
+                          </>
+                        )}
+                        {serviceType === 'mysql' && (
+                          <>
+                            <li>MySQL wird auf Port {dockerConfig.mysql.port} verfügbar sein</li>
+                            <li>Prisma API wird auf Port {dockerConfig.mysql.prismaPort} verfügbar sein</li>
+                          </>
+                        )}
+                        {serviceType === 'couchdb' && dockerConfig.couchdb && (
+                          <>
+                            <li>CouchDB wird auf Port {dockerConfig.couchdb.port} verfügbar sein</li>
+                            <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://localhost:{dockerConfig.couchdb.port}/_utils</code></li>
+                          </>
+                        )}
+                        {serviceType === 'minio' && (
+                          <>
+                            <li>MinIO API wird auf Port {dockerConfig.minio.port} verfügbar sein</li>
+                            <li>MinIO Web-UI wird auf Port {dockerConfig.minio.consolePort} verfügbar sein</li>
+                          </>
+                        )}
+                        {serviceType === 'frontend' && (
+                          <>
+                            <li>Frontend wird auf Port {dockerConfig.frontend?.port || '3000'} verfügbar sein</li>
+                            <li>Öffnen Sie: <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>http://{dockerConfig.frontend?.host || 'localhost'}:{dockerConfig.frontend?.port || '3000'}</code></li>
+                          </>
+                        )}
                         </ol>
                       </div>
                     </div>
-                  </div>
                   
-                  <div className="col-md-6">
-                    <div className="card" style={{ backgroundColor: colors.paper, borderColor: colors.cardBorder }}>
-                      <div className="card-header" style={{ backgroundColor: colors.card, borderBottomColor: colors.cardBorder }}>
-                        <h6 className="mb-0" style={{ color: colors.text }}>
-                          <FaServer className="me-2" />
-                          Portainer Installation
-                        </h6>
-                      </div>
-                      <div className="card-body">
-                        <ol className="mb-0" style={{ fontSize: '0.9em' }}>
-                          <li>Öffnen Sie Portainer in Ihrem Browser</li>
-                          <li>Gehen Sie zu "Stacks" → "Add stack"</li>
-                          <li>Geben Sie einen Namen ein (z.B. <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>
-                            {serviceType === 'frontend' ? 'chef-numbers-frontend' : 
-                             serviceType === 'postgresql' ? 'chef-numbers-postgresql' :
-                             serviceType === 'mariadb' ? 'chef-numbers-mariadb' :
-                             serviceType === 'mysql' ? 'chef-numbers-mysql' :
-                             serviceType === 'couchdb' ? 'chef-numbers-couchdb' :
-                             serviceType === 'minio' ? 'chef-numbers-minio' : 'chef-numbers'}
-                          </code>)</li>
-                          <li>Kopieren Sie den Inhalt der {serviceConfig.filename} <strong>in die Zwischenablage</strong></li>
-                          <li>Fügen Sie ihn in den Web-Editor ein</li>
-                          <li>Klicken Sie "Deploy the stack"</li>
-                        </ol>
-                      </div>
+                  <div className="card" style={{ backgroundColor: colors.paper || colors.card, border: `1px solid ${colors.cardBorder}` }}>
+                    <div className="card-header" style={{ backgroundColor: colors.card, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                      <h6 className="mb-0" style={{ color: colors.text }}>
+                        <FaServer className="me-2" style={{ color: colors.accent }} />
+                        Portainer Installation
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <ol className="mb-0" style={{ fontSize: '0.9em', color: colors.textSecondary }}>
+                        <li>Öffnen Sie Portainer in Ihrem Browser</li>
+                        <li>Gehen Sie zu "Stacks" → "Add stack"</li>
+                        <li>Geben Sie einen Namen ein (z.B. <code style={{ backgroundColor: colors.secondary, padding: '2px 6px', borderRadius: '3px' }}>
+                          {serviceType === 'frontend' ? 'chef-numbers-frontend' : 
+                           serviceType === 'postgresql' ? 'chef-numbers-postgresql' :
+                           serviceType === 'mariadb' ? 'chef-numbers-mariadb' :
+                           serviceType === 'mysql' ? 'chef-numbers-mysql' :
+                           serviceType === 'couchdb' ? 'chef-numbers-couchdb' :
+                           serviceType === 'minio' ? 'chef-numbers-minio' : 'chef-numbers'}
+                        </code>)</li>
+                        <li>Kopieren Sie den Inhalt der {serviceConfig.filename} <strong>in die Zwischenablage</strong></li>
+                        <li>Fügen Sie ihn in den Web-Editor ein</li>
+                        <li>Klicken Sie "Deploy the stack"</li>
+                      </ol>
                     </div>
                   </div>
                 </div>
 
                 {serviceType !== 'frontend' && (
-                  <div className="alert alert-success mt-3" style={{ backgroundColor: colors.accent + '20', borderColor: colors.accent }}>
-                    <FaCheck className="me-2" />
-                    <strong>Nach der Installation:</strong> Starten Sie den Verbindungstest erneut, um die Datenbank zu konfigurieren.
+                  <div className="p-3 rounded mt-3" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                    <div className="d-flex align-items-start">
+                      <FaCheck className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                      <div>
+                        <strong style={{ color: colors.text }}>Nach der Installation:</strong>
+                        <span style={{ color: colors.textSecondary }}> Starten Sie den Verbindungstest erneut, um die Datenbank zu konfigurieren.</span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 
                 {serviceType === 'frontend' && (
-                  <div className="alert alert-info mt-3" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
-                    <FaInfoCircle className="me-2" />
-                    <strong>Nach der Installation:</strong> Öffnen Sie{' '}
-                    <a 
-                      href={`http://${dockerConfig.frontend?.host || 'localhost'}:${dockerConfig.frontend?.port || '3000'}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ 
-                        color: '#17a2b8',
-                        fontWeight: 'bold',
-                        textDecoration: 'underline'
-                      }}
-                    >
-                      http://{dockerConfig.frontend?.host || 'localhost'}:{dockerConfig.frontend?.port || '3000'}
-                    </a>
-                    {' '}im Browser und wählen Sie Ihre Datenbank aus.
+                  <div className="p-3 rounded mt-3" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                    <div className="d-flex align-items-start">
+                      <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                      <div>
+                        <strong style={{ color: colors.text }}>Nach der Installation:</strong>
+                        <span style={{ color: colors.textSecondary }}> Öffnen Sie </span>
+                        <a 
+                          href={`http://${dockerConfig.frontend?.host || 'localhost'}:${dockerConfig.frontend?.port || '3000'}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ 
+                            color: colors.accent,
+                            fontWeight: 'bold',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          http://{dockerConfig.frontend?.host || 'localhost'}:{dockerConfig.frontend?.port || '3000'}
+                        </a>
+                        <span style={{ color: colors.textSecondary }}> im Browser und wählen Sie Ihre Datenbank aus.</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             )}
-          </div>
+        </div>
           
-          <div className="modal-footer" style={{ borderTopColor: colors.cardBorder }}>
-            {showInstructions && getTestButtonText() && (
-              <button
-                className="btn btn-outline-primary me-2"
-                onClick={onRestartTest}
-                style={{
-                  borderColor: colors.accent,
-                  color: colors.accent
-                }}
-              >
-                {getTestButtonText()}
-              </button>
-            )}
+        <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+          {showInstructions && getTestButtonText() && (
             <button
-              className="btn btn-secondary"
-              onClick={onClose}
-              style={{
-                backgroundColor: colors.cardBorder,
-                borderColor: colors.cardBorder,
-                color: colors.text
-              }}
+              className="btn btn-outline-primary"
+              onClick={onRestartTest}
             >
-              Schließen
+              {getTestButtonText()}
             </button>
-          </div>
+          )}
+          <button
+            className="btn btn-outline-secondary"
+            onClick={onClose}
+          >
+            Schließen
+          </button>
         </div>
       </div>
     </div>

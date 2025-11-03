@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaPlus, FaList, FaTh, FaSave, FaSort, FaTrash, FaPencilAlt, FaTimes, FaBoxes, FaCheck, FaPrint } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaList, FaTh, FaSave, FaSort, FaSortUp, FaSortDown, FaTrash, FaPencilAlt, FaTimes, FaBoxes, FaCheck, FaPrint } from 'react-icons/fa';
 import { Article } from '../types';
 import { setButtonColors } from '../utils/cssVariables';
 
@@ -180,28 +180,16 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                 <div className="btn-group w-full" role="group">
                   <button
                     type="button"
-                    className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setViewMode('list')}
-                    style={{
-                      backgroundColor: viewMode === 'list' ? colors.accent : 'transparent',
-                      borderColor: viewMode === 'list' ? colors.accent : colors.cardBorder,
-                      color: viewMode === 'list' ? 'white' : colors.text,
-                      borderRadius: '0.375rem 0 0 0.375rem'
-                    }}
                   >
                     <FaList className="me-1" />
                     Liste
                   </button>
                   <button
                     type="button"
-                    className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setViewMode('grid')}
-                    style={{
-                      backgroundColor: viewMode === 'grid' ? colors.accent : 'transparent',
-                      borderColor: viewMode === 'grid' ? colors.accent : colors.cardBorder,
-                      color: viewMode === 'grid' ? 'white' : colors.text,
-                      borderRadius: '0 0.375rem 0.375rem 0'
-                    }}
                   >
                     <FaTh className="me-1" />
                     Kacheln
@@ -259,34 +247,32 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                 </select>
               </div>
               <div>
-                <select
-                  className="form-select bg-color-input"
-                  value={sortField}
-                  onChange={(e) => setSortField(e.target.value)}
-                  style={{
-                    borderColor: colors.cardBorder,
-                    color: colors.text
-                  }}
-                >
-                  <option value="name">Artikel</option>
-                  <option value="supplier">Lieferant</option>
-                  <option value="category">Kategorie</option>
-                  <option value="bundlePrice">Gebindepreis</option>
-                  <option value="pricePerUnit">Inhaltspreis</option>
-                </select>
+                {/* Leere Spalte */}
               </div>
               <div>
-                <button
-                  className="btn btn-outline-secondary no-hover w-full bg-color-input"
-                  onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                  style={{
-                    borderColor: colors.cardBorder,
-                    color: colors.text
-                  }}
-                >
-                  <FaSort className="me-1" />
-                  {sortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
-                </button>
+                <div className="input-group">
+                  <select
+                    className="form-select"
+                    value={sortField}
+                    onChange={(e) => setSortField(e.target.value)}
+                    style={{
+                      color: colors.text
+                    }}
+                  >
+                    <option value="name">Artikel</option>
+                    <option value="supplier">Lieferant</option>
+                    <option value="category">Kategorie</option>
+                    <option value="bundlePrice">Gebindepreis</option>
+                    <option value="pricePerUnit">Inhaltspreis</option>
+                  </select>
+                  <button
+                    className="btn btn-outline-input"
+                    title={sortDirection === 'asc' ? 'Aufsteigend' : 'Absteigend'}
+                    onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {sortDirection === 'asc' ? <FaSortUp /> : <FaSortDown />}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -393,9 +379,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
         {/* Artikel-Liste */}
         {viewMode === 'list' ? (
           <div className="card">
-            <div className="card-body p-0">
-              <div className="overflow-x-auto">
-                <table className="table table-hover modern-table mb-0">
+            <div className="overflow-x-auto">
+              <table className="table table-hover modern-table mb-0">
                   <thead>
                     <tr>
                       <th>
@@ -408,9 +393,9 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                       </th>
                       <th>Artikel</th>
                       <th>Lieferant</th>
-                      <th>Gebindepreis</th>
+                      <th>E-Preis</th>
                       <th>Inhalt</th>
-                      <th>Preis/Einheit</th>
+                      <th>G-Preis</th>
                       <th>Aktionen</th>
                     </tr>
                   </thead>
@@ -451,8 +436,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                         </td>
                         <td>
                           <div className="price-info">
-                            <div className="price-main">{formatPrice(article.bundlePrice)}</div>
-                            <div className="price-unit">pro {article.bundleUnit}</div>
+                            <div className="price-main price-highlight">{formatPrice(article.pricePerUnit)}</div>
+                            <div className="price-unit">pro {article.contentUnit}</div>
                           </div>
                         </td>
                         <td>
@@ -462,8 +447,8 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                         </td>
                         <td>
                           <div className="price-info">
-                            <div className="price-main price-highlight">{formatPrice(article.pricePerUnit)}</div>
-                            <div className="price-unit">pro {article.contentUnit}</div>
+                            <div className="price-main">{formatPrice(article.bundlePrice)}</div>
+                            <div className="price-unit">pro {article.bundleUnit}</div>
                           </div>
                         </td>
                         <td>
@@ -497,13 +482,12 @@ const Artikelverwaltung: React.FC<ArtikelverwaltungProps> = ({
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+              </table>
             </div>
           </div>
         ) : (
           /* Kachel-Ansicht */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {filteredArticles.map(article => (
               <div key={article.id} className="mb-3">
                 <div 

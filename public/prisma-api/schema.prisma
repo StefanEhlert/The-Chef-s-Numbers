@@ -1,6 +1,6 @@
 // Chef Numbers Prisma Schema
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-10-29T20:35:35.938Z
+// Automatisch generiert am: 2025-11-03T01:06:18.463Z
 
 generator client {
   provider = "prisma-client-js"
@@ -90,7 +90,9 @@ model Recipe {
   sellingPrice           Decimal? @map("selling_price") @db.Decimal(10, 4)
   sellingPriceHistory    Json? @map("selling_price_history")
   totalNutritionInfo     Json? @map("total_nutrition_info")
+  alcohol                Decimal? @db.Decimal(10, 4)
   allergens              Json?
+  ingredientsText        String? @map("ingredients_text") @db.Text
   notes                  String? @db.Text
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")

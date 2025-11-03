@@ -165,7 +165,9 @@ export interface Recipe extends BaseEntity {
     salt?: number;
     alcohol?: number; // % Alkoholgehalt
   };
+  alcohol?: number; // % Alkoholgehalt (als eigenständiges Feld)
   allergens: string[];
+  ingredientsText?: string; // Manuell editierte Inhaltsstoffe (überschreibt automatisch berechnete)
   notes?: string;
 }
 

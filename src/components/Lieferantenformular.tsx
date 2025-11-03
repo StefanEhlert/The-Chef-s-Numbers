@@ -31,6 +31,40 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   const [isSearching, setIsSearching] = React.useState(false);
   const [shouldEvaluateClipboard, setShouldEvaluateClipboard] = React.useState(false);
   const [isEvaluatingClipboard, setIsEvaluatingClipboard] = React.useState(false);
+  
+  // Resize-Funktionalität
+  const [formWidth, setFormWidth] = React.useState<number | null>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+  const [isInitialMount, setIsInitialMount] = React.useState(true);
+  const formContainerRef = React.useRef<HTMLDivElement>(null);
+  const resizeHandleRef = React.useRef<HTMLDivElement>(null);
+  const resizeStartX = React.useRef<number>(0);
+  const resizeStartWidth = React.useRef<number>(60);
+  
+  const FORM_WIDTH_STORAGE_KEY = 'supplierFormWidth';
+  
+  const loadSavedWidth = (): number => {
+    try {
+      const saved = localStorage.getItem(FORM_WIDTH_STORAGE_KEY);
+      if (saved) {
+        const width = parseFloat(saved);
+        if (!isNaN(width) && width >= 40 && width <= 90) {
+          return width;
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der gespeicherten Breite:', error);
+    }
+    return 60;
+  };
+  
+  const saveWidth = (width: number) => {
+    try {
+      localStorage.setItem(FORM_WIDTH_STORAGE_KEY, width.toString());
+    } catch (error) {
+      console.error('Fehler beim Speichern der Breite:', error);
+    }
+  };
 
   const {
     // States
@@ -71,6 +105,73 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
       }
     }
   }, [showSupplierForm, editingSupplierId, suppliers]);
+
+  // Initialisiere Breite beim Öffnen - lade gespeicherte Breite oder verwende 60%
+  React.useEffect(() => {
+    if (showSupplierForm && formWidth === null) {
+      setIsInitialMount(true);
+      const savedWidth = loadSavedWidth();
+      setFormWidth(savedWidth);
+      const timer = setTimeout(() => {
+        setIsInitialMount(false);
+      }, 50);
+      return () => clearTimeout(timer);
+    } else if (!showSupplierForm) {
+      setFormWidth(null);
+      setIsInitialMount(true);
+    }
+  }, [showSupplierForm, formWidth]);
+
+  // Resize-Handling
+  React.useEffect(() => {
+    if (!isResizing) return;
+
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!formContainerRef.current) return;
+      
+      const container = formContainerRef.current.parentElement?.parentElement;
+      if (!container) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const deltaX = e.clientX - resizeStartX.current;
+      const containerWidth = containerRect.width;
+      const deltaWidthPercent = (deltaX / containerWidth) * 100;
+      
+      const newWidth = Math.min(Math.max(resizeStartWidth.current + (deltaWidthPercent * 2), 40), 90);
+      
+      setFormWidth(newWidth);
+      saveWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
+  const effectiveWidth = showSupplierForm && formWidth === null ? loadSavedWidth() : formWidth;
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeStartX.current = e.clientX;
+    const currentWidth = formWidth !== null ? formWidth : (showSupplierForm ? loadSavedWidth() : 60);
+    resizeStartWidth.current = currentWidth;
+    setIsResizing(true);
+  };
 
   const handleCloseForm = () => {
     setShowSupplierForm(false);
@@ -1026,7 +1127,14 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
     >
       <div className="container-fluid h-full p-4">
         <div className="flex justify-center h-full">
-          <div className="w-full xl:w-1/2">
+          <div 
+            ref={formContainerRef}
+            className="relative"
+            style={{ 
+              width: effectiveWidth !== null ? `${effectiveWidth}%` : '100%',
+              transition: (isResizing || isInitialMount) ? 'none' : 'width 0.3s ease'
+            }}
+          >
             <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
               <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
                 <div className="flex items-center">
@@ -1322,6 +1430,42 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                   <FaSave className="mr-2" />
                   {editingSupplier ? 'Änderungen speichern' : 'Lieferant speichern'}
                 </button>
+              </div>
+              {/* Resize-Handle - nur auf größeren Bildschirmen sichtbar */}
+              <div
+                ref={resizeHandleRef}
+                onMouseDown={handleResizeStart}
+                className="hidden md:flex"
+                style={{
+                  position: 'absolute',
+                  right: '-4px',
+                  top: 0,
+                  bottom: 0,
+                  width: '8px',
+                  cursor: 'ew-resize',
+                  backgroundColor: 'transparent',
+                  zIndex: 100,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.accent + '20';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isResizing) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    width: '3px',
+                    height: '60px',
+                    backgroundColor: isResizing ? colors.accent : colors.cardBorder,
+                    borderRadius: '2px',
+                    transition: isResizing ? 'none' : 'background-color 0.2s ease'
+                  }}
+                />
               </div>
             </div>
           </div>

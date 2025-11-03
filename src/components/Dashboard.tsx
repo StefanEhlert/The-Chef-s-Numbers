@@ -212,7 +212,7 @@ const Dashboard: React.FC<DashboardProps> = ({
          
           {/* Speicher-Info mit Link */}
           <div 
-            className="flex items-center gap-2 px-3 py-2 rounded"
+            className="card-button flex items-center gap-2 px-3 py-2 rounded"
             style={{
               backgroundColor: colors.secondary,
               border: `1px solid ${colors.cardBorder}`,

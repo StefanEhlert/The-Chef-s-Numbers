@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (Supabase)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-10-29T20:35:35.961Z
+-- Automatisch generiert am: 2025-11-03T01:06:18.478Z
 -- 
 -- WICHTIG: Dieses Script ist für Supabase Cloud optimiert
 -- - Verwendet UUIDs als Primary Keys
@@ -148,7 +148,9 @@ CREATE TABLE IF NOT EXISTS recipes (
     selling_price DECIMAL  NULL,
     selling_price_history JSONB  NULL,
     total_nutrition_info JSONB  NULL,
+    alcohol DECIMAL  NULL,
     allergens JSONB  NULL,
+    ingredients_text TEXT  NULL,
     notes TEXT  NULL,
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
@@ -1088,12 +1090,40 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'recipes' 
+        AND column_name = 'alcohol'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN alcohol DECIMAL  NULL ;
+        RAISE NOTICE '✅ Spalte alcohol zu recipes hinzugefügt';
+    ELSE
+        RAISE NOTICE '✓ Spalte alcohol existiert bereits in recipes';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'recipes' 
         AND column_name = 'allergens'
     ) THEN
         ALTER TABLE recipes ADD COLUMN allergens JSONB  NULL ;
         RAISE NOTICE '✅ Spalte allergens zu recipes hinzugefügt';
     ELSE
         RAISE NOTICE '✓ Spalte allergens existiert bereits in recipes';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'recipes' 
+        AND column_name = 'ingredients_text'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN ingredients_text TEXT  NULL ;
+        RAISE NOTICE '✅ Spalte ingredients_text zu recipes hinzugefügt';
+    ELSE
+        RAISE NOTICE '✓ Spalte ingredients_text existiert bereits in recipes';
     END IF;
 END $$;
 

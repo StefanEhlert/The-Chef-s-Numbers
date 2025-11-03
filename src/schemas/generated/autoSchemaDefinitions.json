@@ -559,12 +559,28 @@
         "tsType": "{\r\n    calories: number;\r\n    kilojoules: number;\r\n    protein: number;\r\n    fat: number;\r\n    carbohydrates: number;\r\n    fiber: number;\r\n    sugar?: number;\r\n    salt?: number;\r\n    alcohol?: number; // % Alkoholgehalt\r\n  }"
       },
       {
+        "name": "alcohol",
+        "type": "DECIMAL",
+        "nullable": true,
+        "primary": false,
+        "description": "alcohol property",
+        "tsType": "number"
+      },
+      {
         "name": "allergens",
         "type": "JSONB",
         "nullable": true,
         "primary": false,
         "description": "allergens property",
         "tsType": "string[]"
+      },
+      {
+        "name": "ingredients_text",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "ingredientsText property",
+        "tsType": "string"
       },
       {
         "name": "notes",

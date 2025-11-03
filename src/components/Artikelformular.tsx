@@ -63,9 +63,46 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const [isSearchingEAN, setIsSearchingEAN] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [scannerTargetField, setScannerTargetField] = useState<'bundle' | 'content'>('bundle');
+  const [formWidth, setFormWidth] = useState<number | null>(null); // null = responsive, number = feste Breite in %
+  const [isResizing, setIsResizing] = useState(false);
+  const [isInitialMount, setIsInitialMount] = useState(true); // Verhindert Transition beim ersten Öffnen
+
+  // Key für localStorage
+  const FORM_WIDTH_STORAGE_KEY = 'articleFormWidth';
+
+  // Lade gespeicherte Breite
+  const loadSavedWidth = (): number => {
+    try {
+      const saved = localStorage.getItem(FORM_WIDTH_STORAGE_KEY);
+      if (saved) {
+        const width = parseFloat(saved);
+        if (!isNaN(width) && width >= 40 && width <= 90) {
+          return width;
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der gespeicherten Breite:', error);
+    }
+    return 60; // Fallback auf Standardbreite
+  };
+
+  // Speichere Breite
+  const saveWidth = (width: number) => {
+    try {
+      localStorage.setItem(FORM_WIDTH_STORAGE_KEY, width.toString());
+    } catch (error) {
+      console.error('Fehler beim Speichern der Breite:', error);
+    }
+  };
   
   const articleNameRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resizeHandleRef = useRef<HTMLDivElement>(null);
+  const formContainerRef = useRef<HTMLDivElement>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(60);
+  const bundleUnitContainerRef = useRef<HTMLDivElement>(null);
+  const contentUnitContainerRef = useRef<HTMLDivElement>(null);
   
   // State für das ausgewählte Bild-File
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -445,6 +482,173 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     }
   }, [show]);
 
+  // Positioniere Bundle-Unit-Dropdown
+  useEffect(() => {
+    if (showBundleUnitDropdown && bundleUnitContainerRef.current) {
+      const rect = bundleUnitContainerRef.current.getBoundingClientRect();
+      const dropdown = bundleUnitContainerRef.current.querySelector('.bundle-unit-dropdown') as HTMLElement;
+      if (dropdown) {
+        dropdown.style.top = `${rect.bottom}px`;
+        dropdown.style.left = `${rect.left}px`;
+      }
+    }
+  }, [showBundleUnitDropdown]);
+
+  // Positioniere Content-Unit-Dropdown
+  useEffect(() => {
+    if (showContentUnitDropdown && contentUnitContainerRef.current) {
+      const rect = contentUnitContainerRef.current.getBoundingClientRect();
+      const dropdown = contentUnitContainerRef.current.querySelector('.content-unit-dropdown') as HTMLElement;
+      if (dropdown) {
+        dropdown.style.top = `${rect.bottom}px`;
+        dropdown.style.left = `${rect.left}px`;
+      }
+    }
+  }, [showContentUnitDropdown]);
+
+  // Positioniere Additives-Dropdown
+  useEffect(() => {
+    if (!showAdditivesDropdown) return;
+
+    const updatePosition = () => {
+      const container = document.querySelector('.ingredients-dropdown-container');
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const dropdown = container.querySelector('.additives-dropdown') as HTMLElement;
+        if (dropdown) {
+          dropdown.style.top = `${rect.bottom}px`;
+          dropdown.style.left = `${rect.left}px`;
+          dropdown.style.width = `${rect.width}px`;
+        }
+      }
+    };
+
+    // Initiale Positionierung
+    updatePosition();
+
+    // Bei Scroll und Resize aktualisieren
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [showAdditivesDropdown]);
+
+  // Positioniere Allergens-Dropdown
+  useEffect(() => {
+    if (!showAllergensDropdown) return;
+
+    const updatePosition = () => {
+      const container = document.querySelector('.allergens-dropdown-container');
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const dropdown = container.querySelector('.allergens-dropdown') as HTMLElement;
+        if (dropdown) {
+          dropdown.style.top = `${rect.bottom}px`;
+          dropdown.style.left = `${rect.left}px`;
+          dropdown.style.width = `${rect.width}px`;
+        }
+      }
+    };
+
+    // Initiale Positionierung
+    updatePosition();
+
+    // Bei Scroll und Resize aktualisieren
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [showAllergensDropdown]);
+
+  // Debug-Log für showPriceConverter State
+  useEffect(() => {
+    console.log('🔵 showPriceConverter State changed to:', showPriceConverter);
+  }, [showPriceConverter]);
+
+  // Initialisiere Breite beim Öffnen - lade gespeicherte Breite oder verwende 60%
+  useEffect(() => {
+    if (show && formWidth === null) {
+      // Setze sofort ohne Transition beim ersten Öffnen
+      setIsInitialMount(true);
+      const savedWidth = loadSavedWidth();
+      setFormWidth(savedWidth);
+      // Nach dem ersten Render die Transition wieder aktivieren
+      const timer = setTimeout(() => {
+        setIsInitialMount(false);
+      }, 50);
+      return () => clearTimeout(timer);
+    } else if (!show) {
+      // Zurücksetzen beim Schließen (Breite bleibt aber gespeichert)
+      setFormWidth(null);
+      setIsInitialMount(true); // Beim nächsten Öffnen wieder ohne Transition
+    }
+  }, [show, formWidth]);
+
+  // Resize-Handling
+  useEffect(() => {
+    if (!isResizing) return;
+
+    // Ändere Cursor während des Resizings
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!formContainerRef.current) return;
+      
+      const container = formContainerRef.current.parentElement?.parentElement;
+      if (!container) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const deltaX = e.clientX - resizeStartX.current;
+      const containerWidth = containerRect.width;
+      const deltaWidthPercent = (deltaX / containerWidth) * 100;
+      
+      // Da das Modal zentriert ist, muss die Breitenänderung verdoppelt werden,
+      // damit sich der rechte Rand mit der Maus bewegt (beide Ränder bewegen sich um die Hälfte)
+      const newWidth = Math.min(Math.max(resizeStartWidth.current + (deltaWidthPercent * 2), 40), 90); // Min 40%, Max 90%
+      
+      setFormWidth(newWidth);
+      saveWidth(newWidth); // Speichere die neue Breite
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
+  // Wenn das Modal geöffnet wird, aber formWidth noch null ist, verwende gespeicherte Breite als Fallback
+  // Das verhindert, dass das Modal zunächst mit 100% Breite rendert
+  const effectiveWidth = show && formWidth === null ? loadSavedWidth() : formWidth;
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Speichere Startposition und aktuelle Breite
+    resizeStartX.current = e.clientX;
+    const currentWidth = formWidth !== null ? formWidth : (show ? loadSavedWidth() : 60);
+    resizeStartWidth.current = currentWidth;
+    
+    setIsResizing(true);
+  };
+
   if (!show) return null;
 
   const handleSave = async () => {
@@ -481,7 +685,8 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
         category: articleForm.category as ArticleCategory, // Type-Assertion für category
         bundleUnit: articleForm.bundleUnit as Unit, // Type-Assertion für bundleUnit
         contentUnit: articleForm.contentUnit as Unit, // Type-Assertion für contentUnit
-        nutritionInfo: articleForm.nutrition
+        nutritionInfo: articleForm.nutrition,
+        alcohol: articleForm.nutrition.alcohol // Separates alcohol Feld
         // Keine Timestamps - werden von PostgreSQL automatisch gesetzt (created_at, updated_at)
       };
       
@@ -643,13 +848,20 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
         className="fixed top-0 left-0 w-full h-full" 
         style={{
           background: 'rgba(0,0,0,0.5)',
-          zIndex: 4000,
+          zIndex: (showPriceConverter || showCalculator) ? 3000 : 4000,
           top: 56
         }}
       >
         <div className="container-fluid h-full p-4">
           <div className="flex justify-center h-full">
-            <div className="w-full xl:w-1/2">
+            <div 
+              ref={formContainerRef}
+              className="relative"
+              style={{ 
+                width: effectiveWidth !== null ? `${effectiveWidth}%` : '100%',
+                transition: (isResizing || isInitialMount) ? 'none' : 'width 0.3s ease'
+              }}
+            >
               <div className="card" style={{ backgroundColor: colors.card, maxHeight: 'calc(100vh - 120px)' }}>
                 <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
                   <h5 className="mb-0 form-label-themed">
@@ -991,7 +1203,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                            </span>
                            
                            {/* Gebindeeinheit Dropdown */}
-                           <div className="relative" style={{ width: '30%' }}> {/* 1/6 Breite */}
+                           <div className="relative" ref={bundleUnitContainerRef} style={{ width: '30%' }}> {/* 1/6 Breite */}
                              <input
                                type="text"
                                className="form-control"
@@ -1005,11 +1217,11 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                                style={{ borderRadius: 0 }}
                              />
                              {showBundleUnitDropdown && (
-                               <div className="absolute" style={{
-                                 top: '100%',
-                                 left: 0,
-                                 width: '200%', // Doppelt so breit wie der Container
-                                 zIndex: 1000,
+                               <div className="bundle-unit-dropdown" style={{
+                                 position: 'fixed',
+                                 width: '200%',
+                                 maxWidth: '300px',
+                                 zIndex: 1001,
                                  maxHeight: '200px',
                                  overflowY: 'auto',
                                  backgroundColor: colors.card,
@@ -1176,9 +1388,29 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                            <button
                              type="button"
                              className="btn btn-outline-input"
-                             onClick={() => setShowPriceConverter(true)}
+                             onMouseDown={(e) => {
+                               e.preventDefault();
+                               e.stopPropagation();
+                               console.log('🔵 Price Converter Button mouseDown');
+                               // Verhindere, dass onBlur das Dropdown schließt
+                               const input = bundleUnitContainerRef.current?.querySelector('input');
+                               if (input && document.activeElement === input) {
+                                 input.blur();
+                               }
+                               // Öffne das Modal sofort bei mouseDown, nicht onClick
+                               setShowPriceConverter(true);
+                               console.log('🔵 showPriceConverter set to true via mouseDown');
+                             }}
+                             onClick={(e) => {
+                               e.preventDefault();
+                               e.stopPropagation();
+                               console.log('🔵 Price Converter Button clicked, setting showPriceConverter to true');
+                               setShowPriceConverter(true);
+                               console.log('🔵 showPriceConverter should now be:', true);
+                             }}
                              tabIndex={-1}
                              title="Preis umrechnen"
+                             style={{ zIndex: 1002, position: 'relative' }}
                            >
                              <FaCoins />
                            </button>
@@ -1256,7 +1488,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           />
                           
                           {/* Inhaltseinheit Dropdown */}
-                          <div className="relative" style={{ width: '25%' }}>
+                          <div className="relative" ref={contentUnitContainerRef} style={{ width: '25%' }}>
                             <input
                               type="text"
                               className="form-control"
@@ -1270,11 +1502,11 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                               style={{ borderRadius: 0 }}
                             />
                             {showContentUnitDropdown && (
-                              <div className="absolute" style={{
-                                top: '100%',
-                                left: 0,
+                              <div className="content-unit-dropdown" style={{
+                                position: 'fixed',
                                 width: '200%',
-                                zIndex: 1000,
+                                maxWidth: '300px',
+                                zIndex: 1001,
                                 maxHeight: '200px',
                                 overflowY: 'auto',
                                 backgroundColor: colors.card,
@@ -1432,9 +1664,29 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           <button
                             type="button"
                             className="btn btn-outline-input"
-                            onClick={() => setShowCalculator(true)}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('🔵 Calculator Button mouseDown');
+                              // Verhindere, dass onBlur das Dropdown schließt
+                              const input = contentUnitContainerRef.current?.querySelector('input');
+                              if (input && document.activeElement === input) {
+                                input.blur();
+                              }
+                              // Öffne das Modal sofort bei mouseDown, nicht onClick
+                              setShowCalculator(true);
+                              console.log('🔵 showCalculator set to true via mouseDown');
+                            }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('🔵 Calculator Button clicked, setting showCalculator to true');
+                              setShowCalculator(true);
+                              console.log('🔵 showCalculator should now be:', true);
+                            }}
                             tabIndex={-1}
                             title="Taschenrechner"
+                            style={{ zIndex: 1002, position: 'relative' }}
                           >
                             <FaCalculator />
                           </button>
@@ -1561,19 +1813,29 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           </div>
                         )}
                       </div>
-                      <div className="w-full md:w-1/3 px-2 mb-3 flex justify-end items-end">
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary"
-                          onClick={() => {
-                            console.log('Öffne Nährwert-Suche...');
-                            setShowNutritionSearch(true);
-                          }}
-                          tabIndex={-1}
-                        >
-                          <FaSearch className="me-1" />
-                          Nährwerte suchen
-                        </button>
+                      <div className="w-full md:w-1/3 px-2 mb-3 flex flex-col justify-start">
+                        {/* Unsichtbarer Container mit gleicher Höhe wie EAN-Labels */}
+                        <div style={{ 
+                          height: '1.5em', 
+                          visibility: 'hidden',
+                          marginBottom: '0'
+                        }}>
+                          <label className="form-label form-label-themed">Platzhalter</label>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            onClick={() => {
+                              console.log('Öffne Nährwert-Suche...');
+                              setShowNutritionSearch(true);
+                            }}
+                            tabIndex={-1}
+                          >
+                            <FaSearch className="me-1" />
+                            Nährwerte suchen
+                          </button>
+                        </div>
                       </div>
                       
                     </div>
@@ -1594,7 +1856,17 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                         <label className="form-label form-label-themed">
                           Zusatzstoffe
                         </label>
-                        <div className="relative ingredients-dropdown-container">
+                        <div className="relative ingredients-dropdown-container" ref={(el) => {
+                          if (el && showAdditivesDropdown) {
+                            const rect = el.getBoundingClientRect();
+                            const dropdown = el.querySelector('.additives-dropdown') as HTMLElement;
+                            if (dropdown) {
+                              dropdown.style.top = `${rect.bottom}px`;
+                              dropdown.style.left = `${rect.left}px`;
+                              dropdown.style.width = `${rect.width}px`;
+                            }
+                          }
+                        }}>
                           <div
                             className="form-control"
                             onClick={handleAdditivesDropdownToggle}
@@ -1626,10 +1898,9 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             </span>
                           </div>
                           {showAdditivesDropdown && (
-                            <div className="absolute w-full" style={{
-                              top: '100%',
-                              left: 0,
-                              zIndex: 1000,
+                            <div className="additives-dropdown" style={{
+                              position: 'fixed',
+                              zIndex: 1001,
                               maxHeight: '300px',
                               overflowY: 'auto',
                               backgroundColor: colors.card,
@@ -1661,7 +1932,17 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                         <label className="form-label form-label-themed">
                           Allergene
                         </label>
-                        <div className="position-relative allergens-dropdown-container">
+                        <div className="position-relative allergens-dropdown-container" ref={(el) => {
+                          if (el && showAllergensDropdown) {
+                            const rect = el.getBoundingClientRect();
+                            const dropdown = el.querySelector('.allergens-dropdown') as HTMLElement;
+                            if (dropdown) {
+                              dropdown.style.top = `${rect.bottom}px`;
+                              dropdown.style.left = `${rect.left}px`;
+                              dropdown.style.width = `${rect.width}px`;
+                            }
+                          }
+                        }}>
                           <div
                             className="form-control"
                             onClick={handleAllergensDropdownToggle}
@@ -1693,10 +1974,9 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                             </span>
                           </div>
                           {showAllergensDropdown && (
-                            <div className="absolute w-full" style={{
-                              top: '100%',
-                              left: 0,
-                              zIndex: 1000,
+                            <div className="allergens-dropdown" style={{
+                              position: 'fixed',
+                              zIndex: 1001,
                               maxHeight: '300px',
                               overflowY: 'auto',
                               backgroundColor: colors.card,
@@ -1755,7 +2035,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           </span>
                         </div>
                       </div>
-                      <div className="col-12 mb-3">
+                      <div className="w-full mb-3">
                         <label className="form-label form-label-themed">
                           Inhaltsstoffe
                         </label>
@@ -1764,8 +2044,9 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                           value={articleForm.ingredients || ''}
                           onChange={(e) => setArticleForm(prev => ({ ...prev, ingredients: e.target.value }))}
                           placeholder="Komplette Liste aller Zutaten (z.B. Weizenmehl, Wasser, Salz, Hefe...)"
-                          rows={2}
+                          rows={3}
                           tabIndex={-1}
+                          style={{ width: '100%' }}
                         />
                       </div>
                     </div>
@@ -1813,7 +2094,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                         <input
                           type="number"
                           step="0.1"
-                          className="form-control form-control-themed"
+                          className="form-control form-control-themed form-control-static"
                           value={articleForm.nutrition.kilojoules}
                           readOnly
                           tabIndex={-1}
@@ -1968,6 +2249,42 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                   </button>
                 </div>
               </div>
+              {/* Resize-Handle - nur auf größeren Bildschirmen sichtbar */}
+              <div
+                ref={resizeHandleRef}
+                onMouseDown={handleResizeStart}
+                className="hidden md:flex"
+                style={{
+                  position: 'absolute',
+                  right: '-4px',
+                  top: 0,
+                  bottom: 0,
+                  width: '8px',
+                  cursor: 'ew-resize',
+                  backgroundColor: 'transparent',
+                  zIndex: 100,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.accent + '20';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isResizing) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    width: '3px',
+                    height: '60px',
+                    backgroundColor: isResizing ? colors.accent : colors.cardBorder,
+                    borderRadius: '2px',
+                    transition: isResizing ? 'none' : 'background-color 0.2s ease'
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1975,31 +2292,49 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
 
       {/* Taschenrechner-Dialog */}
       {showCalculator && (
-        <div className="position-fixed top-0 start-0 w-100 h-100" style={{
-          background: 'rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          top: 56
-        }}>
-          <div className="container-fluid h-100 p-4">
-            <div className="row justify-content-center h-100">
-              <div className="col-12 col-md-4 col-lg-3">
-                <div className="card" style={{ backgroundColor: colors.card }}>
-                  <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                    <h5 className="mb-0 form-label-themed">
-                      Taschenrechner
-                    </h5>
-                    <button
-                      className="btn btn-link p-0"
-                      onClick={() => setShowCalculator(false)}
-                    >
-                      <FaClose />
-                    </button>
-                  </div>
-                  <div className="card-body">
-                    <Calculator onResult={handleCalculatorResult} colors={colors} />
-                  </div>
-                </div>
-              </div>
+        <div 
+          style={{
+            position: 'fixed',
+            top: '56px',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: 'calc(100vh - 56px)',
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            padding: '1rem'
+          }}
+        >
+          <div 
+            className="card price-converter-modal" 
+            style={{ 
+              backgroundColor: colors.card,
+              width: '400px',
+              maxWidth: '90vw',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+              minWidth: '400px'
+            }}
+          >
+            <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, width: '100%' }}>
+              <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                Taschenrechner
+              </h5>
+              <button
+                className="btn btn-link p-0"
+                onClick={() => setShowCalculator(false)}
+                style={{ marginLeft: 'auto', flexShrink: 0 }}
+              >
+                <FaClose />
+              </button>
+            </div>
+            <div className="card-body">
+              <Calculator onResult={handleCalculatorResult} colors={colors} />
             </div>
           </div>
         </div>
@@ -2007,26 +2342,47 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
 
       {/* Preisumrechnungs-Dialog */}
       {showPriceConverter && (
-        <div className="position-fixed top-0 start-0 w-100 h-100" style={{
-          background: 'rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          top: 56
-        }}>
-          <div className="container-fluid h-100 p-4">
-            <div className="row justify-content-center h-100">
-              <div className="col-12 col-md-6 col-lg-2">
-                <div className="card" style={{ backgroundColor: colors.card }}>
-                  <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-                    <h5 className="mb-0">
-                      Preis umrechnen in Brutto oder Netto
-                    </h5>
-                    <button
-                      className="btn btn-link p-0"
-                      onClick={() => setShowPriceConverter(false)}
-                    >
-                      <FaClose />
-                    </button>
-                  </div>
+        <div 
+          style={{
+            position: 'fixed',
+            top: '56px',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: 'calc(100vh - 56px)',
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            padding: '1rem'
+          }}
+        >
+          <div 
+            className="card price-converter-modal" 
+            style={{ 
+              backgroundColor: colors.card,
+              width: '400px',
+              maxWidth: '90vw',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+              minWidth: '400px'
+            }}
+          >
+              <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, width: '100%' }}>
+                <h5 className="mb-0" style={{ flex: 1 }}>
+                  Brutto oder Netto übernehmen
+                </h5>
+                <button
+                  className="btn btn-link p-0"
+                  onClick={() => setShowPriceConverter(false)}
+                  style={{ marginLeft: 'auto', flexShrink: 0 }}
+                >
+                  <FaClose />
+                </button>
+              </div>
                   <div className="card-body">
                     <div className="mb-4">
                       <label className="form-label form-label-themed">
@@ -2035,7 +2391,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                       <div className="input-group">
                         <input
                           type="text"
-                          className="form-control form-control-themed"
+                          className="form-control form-control-themed form-control-static"
                           value={articleForm.bundlePrice.toFixed(2)}
                           readOnly
                           style={{ borderColor: colors.cardBorder, color: colors.text, backgroundColor: colors.secondary }}
@@ -2068,7 +2424,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                         <input
                           type="number"
                           step="0.01"
-                          className="form-control form-control-themed"
+                          className="form-control form-control-themed form-control-static"
                           value={calculateGrossPrice(articleForm.bundlePrice, selectedVatRate).toFixed(2)}
                           readOnly
                           style={{ borderColor: colors.cardBorder, color: colors.text, backgroundColor: colors.secondary }}
@@ -2095,7 +2451,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                         <input
                           type="number"
                           step="0.01"
-                          className="form-control"
+                          className="form-control form-control-static"
                           value={calculateNetPrice(articleForm.bundlePrice, selectedVatRate).toFixed(2)}
                           readOnly
                           style={{ borderColor: colors.cardBorder, color: colors.text, backgroundColor: colors.secondary }}
@@ -2126,9 +2482,6 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -2164,13 +2517,14 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary }}>
-              <h5 className="mb-0 form-label-themed">
+            <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, width: '100%' }}>
+              <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
                 Artikelbild verwalten
               </h5>
               <button
                 className="btn btn-link p-0"
                 onClick={closeImageModal}
+                style={{ marginLeft: 'auto', flexShrink: 0 }}
               >
                 <FaTimes />
               </button>
@@ -2255,16 +2609,18 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                 type="button"
                 className="btn-outline-secondary px-4 py-2 rounded"
                 onClick={handleRemoveImage}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
               >
-                <FaTrash className="mr-2" />
+                <FaTrash />
                 Bild entfernen
               </button>
               <button
                 type="button"
                 className="btn-outline-primary px-4 py-2 rounded"
                 onClick={closeImageModal}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
               >
-                <FaTimes className="mr-2" />
+                <FaTimes />
                 Schließen
               </button>
             </div>

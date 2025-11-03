@@ -2770,12 +2770,29 @@ const StorageManagement: React.FC = () => {
         message: 'Sichere LocalStorage-Einstellungen...'
       });
 
-      const localStorageKeys = ['artikelExportFilter', 'chef_design', 'storageManagement'];
+      // Standard LocalStorage-Schlüssel
+      const localStorageKeys = ['artikelExportFilter', 'chef_design'];
       for (const key of localStorageKeys) {
         const value = localStorage.getItem(key);
         if (value) {
           backup.localStorage[key] = value;
           console.log(`✅ LocalStorage-Schlüssel gesichert: ${key}`);
+        }
+      }
+
+      // Sichere nur connections und selectedStorage aus storageManagement
+      const storageManagementValue = localStorage.getItem('storageManagement');
+      if (storageManagementValue) {
+        try {
+          const storageManagement = JSON.parse(storageManagementValue);
+          const storageManagementBackup = {
+            connections: storageManagement.connections || {},
+            selectedStorage: storageManagement.selectedStorage || {}
+          };
+          backup.localStorage['storageManagement'] = JSON.stringify(storageManagementBackup);
+          console.log('✅ storageManagement (connections & selectedStorage) gesichert');
+        } catch (error) {
+          console.warn('⚠️ Fehler beim Sichern von storageManagement:', error);
         }
       }
 
@@ -2903,18 +2920,29 @@ const StorageManagement: React.FC = () => {
         for (const [key, value] of Object.entries(backupData.localStorage)) {
           if (key === 'storageManagement') {
             // Spezielle Behandlung für storageManagement
+            // Wiederherstelle nur connections und selectedStorage, behalte currentStorage
             try {
               const backupStorageManagement = JSON.parse(value as string);
               const currentStorageManagement = JSON.parse(localStorage.getItem('storageManagement') || '{}');
               
-              // Behalte currentStorage aus aktuellem LocalStorage
-              const mergedStorageManagement = {
-                ...backupStorageManagement,
-                currentStorage: currentStorageManagement.currentStorage // NICHT überschreiben!
+              // Merge: Backup connections & selectedStorage, behalte currentStorage
+              const restoredStorageManagement = {
+                ...currentStorageManagement, // Behalte alles Aktuelle (insbesondere currentStorage)
+                connections: backupStorageManagement.connections || currentStorageManagement.connections || {},
+                selectedStorage: {
+                  ...(backupStorageManagement.selectedStorage || {}),
+                  isTested: false // Reset Test-Status, damit Verbindungen erneut getestet werden müssen
+                }
               };
               
-              localStorage.setItem('storageManagement', JSON.stringify(mergedStorageManagement));
-              console.log('✅ storageManagement wiederhergestellt (currentStorage beibehalten)');
+              localStorage.setItem('storageManagement', JSON.stringify(restoredStorageManagement));
+              
+              // Aktualisiere auch den State, damit die UI sofort aktualisiert wird
+              setStorageManagement(restoredStorageManagement);
+              
+              console.log('✅ storageManagement wiederhergestellt (connections & selectedStorage)');
+              console.log('✅ currentStorage beibehalten (keine automatische Umstellung der Speichermethode)');
+              console.log('⚠️ Verbindungsstatus zurückgesetzt - bitte Verbindungen erneut testen');
             } catch (error) {
               console.warn('⚠️ Fehler beim Wiederherstellen von storageManagement:', error);
             }
@@ -7365,19 +7393,21 @@ const StorageManagement: React.FC = () => {
                         </span>
                       </span>
                     </div>
-                    <button
-                      className={`btn ${isPostgreSQLConfigValid() ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                      onClick={handleConnectionTest}
-                      disabled={!isPostgreSQLConfigValid()}
-                      style={{
-                        opacity: isPostgreSQLConfigValid() ? 1 : 0.6,
-                        cursor: isPostgreSQLConfigValid() ? 'pointer' : 'not-allowed'
-                      }}
-                      title={isPostgreSQLConfigValid() ? 'PostgreSQL-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
-                    >
-                      <FaWifi className="me-1" />
-                      Verbindung testen
-                    </button>
+                    <div className="d-flex justify-content-end">
+                      <button
+                        className={`btn ${isPostgreSQLConfigValid() ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={handleConnectionTest}
+                        disabled={!isPostgreSQLConfigValid()}
+                        style={{
+                          opacity: isPostgreSQLConfigValid() ? 1 : 0.6,
+                          cursor: isPostgreSQLConfigValid() ? 'pointer' : 'not-allowed'
+                        }}
+                        title={isPostgreSQLConfigValid() ? 'PostgreSQL-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
                   </div>
 
                   {/* Testmeldungen anzeigen */}
@@ -7765,19 +7795,21 @@ const StorageManagement: React.FC = () => {
                         </span>
                       </span>
                     </div>
-                    <button
-                      className={`btn ${isMariaDBButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                      onClick={handleMariaDBConnectionTest}
-                      disabled={!isMariaDBButtonEnabled}
-                      style={{
-                        opacity: isMariaDBButtonEnabled ? 1 : 0.6,
-                        cursor: isMariaDBButtonEnabled ? 'pointer' : 'not-allowed'
-                      }}
-                      title={isMariaDBButtonEnabled ? 'MariaDB-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
-                    >
-                      <FaWifi className="me-1" />
-                      Verbindung testen
-                    </button>
+                    <div className="d-flex justify-content-end">
+                      <button
+                        className={`btn ${isMariaDBButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={handleMariaDBConnectionTest}
+                        disabled={!isMariaDBButtonEnabled}
+                        style={{
+                          opacity: isMariaDBButtonEnabled ? 1 : 0.6,
+                          cursor: isMariaDBButtonEnabled ? 'pointer' : 'not-allowed'
+                        }}
+                        title={isMariaDBButtonEnabled ? 'MariaDB-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
                   </div>
 
                   {/* Testmeldungen anzeigen */}
@@ -8165,19 +8197,21 @@ const StorageManagement: React.FC = () => {
                         </span>
                       </span>
                     </div>
-                    <button
-                      className={`btn ${isMySQLButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                      onClick={handleMySQLConnectionTest}
-                      disabled={!isMySQLButtonEnabled}
-                      style={{
-                        opacity: isMySQLButtonEnabled ? 1 : 0.6,
-                        cursor: isMySQLButtonEnabled ? 'pointer' : 'not-allowed'
-                      }}
-                      title={isMySQLButtonEnabled ? 'MySQL-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
-                    >
-                      <FaWifi className="me-1" />
-                      Verbindung testen
-                    </button>
+                    <div className="d-flex justify-content-end">
+                      <button
+                        className={`btn ${isMySQLButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={handleMySQLConnectionTest}
+                        disabled={!isMySQLButtonEnabled}
+                        style={{
+                          opacity: isMySQLButtonEnabled ? 1 : 0.6,
+                          cursor: isMySQLButtonEnabled ? 'pointer' : 'not-allowed'
+                        }}
+                        title={isMySQLButtonEnabled ? 'MySQL-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
                   </div>
 
                   {/* Testmeldungen anzeigen */}
@@ -8537,19 +8571,21 @@ const StorageManagement: React.FC = () => {
                         </span>
                       </span>
                     </div>
-                    <button
-                      className={`btn ${isCouchDBButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                      onClick={handleCouchDBConnectionTest}
-                      disabled={!isCouchDBButtonEnabled}
-                      style={{
-                        opacity: isCouchDBButtonEnabled ? 1 : 0.6,
-                        cursor: isCouchDBButtonEnabled ? 'pointer' : 'not-allowed'
-                      }}
-                      title={isCouchDBButtonEnabled ? 'CouchDB-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
-                    >
-                      <FaWifi className="me-1" />
-                      Verbindung testen
-                    </button>
+                    <div className="d-flex justify-content-end">
+                      <button
+                        className={`btn ${isCouchDBButtonEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={handleCouchDBConnectionTest}
+                        disabled={!isCouchDBButtonEnabled}
+                        style={{
+                          opacity: isCouchDBButtonEnabled ? 1 : 0.6,
+                          cursor: isCouchDBButtonEnabled ? 'pointer' : 'not-allowed'
+                        }}
+                        title={isCouchDBButtonEnabled ? 'CouchDB-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
                   </div>
 
                   {/* Testmeldungen anzeigen */}
@@ -8811,7 +8847,7 @@ const StorageManagement: React.FC = () => {
                         </span>
                       </span>
                     </div>
-                    <div className="d-flex gap-2">
+                    <div className="d-flex gap-2 justify-content-end">
                       <button
                         className="btn btn-outline-secondary"
                         onClick={() => window.open('https://supabase.com/dashboard', '_blank')}
@@ -9309,7 +9345,7 @@ const StorageManagement: React.FC = () => {
                         </span>
                       </span>
                     </div>
-                    <div className="d-flex gap-2">
+                    <div className="d-flex gap-2 justify-content-end">
                       <button
                         className="btn btn-outline-secondary"
                         onClick={() => window.open('https://console.firebase.google.com', '_blank')}
@@ -9404,22 +9440,14 @@ const StorageManagement: React.FC = () => {
                           }}
                           placeholder="localhost"
                           style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
                             backgroundColor: !storageManagement.connections.minio.host ? colors.accent + '20' : undefined,
-                            transition: 'all 0.2s ease'
                           }}
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-input"
                           onClick={() => handlePingHost(storageManagement.connections.minio.host, 'minio-host')}
                           disabled={!storageManagement.connections.minio.host || pingingHosts['minio-host']}
-                          style={{
-                            borderColor: colors.cardBorder,
-                            color: colors.text,
-                            transition: 'all 0.2s ease'
-                          }}
                           title="Ping testen"
                         >
                           {pingingHosts['minio-host'] ? (
@@ -9790,19 +9818,21 @@ const StorageManagement: React.FC = () => {
                         {storageManagement.connections.minio.connectionStatus ? 'Verbunden' : 'Nicht verbunden'}
                       </span>
                     </span>
-                    <button
-                      className={`btn ${isMinIOConfigValid() ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                      onClick={handleMinIOConnectionTest}
-                      disabled={!isMinIOConfigValid()}
-                      style={{
-                        opacity: isMinIOConfigValid() ? 1 : 0.6,
-                        cursor: isMinIOConfigValid() ? 'pointer' : 'not-allowed'
-                      }}
-                      title={isMinIOConfigValid() ? 'MinIO-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
-                    >
-                      <FaWifi className="me-1" />
-                      Verbindung testen
-                    </button>
+                    <div className="d-flex justify-content-end">
+                      <button
+                        className={`btn ${isMinIOConfigValid() ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                        onClick={handleMinIOConnectionTest}
+                        disabled={!isMinIOConfigValid()}
+                        style={{
+                          opacity: isMinIOConfigValid() ? 1 : 0.6,
+                          cursor: isMinIOConfigValid() ? 'pointer' : 'not-allowed'
+                        }}
+                        title={isMinIOConfigValid() ? 'MinIO-Verbindung testen' : 'Alle Felder müssen gültig ausgefüllt sein'}
+                      >
+                        <FaWifi className="me-1" />
+                        Verbindung testen
+                      </button>
+                    </div>
                   </div>
 
                   {/* MinIO Testmeldungen anzeigen */}
@@ -9867,7 +9897,8 @@ const StorageManagement: React.FC = () => {
                 </button>
 
                 {/* Rechts: Konfiguration übernehmen Button */}
-                <button
+                <div className="d-flex justify-content-end">
+                  <button
                   className={`btn ${(storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
                   disabled={!storageManagement.selectedStorage.isTested || !isConfigurationDifferent || isCloudHostedWithDockerConfig()}
                   onClick={handleConfigApply}
@@ -9885,9 +9916,10 @@ const StorageManagement: React.FC = () => {
                           : 'Konfiguration übernehmen'
                   }
                 >
-                  <FaCheckCircle className="me-2" />
-                  Konfiguration übernehmen
-                </button>
+                    <FaCheckCircle className="me-2" />
+                    Konfiguration übernehmen
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -9979,83 +10011,113 @@ const StorageManagement: React.FC = () => {
 
           {/* Konfigurations-Modal */}
           {showConfigModal && (
-            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-              <div className="modal-dialog modal-lg">
-                <div className="modal-content" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-                  <div className="modal-header" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
-                    <h5 className="modal-title" style={{ color: colors.text }}>
-                      <FaCheckCircle className="me-2" />
-                      Konfiguration übernehmen
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={handleConfigModalClose}
-                      style={{ filter: 'invert(1)' }}
-                    ></button>
-                  </div>
-                  <div className="modal-body" style={{ color: colors.text }}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <h6 style={{ color: colors.text, marginBottom: '15px' }}>
-                          <FaDatabase className="me-2" />
-                          Aktuelle Konfiguration
-                        </h6>
-                        <div className="alert alert-info" style={{ backgroundColor: colors.accent + '20', borderColor: colors.accent }}>
+            <div 
+              className="fixed top-0 left-0 w-full h-full" 
+              style={{ 
+                background: 'rgba(0,0,0,0.5)', 
+                zIndex: 1060,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  handleConfigModalClose();
+                }
+              }}
+            >
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '700px',
+                  width: '90vw',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    <FaCheckCircle className="me-2" style={{ color: colors.accent }} />
+                    Konfiguration übernehmen
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={handleConfigModalClose}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem' }}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h6 className="d-flex align-items-center" style={{ color: colors.text, marginBottom: '15px' }}>
+                        <FaDatabase className="me-2" style={{ color: colors.accent, flexShrink: 0 }} />
+                        <span>Aktuelle Konfiguration</span>
+                      </h6>
+                      <div className="p-3 rounded" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                        <div style={{ color: colors.text }}>
                           <strong>Speichermodus:</strong> {storageManagement.currentStorage.currentStorageMode}<br />
                           <strong>Datenbank:</strong> {storageManagement.currentStorage.currentDataStorage}<br />
                           <strong>Bildspeicher:</strong> {storageManagement.currentStorage.currentPictureStorage}
                         </div>
                       </div>
-                      <div>
-                        <h6 style={{ color: colors.text, marginBottom: '15px' }}>
-                          <FaCloud className="me-2" />
-                          Neue Konfiguration
-                        </h6>
-                        <div className="alert alert-success" style={{ backgroundColor: '#28a74520', borderColor: '#28a745' }}>
+                    </div>
+                    <div>
+                      <h6 className="d-flex align-items-center" style={{ color: colors.text, marginBottom: '15px' }}>
+                        <FaCloud className="me-2" style={{ color: colors.accent, flexShrink: 0 }} />
+                        <span>Neue Konfiguration</span>
+                      </h6>
+                      <div className="p-3 rounded" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                        <div style={{ color: colors.text }}>
                           <strong>Speichermodus:</strong> {storageManagement.selectedStorage.selectedStorageMode}<br />
                           <strong>Datenbank:</strong> {storageManagement.selectedStorage.selectedDataStorage}<br />
                           <strong>Bildspeicher:</strong> {storageManagement.selectedStorage.selectedPictureStorage}
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="mt-4">
-                      <h6 style={{ color: colors.text, marginBottom: '15px' }}>
-                        <FaSync className="me-2" />
-                        Datenübertragung
-                      </h6>
-                      <p style={{ color: colors.textSecondary }}>
-                        Möchten Sie die vorhandenen Daten aus der aktuellen Konfiguration in die neue Konfiguration übertragen?
-                      </p>
-                    </div>
+                  <div className="mt-4">
+                    <h6 className="d-flex align-items-center" style={{ color: colors.text, marginBottom: '15px' }}>
+                      <FaSync className="me-2" style={{ color: colors.accent, flexShrink: 0 }} />
+                      <span>Datenübertragung</span>
+                    </h6>
+                    <p style={{ color: colors.textSecondary }}>
+                      Möchten Sie die vorhandenen Daten aus der aktuellen Konfiguration in die neue Konfiguration übertragen?
+                    </p>
                   </div>
-                  <div className="modal-footer" style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                    <button
-                      type="button"
-                      className="btn btn-success"
-                      onClick={() => handleDataTransfer(true)}
-                    >
-                      <FaCheckCircle className="me-2" />
-                      Ja, Daten übertragen
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-warning"
-                      onClick={() => handleDataTransfer(false)}
-                    >
-                      <FaTimes className="me-2" />
-                      Nein, ohne Datenübertragung
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleConfigModalClose}
-                    >
-                      <FaTimes className="me-2" />
-                      Abbrechen
-                    </button>
-                  </div>
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={() => handleDataTransfer(true)}
+                  >
+                    <FaCheckCircle className="me-2" />
+                    Ja, Daten übertragen
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={() => handleDataTransfer(false)}
+                  >
+                    <FaTimes className="me-2" />
+                    Nein, ohne Datenübertragung
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={handleConfigModalClose}
+                  >
+                    <FaTimes className="me-2" />
+                    Abbrechen
+                  </button>
                 </div>
               </div>
             </div>
@@ -10063,35 +10125,60 @@ const StorageManagement: React.FC = () => {
 
           {/* Transfer Progress Modal - Zeigt Fortschritt der Datenübertragung */}
           {showTransferProgressModal && (
-            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1070 }}>
-              <div className="modal-dialog modal-lg">
-                <div className="modal-content" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-                  <div className="modal-header" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
-                    <h5 className="modal-title" style={{ color: colors.text }}>
-                      {transferCompleted ? (
-                        <>
-                          <FaCheckCircle className="me-2" style={{ color: '#28a745' }} />
-                          Datenübertragung abgeschlossen
-                        </>
-                      ) : (
-                        <>
-                          <FaSpinner className="fa-spin me-2" style={{ color: colors.accent }} />
-                          Datenübertragung läuft...
-                        </>
-                      )}
-                    </h5>
-                  </div>
-                  <div className="modal-body" style={{ color: colors.text, padding: '2rem' }}>
+            <div 
+              className="fixed top-0 left-0 w-full h-full" 
+              style={{ 
+                background: 'rgba(0,0,0,0.7)', 
+                zIndex: 1070,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget && transferCompleted) {
+                  // Nur schließen wenn abgeschlossen
+                }
+              }}
+            >
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '800px',
+                  width: '90vw',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    {transferCompleted ? (
+                      <>
+                        <FaCheckCircle className="me-2" style={{ color: colors.accent }} />
+                        Datenübertragung abgeschlossen
+                      </>
+                    ) : (
+                      <>
+                        <FaSpinner className="fa-spin me-2" style={{ color: colors.accent }} />
+                        Datenübertragung läuft...
+                      </>
+                    )}
+                  </h5>
+                </div>
+                <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem' }}>
                     {/* Fortschrittsbalken für jede Entity */}
                     {Object.entries(transferResults).map(([entityType, result]) => (
                       <div key={entityType} className="mb-4">
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <div className="d-flex align-items-center">
-                            {result.status === 'completed' && <FaCheck className="me-2" style={{ color: '#28a745' }} />}
+                            {result.status === 'completed' && <FaCheck className="me-2" style={{ color: colors.accent }} />}
                             {result.status === 'in_progress' && <FaSpinner className="fa-spin me-2" style={{ color: colors.accent }} />}
                             {result.status === 'pending' && <FaInfoCircle className="me-2" style={{ color: colors.textSecondary }} />}
-                            {result.status === 'error' && <FaTimes className="me-2" style={{ color: '#dc3545' }} />}
-                            <strong style={{ fontSize: '1.1rem' }}>{getEntityNameGerman(entityType)}</strong>
+                            {result.status === 'error' && <FaTimes className="me-2" style={{ color: colors.accent }} />}
+                            <strong style={{ fontSize: '1.1rem', color: colors.text }}>{getEntityNameGerman(entityType)}</strong>
                           </div>
                           <span style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
                             {result.transferred > 0 ? `${result.transferred} Datensätze` : 
@@ -10108,9 +10195,7 @@ const StorageManagement: React.FC = () => {
                             role="progressbar"
                             style={{
                               width: `${result.progress}%`,
-                              backgroundColor: result.status === 'completed' ? '#28a745' :
-                                              result.status === 'error' ? '#dc3545' :
-                                              colors.accent,
+                              backgroundColor: colors.accent,
                               transition: 'width 0.3s ease'
                             }}
                           >
@@ -10137,17 +10222,17 @@ const StorageManagement: React.FC = () => {
 
                     {/* Zusammenfassung - nur wenn abgeschlossen */}
                     {transferCompleted && (
-                      <div className="mt-4 p-3 rounded" style={{ backgroundColor: '#28a74520', border: `2px solid #28a745` }}>
+                      <div className="mt-4 p-3 rounded" style={{ backgroundColor: colors.accent + '20', border: `2px solid ${colors.accent}` }}>
                         <div className="d-flex align-items-start">
-                          <FaCheckCircle className="me-3 mt-1" style={{ color: '#28a745', fontSize: '1.5rem' }} />
+                          <FaCheckCircle className="me-3 mt-1" style={{ color: colors.accent, fontSize: '1.5rem', flexShrink: 0 }} />
                           <div>
                             <h6 style={{ color: colors.text, marginBottom: '10px' }}>
                               ✅ Übertragung erfolgreich abgeschlossen!
                             </h6>
-                            <div style={{ fontSize: '0.9rem', color: colors.text }}>
+                            <div style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
                               {Object.entries(transferResults).map(([type, result]) => (
                                 <div key={type} className="mb-1">
-                                  <strong>{getEntityNameGerman(type)}:</strong>{' '}
+                                  <strong style={{ color: colors.text }}>{getEntityNameGerman(type)}:</strong>{' '}
                                   {result.transferred} Datensätze übertragen
                                   {result.source !== result.transferred && (
                                     <span style={{ color: colors.textSecondary, marginLeft: '8px' }}>
@@ -10170,28 +10255,23 @@ const StorageManagement: React.FC = () => {
                         </small>
                       </div>
                     )}
-                  </div>
-                  <div className="modal-footer" style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                    {transferCompleted ? (
-                      <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={handleTransferComplete}
-                        style={{
-                          backgroundColor: '#28a745',
-                          borderColor: '#28a745'
-                        }}
-                      >
-                        <FaCheckCircle className="me-2" />
-                        Fertig - Konfiguration übernehmen
-                      </button>
-                    ) : (
-                      <div className="d-flex align-items-center" style={{ color: colors.textSecondary }}>
-                        <FaSpinner className="fa-spin me-2" />
-                        Bitte warten Sie, während die Daten übertragen werden...
-                      </div>
-                    )}
-                  </div>
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  {transferCompleted ? (
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary"
+                      onClick={handleTransferComplete}
+                    >
+                      <FaCheckCircle className="me-2" />
+                      Fertig - Konfiguration übernehmen
+                    </button>
+                  ) : (
+                    <div className="d-flex align-items-center" style={{ color: colors.textSecondary }}>
+                      <FaSpinner className="fa-spin me-2" />
+                      Bitte warten Sie, während die Daten übertragen werden...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -10199,227 +10279,281 @@ const StorageManagement: React.FC = () => {
 
           {/* Backup & Restore Modal */}
           {showBackupModal && (
-            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1070 }}>
-              <div className="modal-dialog modal-lg">
-                <div className="modal-content" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-                  <div className="modal-header" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
-                    <h5 className="modal-title" style={{ color: colors.text }}>
-                      <FaDownload className="me-2" style={{ color: '#17a2b8' }} />
-                      Backup & Restore
-                    </h5>
+            <div 
+              className="fixed top-0 left-0 w-full h-full" 
+              style={{ 
+                background: 'rgba(0,0,0,0.5)', 
+                zIndex: 1070,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              onClick={() => {
+                if (!backupProgress) {
+                  setShowBackupModal(false);
+                  setBackupCompleted(false);
+                  setBackupProgress(null);
+                  setBackupError(null);
+                }
+              }}
+            >
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '600px',
+                  width: '90%',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    <FaDownload className="me-2" style={{ color: colors.accent }} />
+                    Backup & Restore
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={() => {
+                      setShowBackupModal(false);
+                      setBackupCompleted(false);
+                      setBackupProgress(null);
+                      setBackupError(null);
+                    }}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
+                    disabled={!!backupProgress}
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, padding: '2rem', overflow: 'auto', maxHeight: 'calc(90vh - 120px)' }}>
+                  {/* Fehlermeldung */}
+                  {backupError && (
+                    <div className="mb-3 p-3 rounded" style={{
+                      backgroundColor: colors.accent + '20',
+                      border: `1px solid ${colors.accent}`,
+                      color: colors.text
+                    }}>
+                      <div className="d-flex align-items-start">
+                        <FaExclamationTriangle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                        <div>
+                          <strong>Fehler!</strong>
+                          <br />
+                          {backupError}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!backupProgress && !backupCompleted ? (
+                    <>
+                      {/* Modus-Auswahl */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div
+                          className="p-4 rounded text-center"
+                          style={{
+                            border: `2px solid ${backupMode === 'backup' ? colors.accent : colors.cardBorder}`,
+                            backgroundColor: backupMode === 'backup' ? colors.accent + '10' : colors.card,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            minHeight: '180px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center'
+                          }}
+                          onClick={() => setBackupMode('backup')}
+                          onMouseEnter={(e) => {
+                            if (backupMode !== 'backup') {
+                              e.currentTarget.style.borderColor = colors.accent + '80';
+                              e.currentTarget.style.backgroundColor = colors.accent + '05';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (backupMode !== 'backup') {
+                              e.currentTarget.style.borderColor = colors.cardBorder;
+                              e.currentTarget.style.backgroundColor = colors.card;
+                            }
+                          }}
+                        >
+                          <FaDownload style={{ fontSize: '3rem', color: colors.accent, marginBottom: '1rem' }} />
+                          <h5 style={{ color: colors.text, marginBottom: '0.5rem' }}>Backup erstellen</h5>
+                          <small style={{ color: colors.textSecondary }}>
+                            Alle Daten, Einstellungen und Bilder sichern
+                          </small>
+                        </div>
+                        <div
+                          className="p-4 rounded text-center"
+                          style={{
+                            border: `2px solid ${backupMode === 'restore' ? colors.accent : colors.cardBorder}`,
+                            backgroundColor: backupMode === 'restore' ? colors.accent + '10' : colors.card,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            minHeight: '180px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center'
+                          }}
+                          onClick={() => setBackupMode('restore')}
+                          onMouseEnter={(e) => {
+                            if (backupMode !== 'restore') {
+                              e.currentTarget.style.borderColor = colors.accent + '80';
+                              e.currentTarget.style.backgroundColor = colors.accent + '05';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (backupMode !== 'restore') {
+                              e.currentTarget.style.borderColor = colors.cardBorder;
+                              e.currentTarget.style.backgroundColor = colors.card;
+                            }
+                          }}
+                        >
+                          <FaSync style={{ fontSize: '3rem', color: colors.accent, marginBottom: '1rem' }} />
+                          <h5 style={{ color: colors.text, marginBottom: '0.5rem' }}>Backup wiederherstellen</h5>
+                          <small style={{ color: colors.textSecondary }}>
+                            Daten aus einer Backup-Datei wiederherstellen
+                          </small>
+                        </div>
+                      </div>
+
+                      {/* Info-Box */}
+                      <div className="p-3 rounded mb-3" style={{ backgroundColor: colors.secondary, border: `1px solid ${colors.cardBorder}` }}>
+                        <div className="d-flex align-items-start">
+                          <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                          <div>
+                            <strong style={{ color: colors.text }}>Was wird {backupMode === 'backup' ? 'gesichert' : 'wiederhergestellt'}?</strong>
+                            <ul className="mt-2 mb-0" style={{ color: colors.textSecondary }}>
+                              <li>Alle Lieferanten, Artikel und Rezepte aus dem aktuellen State</li>
+                              <li>LocalStorage-Einstellungen (Design, Filter, etc.)</li>
+                              <li>Alle Bilder (Artikel & Rezepte)</li>
+                              {backupMode === 'restore' && (
+                                <li style={{ color: colors.accent }}>
+                                  ⚠️ Die aktuelle Speicherkonfiguration bleibt erhalten
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Fortschrittsanzeige */}
+                      {backupProgress && (
+                        <div className="mb-4">
+                          <div className="d-flex align-items-center mb-3">
+                            <FaSpinner className="fa-spin me-2" style={{ color: colors.accent, fontSize: '1.5rem', flexShrink: 0 }} />
+                            <div>
+                              <strong style={{ fontSize: '1.1rem', color: colors.text }}>{backupProgress.message}</strong>
+                              <div style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
+                                {backupProgress.item}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="progress" style={{ height: '30px', backgroundColor: colors.secondary, borderRadius: '0.375rem', overflow: 'hidden' }}>
+                            <div
+                              className="progress-bar progress-bar-striped progress-bar-animated"
+                              role="progressbar"
+                              style={{
+                                width: `${(backupProgress.current / backupProgress.total) * 100}%`,
+                                backgroundColor: colors.accent,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: colors.card,
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              <span style={{ fontSize: '0.9rem' }}>
+                                {backupProgress.current} / {backupProgress.total}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Abschluss-Nachricht */}
+                      {backupCompleted && (
+                        <div className="p-4 rounded text-center" style={{ backgroundColor: colors.accent + '20', border: `2px solid ${colors.accent}` }}>
+                          <FaCheckCircle style={{ fontSize: '3rem', color: colors.accent, marginBottom: '1rem' }} />
+                          <h5 style={{ color: colors.text, marginBottom: '1rem' }}>
+                            {backupMode === 'backup' ? '✅ Backup erfolgreich erstellt!' : '✅ Backup erfolgreich wiederhergestellt!'}
+                          </h5>
+                          <p style={{ color: colors.textSecondary, marginBottom: 0 }}>
+                            {backupMode === 'backup' 
+                              ? 'Die Backup-Datei wurde heruntergeladen.'
+                              : 'Alle Daten und Einstellungen wurden wiederhergestellt.'}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  {!backupProgress && !backupCompleted ? (
+                    <>
+                      {backupMode === 'backup' ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          onClick={handleCreateBackup}
+                        >
+                          <FaDownload className="me-2" />
+                          Backup jetzt erstellen
+                        </button>
+                      ) : (
+                        <>
+                          <input
+                            type="file"
+                            accept=".json"
+                            onChange={handleRestoreBackup}
+                            style={{ display: 'none' }}
+                            id="backup-file-input"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            onClick={() => document.getElementById('backup-file-input')?.click()}
+                          >
+                            <FaSync className="me-2" />
+                            Backup-Datei auswählen
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => {
+                          setShowBackupModal(false);
+                          setBackupError(null);
+                        }}
+                      >
+                        <FaTimes className="me-2" />
+                        Abbrechen
+                      </button>
+                    </>
+                  ) : backupCompleted ? (
                     <button
                       type="button"
-                      className="btn-close"
+                      className="btn btn-outline-primary"
                       onClick={() => {
                         setShowBackupModal(false);
                         setBackupCompleted(false);
                         setBackupProgress(null);
                         setBackupError(null);
                       }}
-                      style={{ filter: 'invert(1)' }}
-                      disabled={!!backupProgress}
-                    ></button>
-                  </div>
-                  <div className="modal-body" style={{ color: colors.text, padding: '2rem' }}>
-                    {/* Fehlermeldung */}
-                    {backupError && (
-                      <div className="alert alert-danger mb-3" style={{
-                        backgroundColor: '#dc354520',
-                        borderColor: '#dc3545',
-                        color: colors.text
-                      }}>
-                        <div className="d-flex align-items-start">
-                          <FaExclamationTriangle className="me-2 mt-1" style={{ color: '#dc3545' }} />
-                          <div>
-                            <strong>Fehler!</strong>
-                            <br />
-                            {backupError}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {!backupProgress && !backupCompleted ? (
-                      <>
-                        {/* Modus-Auswahl */}
-                        <div className="row mb-4">
-                          <div className="col-md-6">
-                            <div
-                              className="p-4 rounded text-center"
-                              style={{
-                                border: `2px solid ${backupMode === 'backup' ? colors.accent : colors.cardBorder}`,
-                                backgroundColor: backupMode === 'backup' ? colors.accent + '10' : colors.card,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                height: '180px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'center'
-                              }}
-                              onClick={() => setBackupMode('backup')}
-                            >
-                              <FaDownload style={{ fontSize: '3rem', color: '#17a2b8', marginBottom: '1rem' }} />
-                              <h5 style={{ color: colors.text, marginBottom: '0.5rem' }}>Backup erstellen</h5>
-                              <small style={{ color: colors.textSecondary }}>
-                                Alle Daten, Einstellungen und Bilder sichern
-                              </small>
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div
-                              className="p-4 rounded text-center"
-                              style={{
-                                border: `2px solid ${backupMode === 'restore' ? colors.accent : colors.cardBorder}`,
-                                backgroundColor: backupMode === 'restore' ? colors.accent + '10' : colors.card,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                height: '180px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'center'
-                              }}
-                              onClick={() => setBackupMode('restore')}
-                            >
-                              <FaSync style={{ fontSize: '3rem', color: '#28a745', marginBottom: '1rem' }} />
-                              <h5 style={{ color: colors.text, marginBottom: '0.5rem' }}>Backup wiederherstellen</h5>
-                              <small style={{ color: colors.textSecondary }}>
-                                Daten aus einer Backup-Datei wiederherstellen
-                              </small>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Info-Box */}
-                        <div className="alert alert-info" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
-                          <FaInfoCircle className="me-2" />
-                          <strong>Was wird {backupMode === 'backup' ? 'gesichert' : 'wiederhergestellt'}?</strong>
-                          <ul className="mt-2 mb-0">
-                            <li>Alle Lieferanten, Artikel und Rezepte aus dem aktuellen State</li>
-                            <li>LocalStorage-Einstellungen (Design, Filter, etc.)</li>
-                            <li>Alle Bilder (Artikel & Rezepte)</li>
-                            {backupMode === 'restore' && (
-                              <li style={{ color: '#ffc107' }}>
-                                ⚠️ Die aktuelle Speicherkonfiguration bleibt erhalten
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* Fortschrittsanzeige */}
-                        {backupProgress && (
-                          <div className="mb-4">
-                            <div className="d-flex align-items-center mb-3">
-                              <FaSpinner className="fa-spin me-2" style={{ color: colors.accent, fontSize: '1.5rem' }} />
-                              <div>
-                                <strong style={{ fontSize: '1.1rem' }}>{backupProgress.message}</strong>
-                                <div style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
-                                  {backupProgress.item}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="progress" style={{ height: '30px', backgroundColor: colors.secondary }}>
-                              <div
-                                className="progress-bar progress-bar-striped progress-bar-animated"
-                                role="progressbar"
-                                style={{
-                                  width: `${(backupProgress.current / backupProgress.total) * 100}%`,
-                                  backgroundColor: colors.accent
-                                }}
-                              >
-                                <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>
-                                  {backupProgress.current} / {backupProgress.total}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Abschluss-Nachricht */}
-                        {backupCompleted && (
-                          <div className="p-4 rounded text-center" style={{ backgroundColor: '#28a74520', border: `2px solid #28a745` }}>
-                            <FaCheckCircle style={{ fontSize: '3rem', color: '#28a745', marginBottom: '1rem' }} />
-                            <h5 style={{ color: colors.text, marginBottom: '1rem' }}>
-                              {backupMode === 'backup' ? '✅ Backup erfolgreich erstellt!' : '✅ Backup erfolgreich wiederhergestellt!'}
-                            </h5>
-                            <p style={{ color: colors.textSecondary, marginBottom: 0 }}>
-                              {backupMode === 'backup' 
-                                ? 'Die Backup-Datei wurde heruntergeladen.'
-                                : 'Alle Daten und Einstellungen wurden wiederhergestellt.'}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className="modal-footer" style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                    {!backupProgress && !backupCompleted ? (
-                      <>
-                        {backupMode === 'backup' ? (
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleCreateBackup}
-                            style={{
-                              backgroundColor: '#17a2b8',
-                              borderColor: '#17a2b8'
-                            }}
-                          >
-                            <FaDownload className="me-2" />
-                            Backup jetzt erstellen
-                          </button>
-                        ) : (
-                          <>
-                            <input
-                              type="file"
-                              accept=".json"
-                              onChange={handleRestoreBackup}
-                              style={{ display: 'none' }}
-                              id="backup-file-input"
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-success"
-                              onClick={() => document.getElementById('backup-file-input')?.click()}
-                            >
-                              <FaSync className="me-2" />
-                              Backup-Datei auswählen
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => {
-                            setShowBackupModal(false);
-                            setBackupError(null);
-                          }}
-                        >
-                          <FaTimes className="me-2" />
-                          Abbrechen
-                        </button>
-                      </>
-                    ) : backupCompleted ? (
-                      <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={() => {
-                          setShowBackupModal(false);
-                          setBackupCompleted(false);
-                          setBackupError(null);
-                        }}
-                      >
-                        <FaCheckCircle className="me-2" />
-                        OK
-                      </button>
-                    ) : (
-                      <div className="d-flex align-items-center" style={{ color: colors.textSecondary }}>
-                        <FaSpinner className="fa-spin me-2" />
-                        Bitte warten...
-                      </div>
-                    )}
-                  </div>
+                    >
+                      Schließen
+                    </button>
+                  ) : (
+                    <div className="d-flex align-items-center" style={{ color: colors.textSecondary }}>
+                      <FaSpinner className="fa-spin me-2" />
+                      Bitte warten...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -10427,39 +10561,68 @@ const StorageManagement: React.FC = () => {
 
           {/* Data Merge Modal - Erweiterte Optionen bei vorhandenen Daten */}
           {showDataMergeModal && (
-            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-              <div className="modal-dialog modal-xl">
-                <div className="modal-content" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
-                  <div className="modal-header" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
-                    <h5 className="modal-title" style={{ color: colors.text }}>
-                      <FaExclamationTriangle className="me-2" style={{ color: '#ffc107' }} />
-                      Datenübertragung - Ziel enthält bereits Daten
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={handleDataMergeModalClose}
-                      style={{ filter: 'invert(1)' }}
-                    ></button>
-                  </div>
-                  <div className="modal-body" style={{ color: colors.text }}>
-                    {/* Warnung */}
-                    <div className="alert alert-warning mb-4" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107' }}>
-                      <div className="d-flex align-items-start">
-                        <FaExclamationTriangle className="me-2 mt-1" style={{ fontSize: '1.2rem' }} />
-                        <div>
-                          <strong>Achtung!</strong> Der Ziel-Speicher enthält bereits Daten.
-                          <br />
-                          Bitte wählen Sie, wie mit den vorhandenen Daten umgegangen werden soll.
-                        </div>
+            <div 
+              className="fixed top-0 left-0 w-full h-full" 
+              style={{ 
+                background: 'rgba(0,0,0,0.5)', 
+                zIndex: 1060,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget && !dataTransferProgress) {
+                  handleDataMergeModalClose();
+                }
+              }}
+            >
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '1000px',
+                  width: '90vw',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    <FaExclamationTriangle className="me-2" style={{ color: colors.accent }} />
+                    Datenübertragung - Ziel enthält bereits Daten
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={handleDataMergeModalClose}
+                    disabled={!!dataTransferProgress}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto', opacity: dataTransferProgress ? 0.5 : 1 }}
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem' }}>
+                  {/* Warnung */}
+                  <div className="p-3 rounded mb-4" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                    <div className="d-flex align-items-start">
+                      <FaExclamationTriangle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0, fontSize: '1.2rem' }} />
+                      <div>
+                        <strong style={{ color: colors.text }}>Achtung!</strong>
+                        <span style={{ color: colors.textSecondary }}> Der Ziel-Speicher enthält bereits Daten.</span>
+                        <br />
+                        <span style={{ color: colors.textSecondary }}>Bitte wählen Sie, wie mit den vorhandenen Daten umgegangen werden soll.</span>
                       </div>
                     </div>
+                  </div>
 
                     {/* Strategie-Auswahl */}
                     <div className="mb-4">
-                      <h6 style={{ color: colors.text, marginBottom: '15px', borderBottom: `2px solid ${colors.accent}`, paddingBottom: '8px' }}>
-                        <FaCog className="me-2" />
-                        Übertragungsstrategie
+                      <h6 className="d-flex align-items-center" style={{ color: colors.text, marginBottom: '15px', borderBottom: `2px solid ${colors.accent}`, paddingBottom: '8px' }}>
+                        <FaCog className="me-2" style={{ color: colors.accent, flexShrink: 0 }} />
+                        <span>Übertragungsstrategie</span>
                       </h6>
                       
                       {/* Option 1: Überschreiben */}
@@ -10538,9 +10701,9 @@ const StorageManagement: React.FC = () => {
                     {/* Konflikt-Auflösung - nur bei Merge-Strategie */}
                     {mergeStrategy === 'merge' && (
                       <div className="mb-4">
-                        <h6 style={{ color: colors.text, marginBottom: '15px', borderBottom: `2px solid ${colors.accent}`, paddingBottom: '8px' }}>
-                          <FaExclamationTriangle className="me-2" />
-                          Konflikt-Auflösung
+                        <h6 className="d-flex align-items-center" style={{ color: colors.text, marginBottom: '15px', borderBottom: `2px solid ${colors.accent}`, paddingBottom: '8px' }}>
+                          <FaExclamationTriangle className="me-2" style={{ color: colors.accent, flexShrink: 0 }} />
+                          <span>Konflikt-Auflösung</span>
                         </h6>
                         
                         <p style={{ color: colors.textSecondary, fontSize: '0.9rem', marginBottom: '15px' }}>
@@ -10616,15 +10779,15 @@ const StorageManagement: React.FC = () => {
                         </div>
 
                         {/* Info-Box für Duplikat-Behandlung */}
-                        <div className="alert alert-info" style={{ backgroundColor: colors.secondary, borderColor: colors.cardBorder }}>
+                        <div className="p-3 rounded" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
                           <div className="d-flex align-items-start">
-                            <FaInfoCircle className="me-2 mt-1" />
+                            <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
                             <div>
-                              <strong>Automatische Duplikat-Behandlung:</strong>
-                              <ul className="mb-0 mt-2" style={{ fontSize: '0.9rem' }}>
-                                <li><strong>Gleiche ID:</strong> Ihre gewählte Konflikt-Auflösung wird angewendet</li>
-                                <li><strong>Gleicher Name (aber andere ID):</strong> Automatisch "_neue Version" an den Namen anhängen</li>
-                                <li><strong>Keine Duplikate:</strong> Datensatz wird normal hinzugefügt</li>
+                              <strong style={{ color: colors.text }}>Automatische Duplikat-Behandlung:</strong>
+                              <ul className="mb-0 mt-2" style={{ fontSize: '0.9rem', color: colors.textSecondary }}>
+                                <li><strong style={{ color: colors.text }}>Gleiche ID:</strong> Ihre gewählte Konflikt-Auflösung wird angewendet</li>
+                                <li><strong style={{ color: colors.text }}>Gleicher Name (aber andere ID):</strong> Automatisch "_neue Version" an den Namen anhängen</li>
+                                <li><strong style={{ color: colors.text }}>Keine Duplikate:</strong> Datensatz wird normal hinzugefügt</li>
                               </ul>
                             </div>
                           </div>
@@ -10653,31 +10816,26 @@ const StorageManagement: React.FC = () => {
                         </div>
                       </div>
                     )}
-                  </div>
-                  <div className="modal-footer" style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleDataTransferWithStrategy}
-                      disabled={!!dataTransferProgress}
-                      style={{
-                        backgroundColor: colors.accent,
-                        borderColor: colors.accent
-                      }}
-                    >
-                      <FaCheckCircle className="me-2" />
-                      Übertragung starten
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleDataMergeModalClose}
-                      disabled={!!dataTransferProgress}
-                    >
-                      <FaTimes className="me-2" />
-                      Zurück
-                    </button>
-                  </div>
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={handleDataTransferWithStrategy}
+                    disabled={!!dataTransferProgress}
+                  >
+                    <FaCheckCircle className="me-2" />
+                    Übertragung starten
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={handleDataMergeModalClose}
+                    disabled={!!dataTransferProgress}
+                  >
+                    <FaTimes className="me-2" />
+                    Zurück
+                  </button>
                 </div>
               </div>
             </div>
@@ -10686,45 +10844,66 @@ const StorageManagement: React.FC = () => {
           {/* Supabase SQL-Ausführungs-Anleitung Modal */}
           {showSupabaseSQLModal && (
             <div 
-              className="modal fade show" 
+              className="fixed top-0 left-0 w-full h-full" 
               style={{ 
-                display: 'block', 
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                zIndex: 10000 
+                background: 'rgba(0,0,0,0.7)', 
+                zIndex: 10000,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowSupabaseSQLModal(false);
+                  setSupabaseSQLEditorUrl('');
+                }
               }}
             >
-              <div className="modal-dialog modal-lg modal-dialog-centered">
-                <div 
-                  className="modal-content" 
-                  style={{ 
-                    backgroundColor: colors.background, 
-                    color: colors.text,
-                    border: `2px solid #3ecf8e`
-                  }}
-                >
-                  <div 
-                    className="modal-header" 
-                    style={{ 
-                      backgroundColor: '#3ecf8e',
-                      borderBottom: 'none'
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '900px',
+                  width: '90vw',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    <FaDatabase className="me-2" style={{ color: colors.accent }} />
+                    Datenbank-Schema ausführen
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={() => {
+                      setShowSupabaseSQLModal(false);
+                      setSupabaseSQLEditorUrl('');
                     }}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
                   >
-                    <h5 className="modal-title" style={{ color: '#ffffff', fontWeight: 'bold' }}>
-                      <FaDatabase className="me-2" />
-                      Datenbank-Schema ausführen
-                    </h5>
-                  </div>
-                  <div className="modal-body" style={{ padding: '30px', fontSize: '1rem' }}>
-                    {/* Erfolgs-Banner */}
-                    <div className="alert alert-success mb-4" style={{ backgroundColor: '#28a74520', borderColor: '#28a745' }}>
-                      <FaCheckCircle className="me-2" style={{ color: '#28a745' }} />
-                      <strong>SQL-Befehle erfolgreich in die Zwischenablage kopiert!</strong>
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem', fontSize: '1rem' }}>
+                  {/* Erfolgs-Banner */}
+                  <div className="p-3 rounded mb-4" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                    <div className="d-flex align-items-start">
+                      <FaCheckCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                      <div>
+                        <strong style={{ color: colors.text }}>SQL-Befehle erfolgreich in die Zwischenablage kopiert!</strong>
+                      </div>
                     </div>
+                  </div>
 
                     {/* Schritt-für-Schritt Anleitung */}
                     <div className="mb-4">
-                      <h6 style={{ color: '#3ecf8e', fontWeight: 'bold', marginBottom: '20px' }}>
-                        Führen Sie diese Schritte aus:
+                      <h6 className="d-flex align-items-center" style={{ color: colors.text, fontWeight: 'bold', marginBottom: '20px' }}>
+                        <span>Führen Sie diese Schritte aus:</span>
                       </h6>
 
                       <div className="d-flex flex-column gap-3">
@@ -10747,13 +10926,8 @@ const StorageManagement: React.FC = () => {
                               Klicken Sie auf den Button unten, um den Supabase SQL Editor zu öffnen.
                             </p>
                             <button
-                              className="btn btn-sm"
+                              className="btn btn-sm btn-outline-primary"
                               onClick={() => window.open(supabaseSQLEditorUrl, '_blank')}
-                              style={{
-                                backgroundColor: '#3ecf8e',
-                                borderColor: '#3ecf8e',
-                                color: '#ffffff'
-                              }}
                             >
                               <FaExternalLinkAlt className="me-2" />
                               SQL Editor öffnen
@@ -10876,50 +11050,40 @@ const StorageManagement: React.FC = () => {
                     </div>
 
                     {/* Info-Box */}
-                    <div className="alert alert-info mt-4 mb-0" style={{ backgroundColor: '#17a2b820', borderColor: '#17a2b8' }}>
-                      <FaInfoCircle className="me-2" />
-                      <small>
-                        <strong>Hinweis:</strong> Der SQL Editor muss in einem neuen Tab geöffnet werden, 
-                        damit Sie zwischen dieser Anleitung und dem Editor wechseln können.
-                      </small>
+                    <div className="p-3 rounded mt-4 mb-0" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                      <div className="d-flex align-items-start">
+                        <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                        <div>
+                          <strong style={{ color: colors.text }}>Hinweis:</strong>
+                          <span style={{ color: colors.textSecondary }}> Der SQL Editor muss in einem neuen Tab geöffnet werden, damit Sie zwischen dieser Anleitung und dem Editor wechseln können.</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div 
-                    className="modal-footer" 
-                    style={{ 
-                      borderTop: `1px solid ${colors.cardBorder}`,
-                      backgroundColor: colors.card,
-                      justifyContent: 'space-between'
+                </div>
+                <div className="card-footer d-flex justify-content-between gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      setShowSupabaseSQLModal(false);
+                      setSupabaseSQLEditorUrl('');
                     }}
                   >
-                    <button
-                      type="button"
-                      className="btn btn-outline-input"
-                      onClick={() => {
-                        setShowSupabaseSQLModal(false);
-                        setSupabaseSQLEditorUrl('');
-                      }}
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-success"
-                      onClick={async () => {
-                        setShowSupabaseSQLModal(false);
-                        setSupabaseSQLEditorUrl('');
-                        // Starte Verbindungstest neu
-                        await handleSupabaseConnectionTest();
-                      }}
-                      style={{
-                        backgroundColor: '#28a745',
-                        borderColor: '#28a745'
-                      }}
-                    >
-                      <FaCheckCircle className="me-2" />
-                      Fertig - Verbindung testen
-                    </button>
-                  </div>
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={async () => {
+                      setShowSupabaseSQLModal(false);
+                      setSupabaseSQLEditorUrl('');
+                      // Starte Verbindungstest neu
+                      await handleSupabaseConnectionTest();
+                    }}
+                  >
+                    <FaCheckCircle className="me-2" />
+                    Fertig - Verbindung testen
+                  </button>
                 </div>
               </div>
             </div>
@@ -10928,11 +11092,14 @@ const StorageManagement: React.FC = () => {
           {/* Supabase Setup-Anleitung Modal */}
           {showSupabaseSetupModal && (
             <div 
-              className="modal fade show" 
+              className="fixed top-0 left-0 w-full h-full" 
               style={{ 
-                display: 'block', 
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                zIndex: 9999 
+                background: 'rgba(0,0,0,0.5)', 
+                zIndex: 1060,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
               }}
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
@@ -10941,45 +11108,48 @@ const StorageManagement: React.FC = () => {
                 }
               }}
             >
-              <div className="modal-dialog modal-lg modal-dialog-scrollable">
-                <div 
-                  className="modal-content" 
-                  style={{ 
-                    backgroundColor: colors.background, 
-                    color: colors.text,
-                    border: `1px solid ${colors.cardBorder}`,
-                    maxHeight: '90vh'
-                  }}
-                >
-                  <div 
-                    className="modal-header" 
-                    style={{ 
-                      backgroundColor: colors.card,
-                      borderBottom: `1px solid ${colors.cardBorder}`
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '900px',
+                  width: '90vw',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    <FaInfoCircle className="me-2" style={{ color: colors.accent }} />
+                    Supabase Projekt einrichten - Schritt für Schritt
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={() => {
+                      setShowSupabaseSetupModal(false);
+                      setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
                     }}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
                   >
-                    <h5 className="modal-title">
-                      <FaInfoCircle className="me-2" style={{ color: '#3ecf8e' }} />
-                      Supabase Projekt einrichten - Schritt für Schritt
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={() => {
-                        setShowSupabaseSetupModal(false);
-                        setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
-                      }}
-                      style={{ filter: colors.text === '#ffffff' ? 'invert(1)' : 'none' }}
-                    />
-                  </div>
-                  <div className="modal-body" style={{ padding: '30px' }}>
-                    {/* Einleitung */}
-                    <div className="alert alert-info mb-4" style={{ backgroundColor: '#3ecf8e20', borderColor: '#3ecf8e' }}>
-                      <FaInfoCircle className="me-2" />
-                      <strong>Willkommen!</strong> Diese Anleitung hilft Ihnen, Ihr Supabase-Projekt einzurichten.
-                      <br />
-                      <small>Die Einrichtung dauert nur wenige Minuten und ist komplett kostenlos.</small>
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem' }}>
+                  {/* Einleitung */}
+                  <div className="p-3 rounded mb-4" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                    <div className="d-flex align-items-start">
+                      <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                      <div>
+                        <strong style={{ color: colors.text }}>Willkommen!</strong>
+                        <span style={{ color: colors.textSecondary }}> Diese Anleitung hilft Ihnen, Ihr Supabase-Projekt einzurichten.</span>
+                        <br />
+                        <small style={{ color: colors.textSecondary }}>Die Einrichtung dauert nur wenige Minuten und ist komplett kostenlos.</small>
+                      </div>
                     </div>
+                  </div>
 
                     {/* Schritt 1: Projekt erstellen */}
                     <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
@@ -11256,74 +11426,64 @@ const StorageManagement: React.FC = () => {
                     {validateSupabaseURL(supabaseSetupData.url).isValid &&
                      validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid &&
                      validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid && (
-                      <div className="alert alert-success mt-4" style={{ backgroundColor: '#19875420', borderColor: '#198754' }}>
-                        <FaCheckCircle className="me-2" />
-                        <strong>Perfekt!</strong> Alle erforderlichen Daten sind gültig. Sie können jetzt fortfahren!
+                      <div className="p-3 rounded mt-4" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                        <div className="d-flex align-items-start">
+                          <FaCheckCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                          <div>
+                            <strong style={{ color: colors.text }}>Perfekt!</strong>
+                            <span style={{ color: colors.textSecondary }}> Alle erforderlichen Daten sind gültig. Sie können jetzt fortfahren!</span>
+                          </div>
+                        </div>
                       </div>
                     )}
-                  </div>
-                  <div 
-                    className="modal-footer" 
-                    style={{ 
-                      borderTop: `1px solid ${colors.cardBorder}`,
-                      backgroundColor: colors.card
-                    }}
-                  >
-                    {validateSupabaseURL(supabaseSetupData.url).isValid &&
-                     validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid &&
-                     validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? (
-                      <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={() => {
-                          // Daten in die Konfiguration übernehmen
-                          handleStorageManagementUpdate({
-                            connections: {
-                              ...storageManagement.connections,
-                              supabase: {
-                                ...storageManagement.connections.supabase,
-                                url: supabaseSetupData.url,
-                                anonKey: supabaseSetupData.anonKey,
-                                serviceRoleKey: supabaseSetupData.serviceRoleKey
-                              }
-                            }
-                          });
-                          setShowSupabaseSetupModal(false);
-                          setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
-                        }}
-                        style={{
-                          backgroundColor: '#198754',
-                          borderColor: '#198754'
-                        }}
-                      >
-                        <FaCheckCircle className="me-2" />
-                        Daten übernehmen und schließen
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled
-                        style={{
-                          opacity: 0.6,
-                          cursor: 'not-allowed'
-                        }}
-                      >
-                        <FaTimes className="me-2" />
-                        Abbrechen
-                      </button>
-                    )}
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  {validateSupabaseURL(supabaseSetupData.url).isValid &&
+                   validateSupabaseKey(supabaseSetupData.anonKey, 'anon').isValid &&
+                   validateSupabaseKey(supabaseSetupData.serviceRoleKey, 'service').isValid ? (
                     <button
                       type="button"
-                      className="btn btn-outline-input"
+                      className="btn btn-outline-primary"
                       onClick={() => {
+                        // Daten in die Konfiguration übernehmen
+                        handleStorageManagementUpdate({
+                          connections: {
+                            ...storageManagement.connections,
+                            supabase: {
+                              ...storageManagement.connections.supabase,
+                              url: supabaseSetupData.url,
+                              anonKey: supabaseSetupData.anonKey,
+                              serviceRoleKey: supabaseSetupData.serviceRoleKey
+                            }
+                          }
+                        });
                         setShowSupabaseSetupModal(false);
                         setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
                       }}
                     >
-                      Schließen
+                      <FaCheckCircle className="me-2" />
+                      Daten übernehmen und schließen
                     </button>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      disabled
+                    >
+                      <FaTimes className="me-2" />
+                      Abbrechen
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      setShowSupabaseSetupModal(false);
+                      setSupabaseSetupData({ url: '', anonKey: '', serviceRoleKey: '' });
+                    }}
+                  >
+                    Schließen
+                  </button>
                 </div>
               </div>
             </div>
@@ -11332,11 +11492,14 @@ const StorageManagement: React.FC = () => {
           {/* Firebase Setup-Anleitung Modal */}
           {showFirebaseSetupModal && (
             <div 
-              className="modal fade show" 
+              className="fixed top-0 left-0 w-full h-full" 
               style={{ 
-                display: 'block', 
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                zIndex: 9999 
+                background: 'rgba(0,0,0,0.5)', 
+                zIndex: 1060,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
               }}
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
@@ -11352,52 +11515,55 @@ const StorageManagement: React.FC = () => {
                 }
               }}
             >
-              <div className="modal-dialog modal-lg modal-dialog-scrollable">
-                <div 
-                  className="modal-content" 
-                  style={{ 
-                    backgroundColor: colors.background, 
-                    color: colors.text,
-                    border: `1px solid ${colors.cardBorder}`,
-                    maxHeight: '90vh'
-                  }}
-                >
-                  <div 
-                    className="modal-header" 
-                    style={{ 
-                      backgroundColor: colors.card,
-                      borderBottom: `1px solid ${colors.cardBorder}`
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `1px solid ${colors.cardBorder}`,
+                  maxWidth: '900px',
+                  width: '90vw',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.secondary, borderBottom: `1px solid ${colors.cardBorder}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1 }}>
+                    <FaInfoCircle className="me-2" style={{ color: colors.accent }} />
+                    Firebase Projekt einrichten - Schritt für Schritt
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={() => {
+                      setShowFirebaseSetupModal(false);
+                      setFirebaseSetupData({ 
+                        apiKey: '', 
+                        authDomain: '', 
+                        projectId: '', 
+                        storageBucket: '', 
+                        messagingSenderId: '', 
+                        appId: '' 
+                      });
                     }}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
                   >
-                    <h5 className="modal-title">
-                      <FaInfoCircle className="me-2" style={{ color: '#FF9800' }} />
-                      Firebase Projekt einrichten - Schritt für Schritt
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={() => {
-                        setShowFirebaseSetupModal(false);
-                        setFirebaseSetupData({ 
-                          apiKey: '', 
-                          authDomain: '', 
-                          projectId: '', 
-                          storageBucket: '', 
-                          messagingSenderId: '', 
-                          appId: '' 
-                        });
-                      }}
-                      style={{ filter: colors.text === '#ffffff' ? 'invert(1)' : 'none' }}
-                    />
-                  </div>
-                  <div className="modal-body" style={{ padding: '30px' }}>
-                    {/* Einleitung */}
-                    <div className="alert alert-info mb-4" style={{ backgroundColor: '#FF980020', borderColor: '#FF9800' }}>
-                      <FaInfoCircle className="me-2" />
-                      <strong>Willkommen!</strong> Diese Anleitung hilft Ihnen, Ihr Firebase-Projekt einzurichten.
-                      <br />
-                      <small>Die Einrichtung dauert nur wenige Minuten und ist komplett kostenlos.</small>
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)', padding: '1.5rem' }}>
+                  {/* Einleitung */}
+                  <div className="p-3 rounded mb-4" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                    <div className="d-flex align-items-start">
+                      <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                      <div>
+                        <strong style={{ color: colors.text }}>Willkommen!</strong>
+                        <span style={{ color: colors.textSecondary }}> Diese Anleitung hilft Ihnen, Ihr Firebase-Projekt einzurichten.</span>
+                        <br />
+                        <small style={{ color: colors.textSecondary }}>Die Einrichtung dauert nur wenige Minuten und ist komplett kostenlos.</small>
+                      </div>
                     </div>
+                  </div>
 
                     {/* Schritt 1: Projekt erstellen */}
                     <div className="mb-4 pb-4" style={{ borderBottom: `1px solid ${colors.cardBorder}` }}>
@@ -12047,80 +12213,43 @@ allow read, write: if request.auth != null;`}</pre>
                      validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid &&
                      validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid &&
                      validateFirebaseAppId(firebaseSetupData.appId).isValid && (
-                      <div className="alert alert-success mt-4" style={{ backgroundColor: '#19875420', borderColor: '#198754' }}>
-                        <FaCheckCircle className="me-2" />
-                        <strong>Perfekt!</strong> Alle erforderlichen Daten sind gültig. Sie können jetzt fortfahren!
+                      <div className="p-3 rounded mt-4" style={{ backgroundColor: colors.accent + '20', border: `1px solid ${colors.accent}` }}>
+                        <div className="d-flex align-items-start">
+                          <FaCheckCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                          <div>
+                            <strong style={{ color: colors.text }}>Perfekt!</strong>
+                            <span style={{ color: colors.textSecondary }}> Alle erforderlichen Daten sind gültig. Sie können jetzt fortfahren!</span>
+                          </div>
+                        </div>
                       </div>
                     )}
-                  </div>
-                  <div 
-                    className="modal-footer" 
-                    style={{ 
-                      borderTop: `1px solid ${colors.cardBorder}`,
-                      backgroundColor: colors.card
-                    }}
-                  >
-                    {validateFirebaseApiKey(firebaseSetupData.apiKey).isValid &&
-                     validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid &&
-                     validateFirebaseProjectId(firebaseSetupData.projectId).isValid &&
-                     validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid &&
-                     validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid &&
-                     validateFirebaseAppId(firebaseSetupData.appId).isValid ? (
-                      <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={() => {
-                          // Daten in die Konfiguration übernehmen
-                          handleStorageManagementUpdate({
-                            connections: {
-                              ...storageManagement.connections,
-                              firebase: {
-                                ...storageManagement.connections.firebase,
-                                apiKey: firebaseSetupData.apiKey,
-                                authDomain: firebaseSetupData.authDomain,
-                                projectId: firebaseSetupData.projectId,
-                                storageBucket: firebaseSetupData.storageBucket,
-                                messagingSenderId: firebaseSetupData.messagingSenderId,
-                                appId: firebaseSetupData.appId
-                              }
-                            }
-                          });
-                          setShowFirebaseSetupModal(false);
-                          setFirebaseSetupData({ 
-                            apiKey: '', 
-                            authDomain: '', 
-                            projectId: '', 
-                            storageBucket: '', 
-                            messagingSenderId: '', 
-                            appId: '' 
-                          });
-                        }}
-                        style={{
-                          backgroundColor: '#198754',
-                          borderColor: '#198754'
-                        }}
-                      >
-                        <FaCheckCircle className="me-2" />
-                        Daten übernehmen und schließen
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled
-                        style={{
-                          opacity: 0.6,
-                          cursor: 'not-allowed'
-                        }}
-                      >
-                        <FaTimes className="me-2" />
-                        Abbrechen
-                      </button>
-                    )}
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  {validateFirebaseApiKey(firebaseSetupData.apiKey).isValid &&
+                   validateFirebaseAuthDomain(firebaseSetupData.authDomain).isValid &&
+                   validateFirebaseProjectId(firebaseSetupData.projectId).isValid &&
+                   validateFirebaseStorageBucket(firebaseSetupData.storageBucket).isValid &&
+                   validateFirebaseMessagingSenderId(firebaseSetupData.messagingSenderId).isValid &&
+                   validateFirebaseAppId(firebaseSetupData.appId).isValid ? (
                     <button
                       type="button"
-                      className="btn btn-outline-input"
+                      className="btn btn-outline-primary"
                       onClick={() => {
+                        // Daten in die Konfiguration übernehmen
+                        handleStorageManagementUpdate({
+                          connections: {
+                            ...storageManagement.connections,
+                            firebase: {
+                              ...storageManagement.connections.firebase,
+                              apiKey: firebaseSetupData.apiKey,
+                              authDomain: firebaseSetupData.authDomain,
+                              projectId: firebaseSetupData.projectId,
+                              storageBucket: firebaseSetupData.storageBucket,
+                              messagingSenderId: firebaseSetupData.messagingSenderId,
+                              appId: firebaseSetupData.appId
+                            }
+                          }
+                        });
                         setShowFirebaseSetupModal(false);
                         setFirebaseSetupData({ 
                           apiKey: '', 
@@ -12132,9 +12261,36 @@ allow read, write: if request.auth != null;`}</pre>
                         });
                       }}
                     >
-                      Schließen
+                      <FaCheckCircle className="me-2" />
+                      Daten übernehmen und schließen
                     </button>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      disabled
+                    >
+                      <FaTimes className="me-2" />
+                      Abbrechen
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      setShowFirebaseSetupModal(false);
+                      setFirebaseSetupData({ 
+                        apiKey: '', 
+                        authDomain: '', 
+                        projectId: '', 
+                        storageBucket: '', 
+                        messagingSenderId: '', 
+                        appId: '' 
+                      });
+                    }}
+                  >
+                    Schließen
+                  </button>
                 </div>
               </div>
             </div>

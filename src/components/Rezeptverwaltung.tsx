@@ -120,28 +120,16 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                 <div className="btn-group w-full" role="group">
                   <button
                     type="button"
-                    className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    className={`btn ${recipeViewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setRecipeViewMode('list')}
-                    style={{
-                      backgroundColor: recipeViewMode === 'list' ? colors.accent : 'transparent',
-                      borderColor: recipeViewMode === 'list' ? colors.accent : colors.cardBorder,
-                      color: recipeViewMode === 'list' ? 'white' : colors.text,
-                      borderRadius: '0.375rem 0 0 0.375rem'
-                    }}
                   >
                     <FaList className="me-1" />
                     Liste
                   </button>
                   <button
                     type="button"
-                    className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    className={`btn ${recipeViewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setRecipeViewMode('grid')}
-                    style={{
-                      backgroundColor: recipeViewMode === 'grid' ? colors.accent : 'transparent',
-                      borderColor: recipeViewMode === 'grid' ? colors.accent : colors.cardBorder,
-                      color: recipeViewMode === 'grid' ? 'white' : colors.text,
-                      borderRadius: '0 0.375rem 0.375rem 0'
-                    }}
                   >
                     <FaTh className="me-1" />
                     Kacheln
@@ -189,10 +177,6 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                   type="button"
                   className="btn btn-outline-secondary no-hover w-full"
                   onClick={() => setRecipeSortOrder(recipeSortOrder === 'asc' ? 'desc' : 'asc')}
-                  style={{
-                    borderColor: colors.cardBorder,
-                    color: colors.text
-                  }}
                 >
                   <FaSort className="me-1" />
                   {recipeSortOrder === 'asc' ? 'A-Z' : 'Z-A'}
@@ -277,9 +261,8 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
         {/* Rezept-Liste */}
         {recipeViewMode === 'list' ? (
           <div className="card">
-            <div className="card-body p-0">
-              <div className="overflow-x-auto">
-                <table className="table table-hover modern-table mb-0">
+            <div className="overflow-x-auto">
+              <table className="table table-hover modern-table mb-0">
                   <thead>
                     <tr>
                       <th>
@@ -371,13 +354,12 @@ const Rezeptverwaltung: React.FC<RezeptverwaltungProps> = ({
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+              </table>
             </div>
           </div>
         ) : (
           // Grid-Ansicht
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {filteredRecipes.map(recipe => (
               <div key={recipe.id} className="mb-3">
                 <div 

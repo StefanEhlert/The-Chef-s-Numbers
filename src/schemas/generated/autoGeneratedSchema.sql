@@ -1,5 +1,5 @@
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-10-29T20:35:35.882Z
+-- Generiert am: 2025-11-03T01:06:18.417Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -121,7 +121,9 @@ vat_rate DECIMAL DEFAULT 19,
 selling_price DECIMAL,
 selling_price_history JSONB,
 total_nutrition_info JSONB,
+alcohol DECIMAL,
 allergens JSONB,
+ingredients_text TEXT,
 notes TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
