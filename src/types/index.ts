@@ -75,6 +75,7 @@ export interface PriceHistoryEntry {
 // Artikel
 export interface Article extends BaseEntity {
   name: string;
+  namesOCR?: string[]; // Array von OCR-Namen für verschiedene Erkennungen
   category: ArticleCategory;
   supplierId: string;
   supplierArticleNumber?: string;

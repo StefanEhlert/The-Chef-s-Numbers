@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { FaCog, FaCode, FaDatabase, FaSync, FaCheckCircle, FaExclamationTriangle, FaEye, FaEyeSlash } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaCog, FaCode, FaDatabase, FaSync, FaCheckCircle, FaExclamationTriangle, FaEye, FaEyeSlash, FaUpload, FaFileInvoice, FaSpinner, FaTimes, FaCheck, FaCopy } from 'react-icons/fa';
+import { analyzeDocumentWithAzureFormRecognizer, validateDocumentFile } from '../services/azureFormRecognizerService';
+import { OCRResult, enrichReceiptData, ExtendedReceiptData } from '../services/ocrTypes';
+import { useAppContext } from '../contexts/AppContext';
+import ReceiptReviewModal from './ReceiptReviewModal';
 
 const DevelopmentPage: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
     schemaComparison: true,
+    azureOCR: true,
     phase1: false,
     phase2: false,
     phase3: false
@@ -12,6 +17,26 @@ const DevelopmentPage: React.FC = () => {
   const [previousSchema, setPreviousSchema] = useState<any>(null);
   const [schemaChanges, setSchemaChanges] = useState<any>(null);
   const [isLoadingSchema, setIsLoadingSchema] = useState(false);
+  
+  // Azure Form Recognizer OCR States
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [showReceiptReview, setShowReceiptReview] = useState(false);
+  const [enrichedReceiptData, setEnrichedReceiptData] = useState<ExtendedReceiptData | null>(null);
+  const [savedResults, setSavedResults] = useState<Array<{ id: string; timestamp: string; fileName: string; result: OCRResult; enriched: ExtendedReceiptData }>>([]);
+  const [showJSONModal, setShowJSONModal] = useState(false);
+  const [selectedJSONData, setSelectedJSONData] = useState<{ result: OCRResult; enriched: ExtendedReceiptData } | null>(null);
+  const [activeJSONTab, setActiveJSONTab] = useState<'result' | 'enriched' | 'raw'>('result');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [receiptImageFile, setReceiptImageFile] = useState<File | null>(null); // Speichere Bild separat für Modal
+  
+  // App Context für Suppliers
+  const { state } = useAppContext();
+  
+  // Key für localStorage
+  const SAVED_RESULTS_KEY = 'azure_ocr_saved_results';
 
   const colors = {
     primary: '#007bff',
@@ -29,10 +54,67 @@ const DevelopmentPage: React.FC = () => {
     textSecondary: '#6c757d'
   };
 
-  // Lade Schema-Daten beim Start
+  // Lade Schema-Daten und gespeicherte OCR-Ergebnisse beim Start
   useEffect(() => {
     loadSchemas();
+    loadSavedResults();
   }, []);
+  
+  // Lade gespeicherte OCR-Ergebnisse aus localStorage
+  const loadSavedResults = () => {
+    try {
+      const saved = localStorage.getItem(SAVED_RESULTS_KEY);
+      if (saved) {
+        const results = JSON.parse(saved);
+        setSavedResults(results);
+        console.log('📂 Geladene gespeicherte OCR-Ergebnisse:', results.length);
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Laden gespeicherter OCR-Ergebnisse:', error);
+    }
+  };
+  
+  // Speichere OCR-Ergebnis
+  const saveOCRResult = (result: OCRResult, enriched: ExtendedReceiptData) => {
+    try {
+      const newEntry = {
+        id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
+        timestamp: new Date().toISOString(),
+        fileName: selectedFile?.name || 'Unbekannt',
+        result: result,
+        enriched: enriched
+      };
+      
+      const updated = [...savedResults, newEntry];
+      // Behalte nur die letzten 20 Ergebnisse
+      const limited = updated.slice(-20);
+      setSavedResults(limited);
+      localStorage.setItem(SAVED_RESULTS_KEY, JSON.stringify(limited));
+      console.log('💾 OCR-Ergebnis gespeichert:', newEntry.id);
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern des OCR-Ergebnisses:', error);
+    }
+  };
+  
+  // Lösche gespeichertes Ergebnis
+  const deleteSavedResult = (id: string) => {
+    try {
+      const updated = savedResults.filter(r => r.id !== id);
+      setSavedResults(updated);
+      localStorage.setItem(SAVED_RESULTS_KEY, JSON.stringify(updated));
+      console.log('🗑️ OCR-Ergebnis gelöscht:', id);
+    } catch (error) {
+      console.error('❌ Fehler beim Löschen des OCR-Ergebnisses:', error);
+    }
+  };
+  
+  // Öffne gespeichertes Ergebnis
+  const openSavedResult = (savedEntry: { id: string; timestamp: string; fileName: string; result: OCRResult; enriched: ExtendedReceiptData }) => {
+    setOcrResult(savedEntry.result);
+    setEnrichedReceiptData(savedEntry.enriched);
+    setShowReceiptReview(true);
+    console.log('📂 Gespeichertes OCR-Ergebnis geöffnet:', savedEntry.id);
+  };
 
   const loadSchemas = async () => {
     setIsLoadingSchema(true);
@@ -131,6 +213,77 @@ const DevelopmentPage: React.FC = () => {
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  // Azure Form Recognizer Handler
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validiere Datei
+    const validation = validateDocumentFile(file);
+    if (!validation.valid) {
+      setOcrError(validation.error || 'Ungültige Datei');
+      setSelectedFile(null);
+      return;
+    }
+
+    setSelectedFile(file);
+    setOcrError(null);
+    setOcrResult(null);
+    console.log('📄 Datei ausgewählt:', file.name, file.type, file.size);
+  };
+
+  const handleAnalyzeDocument = async () => {
+    if (!selectedFile) {
+      setOcrError('Bitte wählen Sie zuerst eine Datei aus');
+      return;
+    }
+
+    setIsProcessing(true);
+    setOcrError(null);
+    setOcrResult(null);
+    setEnrichedReceiptData(null);
+
+    try {
+      console.log('🚀 Starte Azure Form Recognizer Analyse...');
+      const result = await analyzeDocumentWithAzureFormRecognizer(selectedFile);
+      
+      if (result.error) {
+        setOcrError(result.error);
+      } else {
+        setOcrResult(result);
+        console.log('✅ Azure Form Recognizer Analyse erfolgreich:', result);
+        
+        // Speichere Bild separat für Modal
+        if (selectedFile) {
+          setReceiptImageFile(selectedFile);
+        }
+        
+        // Reichere Daten mit allen Artikelformular-Feldern an
+        const enriched = enrichReceiptData(result, state.suppliers || []);
+        setEnrichedReceiptData(enriched);
+        console.log('✅ Beleg-Daten angereichert:', enriched);
+        
+        // Speichere Ergebnis automatisch
+        saveOCRResult(result, enriched);
+      }
+    } catch (error: any) {
+      console.error('❌ Azure Form Recognizer Fehler:', error);
+      setOcrError(error.message || 'Unbekannter Fehler bei der Analyse');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleClearResults = () => {
+    setSelectedFile(null);
+    setReceiptImageFile(null);
+    setOcrResult(null);
+    setOcrError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -404,6 +557,448 @@ const DevelopmentPage: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Azure Form Recognizer Test Bereich */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="card" style={{ backgroundColor: colors.card, border: `1px solid ${colors.cardBorder}` }}>
+            <div 
+              className="card-header d-flex justify-content-between align-items-center" 
+              style={{ backgroundColor: '#8B5CF6', color: 'white', cursor: 'pointer' }}
+              onClick={() => toggleSection('azureOCR')}
+            >
+              <h5 className="mb-0 d-flex align-items-center">
+                <FaFileInvoice className="me-2" />
+                Azure Form Recognizer - Dokumentenanalyse Test
+              </h5>
+              <div className="d-flex align-items-center gap-2">
+                {expandedSections.azureOCR ? <FaEyeSlash /> : <FaEye />}
+              </div>
+            </div>
+            {expandedSections.azureOCR && (
+              <div className="card-body">
+                <p className="mb-3" style={{ color: colors.textSecondary }}>
+                  Testen Sie die Azure Form Recognizer API zur automatischen Analyse von Belegen und Rechnungen.
+                  <br />
+                  <strong>Unterstützt:</strong> JPEG, PNG, BMP, TIFF, PDF (max. 50MB)
+                  <br />
+                  <small className="text-success">
+                    ✅ PDF-Dateien werden direkt unterstützt!
+                  </small>
+                </p>
+
+                {/* Gespeicherte Ergebnisse Liste */}
+                {savedResults.length > 0 && (
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">Gespeicherte Ergebnisse ({savedResults.length}):</label>
+                    <div style={{ 
+                      maxHeight: '200px', 
+                      overflowY: 'auto',
+                      border: `1px solid ${colors.cardBorder}`,
+                      borderRadius: '4px',
+                      padding: '0.5rem'
+                    }}>
+                      {savedResults.map((saved) => (
+                        <div
+                          key={saved.id}
+                          className="d-flex justify-content-between align-items-center mb-2 p-2"
+                          style={{
+                            backgroundColor: colors.light,
+                            borderRadius: '4px',
+                            border: `1px solid ${colors.cardBorder}`
+                          }}
+                        >
+                          <div className="flex-grow-1">
+                            <div style={{ fontWeight: 'bold', fontSize: '0.9rem', color: colors.text }}>
+                              {saved.fileName}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: colors.textSecondary }}>
+                              {new Date(saved.timestamp).toLocaleString('de-DE')}
+                              {' • '}
+                              {saved.result.articles?.length || 0} Artikel
+                              {saved.result.supplier && ` • ${saved.result.supplier}`}
+                            </div>
+                          </div>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => openSavedResult(saved)}
+                              title="Ergebnis öffnen"
+                            >
+                              <FaFileInvoice className="me-1" />
+                              Öffnen
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-info"
+                              onClick={() => {
+                                setSelectedJSONData({ result: saved.result, enriched: saved.enriched });
+                                setActiveJSONTab('result');
+                                setShowJSONModal(true);
+                              }}
+                              title="JSON anzeigen"
+                            >
+                              <FaCode className="me-1" />
+                              JSON
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => deleteSavedResult(saved.id)}
+                              title="Ergebnis löschen"
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Datei-Auswahl */}
+                <div className="mb-3">
+                  <label className="form-label fw-bold">1. Dokument auswählen:</label>
+                  <div className="d-flex gap-2 align-items-center">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="form-control"
+                      accept="image/jpeg,image/jpg,image/png,image/bmp,image/tiff,application/pdf"
+                      onChange={handleFileSelect}
+                      disabled={isProcessing}
+                    />
+                    {selectedFile && (
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="badge bg-info">
+                          {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
+                        </span>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={handleClearResults}
+                          disabled={isProcessing}
+                        >
+                          <FaTimes className="me-1" />
+                          Zurücksetzen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Analyse-Button */}
+                <div className="mb-3">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleAnalyzeDocument}
+                    disabled={!selectedFile || isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <FaSpinner className="me-2 fa-spin" />
+                        Analysiere...
+                      </>
+                    ) : (
+                      <>
+                        <FaUpload className="me-2" />
+                        Dokument analysieren
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Fehler-Anzeige */}
+                {ocrError && (
+                  <div className="alert alert-danger mb-3">
+                    <strong>Fehler:</strong> {ocrError}
+                  </div>
+                )}
+
+                {/* Ergebnis-Anzeige */}
+                {ocrResult && (
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">2. Analyse-Ergebnis (JSON):</label>
+                    <textarea
+                      className="form-control"
+                      rows={20}
+                      readOnly
+                      value={JSON.stringify(ocrResult, null, 2)}
+                      style={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.9rem',
+                        backgroundColor: colors.light
+                      }}
+                    />
+                    <div className="mt-2 d-flex justify-content-between align-items-center">
+                      <small className="text-muted">
+                        {ocrResult.articles?.length || 0} Artikel extrahiert
+                        {ocrResult.supplier && ` • Lieferant: ${ocrResult.supplier}`}
+                        {ocrResult.date && ` • Datum: ${ocrResult.date}`}
+                      </small>
+                      <div className="d-flex gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(ocrResult, null, 2));
+                            alert('JSON in Zwischenablage kopiert!');
+                          }}
+                        >
+                          <FaCode className="me-1" />
+                          JSON kopieren
+                        </button>
+                        {enrichedReceiptData && enrichedReceiptData.articles.length > 0 && (
+                          <button
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => setShowReceiptReview(true)}
+                          >
+                            <FaCheck className="me-1" />
+                            Beleg überprüfen
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Raw Response (falls vorhanden) */}
+                {ocrResult?.rawResponse && (
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">3. Raw Response von Mistral:</label>
+                    <textarea
+                      className="form-control"
+                      rows={10}
+                      readOnly
+                      value={ocrResult.rawResponse}
+                      style={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.85rem',
+                        backgroundColor: colors.light
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Receipt Review Modal */}
+      {enrichedReceiptData && (
+        <ReceiptReviewModal
+          show={showReceiptReview}
+          onClose={() => setShowReceiptReview(false)}
+          receiptData={enrichedReceiptData}
+          suppliers={state.suppliers || []}
+          colors={colors}
+          receiptImage={receiptImageFile || undefined}
+          onSave={(articles) => {
+            console.log('💾 Artikel aus Beleg gespeichert:', articles);
+            // Hier könnten die Artikel in die Datenbank übernommen werden
+            setShowReceiptReview(false);
+          }}
+        />
+      )}
+
+      {/* JSON Viewer Modal */}
+      {showJSONModal && selectedJSONData && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9999,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setShowJSONModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: '8px',
+              border: `1px solid ${colors.cardBorder}`,
+              width: '90%',
+              maxWidth: '1200px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div 
+              style={{
+                padding: '1rem',
+                borderBottom: `1px solid ${colors.cardBorder}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <h5 className="mb-0" style={{ color: colors.text }}>
+                <FaCode className="me-2" />
+                JSON-Daten der gespeicherten Ergebnisse
+              </h5>
+              <button
+                className="btn btn-sm btn-outline-danger"
+                onClick={() => setShowJSONModal(false)}
+                title="Schließen"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '1rem', overflow: 'auto', flex: 1 }}>
+              {/* Tabs */}
+              <div className="mb-3">
+                <ul className="nav nav-tabs">
+                  <li className="nav-item">
+                    <button
+                      className={`nav-link ${activeJSONTab === 'result' ? 'active' : ''}`}
+                      onClick={() => setActiveJSONTab('result')}
+                      style={{ 
+                        backgroundColor: activeJSONTab === 'result' ? colors.primary : 'transparent',
+                        color: activeJSONTab === 'result' ? 'white' : colors.text,
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      OCR Result
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button
+                      className={`nav-link ${activeJSONTab === 'enriched' ? 'active' : ''}`}
+                      onClick={() => setActiveJSONTab('enriched')}
+                      style={{ 
+                        backgroundColor: activeJSONTab === 'enriched' ? colors.primary : 'transparent',
+                        color: activeJSONTab === 'enriched' ? 'white' : colors.text,
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Enriched Data
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button
+                      className={`nav-link ${activeJSONTab === 'raw' ? 'active' : ''}`}
+                      onClick={() => setActiveJSONTab('raw')}
+                      style={{ 
+                        backgroundColor: activeJSONTab === 'raw' ? colors.primary : 'transparent',
+                        color: activeJSONTab === 'raw' ? 'white' : colors.text,
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Raw Response
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              {/* JSON Display */}
+              <div style={{ position: 'relative' }}>
+                <pre 
+                  style={{
+                    backgroundColor: '#f8f9fa',
+                    padding: '1rem',
+                    borderRadius: '4px',
+                    border: `1px solid ${colors.cardBorder}`,
+                    overflow: 'auto',
+                    maxHeight: '60vh',
+                    fontSize: '0.85rem',
+                    fontFamily: 'monospace',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word'
+                  }}
+                >
+                  {(() => {
+                    let contentToDisplay: any;
+                    
+                    if (activeJSONTab === 'result') {
+                      contentToDisplay = selectedJSONData.result;
+                    } else if (activeJSONTab === 'enriched') {
+                      contentToDisplay = selectedJSONData.enriched;
+                    } else if (activeJSONTab === 'raw') {
+                      // Versuche rawResponse zu parsen falls vorhanden
+                      const rawResponse = selectedJSONData.result?.rawResponse || selectedJSONData.enriched?.rawResponse;
+                      if (rawResponse) {
+                        try {
+                          // Versuche als JSON zu parsen
+                          contentToDisplay = JSON.parse(rawResponse);
+                        } catch (e) {
+                          // Falls nicht parsbar, zeige als String
+                          contentToDisplay = rawResponse;
+                        }
+                      } else {
+                        contentToDisplay = { error: 'Keine rawResponse gefunden' };
+                      }
+                    }
+                    
+                    return JSON.stringify(contentToDisplay, null, 2);
+                  })()}
+                </pre>
+                <button
+                  className="btn btn-sm btn-outline-primary"
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px'
+                  }}
+                  onClick={() => {
+                    let jsonString: string;
+                    
+                    if (activeJSONTab === 'result') {
+                      jsonString = JSON.stringify(selectedJSONData.result, null, 2);
+                    } else if (activeJSONTab === 'enriched') {
+                      jsonString = JSON.stringify(selectedJSONData.enriched, null, 2);
+                    } else {
+                      const rawResponse = selectedJSONData.result?.rawResponse || selectedJSONData.enriched?.rawResponse;
+                      if (rawResponse) {
+                        try {
+                          const parsed = JSON.parse(rawResponse);
+                          jsonString = JSON.stringify(parsed, null, 2);
+                        } catch (e) {
+                          jsonString = rawResponse;
+                        }
+                      } else {
+                        jsonString = 'Keine rawResponse gefunden';
+                      }
+                    }
+                    
+                    navigator.clipboard.writeText(jsonString);
+                    alert('JSON in Zwischenablage kopiert!');
+                  }}
+                  title="JSON kopieren"
+                >
+                  <FaCopy className="me-1" />
+                  Kopieren
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="mt-3 p-2" style={{ backgroundColor: colors.light, borderRadius: '4px' }}>
+                <small style={{ color: colors.textSecondary }}>
+                  <strong>Hinweis:</strong> Dieser JSON-String zeigt die vollständigen Datenstrukturen der gespeicherten OCR-Ergebnisse.
+                  <br />
+                  <strong>OCR Result:</strong> Rohdaten direkt von Azure Form Recognizer.
+                  <br />
+                  <strong>Enriched Data:</strong> Angereicherte Daten mit Artikelformular-Feldern.
+                  <br />
+                  <strong>Raw Response:</strong> Vollständige, formatierte Azure API-Antwort (besser lesbar).
+                </small>
+              </div>
             </div>
           </div>
         </div>
