@@ -13,6 +13,7 @@ import { generateId } from '../utils/storageUtils';
 import StorageManagement from './StorageManagement';
 import DevelopmentPage from './DevelopmentPage';
 import Sidebar from './ui/Sidebar';
+import Belegverwaltung from './Belegverwaltung';
 
 import Rezeptverwaltung from './Rezeptverwaltung';
 import Rezeptformular from './Rezeptformular';
@@ -22,6 +23,7 @@ import Lieferantenverwaltung from './Lieferantenverwaltung';
 import Artikelformular from './Artikelformular';
 import ArtikelDataExchange from './ArtikelDataExchange';
 import ThemeColorTest from './ThemeColorTest';
+import AccountingOptions from './AccountingOptions';
 
 // Import der ausgelagerten Module
 import { designTemplates, DesignTemplateKey } from '../constants/designTemplates';
@@ -32,6 +34,91 @@ import { getRecipeIngredients, getRecipeAllergens } from '../utils/recipeHelpers
 import { useArticleHandlers } from '../hooks/useArticleHandlers';
 import { useAppContext } from '../contexts/AppContext';
 import { categoryManager } from '../utils/categoryManager';
+import { Receipt, ReceiptPaymentStatus } from '../types';
+
+// Hilfsfunktion für Design-Speicherung in localOptions
+const loadDesign = (): string | null => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        return typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      // Migriere zu neuer Struktur
+      saveDesign(oldKey);
+      // Lösche alten Key
+      localStorage.removeItem('chef_design');
+      return oldKey;
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des Designs:', error);
+  }
+  return null;
+};
+
+// Hilfsfunktion zum Laden des gespeicherten Designs (mit Fallback)
+const loadSavedDesign = (): string => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        const design = typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+        try {
+          return JSON.parse(design);
+        } catch (e) {
+          return design;
+        }
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      try {
+        return JSON.parse(oldKey);
+      } catch (e) {
+        return oldKey;
+      }
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des gespeicherten Designs:', error);
+  }
+  return 'warm'; // Fallback auf 'warm' wenn kein Design gespeichert ist
+};
+
+const saveDesign = (design: string) => {
+  try {
+    // Lade bestehende localOptions
+    const localOptionsStr = localStorage.getItem('localOptions');
+    let localOptions: any = {};
+    
+    if (localOptionsStr) {
+      try {
+        localOptions = JSON.parse(localOptionsStr);
+      } catch (e) {
+        // Falls Parsing fehlschlägt, starte mit leerem Objekt
+        localOptions = {};
+      }
+    }
+    
+    // Speichere Design (als String, da es bereits JSON-stringified sein kann)
+    localOptions.design = typeof design === 'string' ? design : JSON.stringify(design);
+    
+    // Speichere zurück
+    localStorage.setItem('localOptions', JSON.stringify(localOptions));
+  } catch (error) {
+    console.error('Fehler beim Speichern des Designs:', error);
+  }
+};
 
 function AppContent() {
   const { state, dispatch } = useAppContext();
@@ -176,6 +263,9 @@ function AppContent() {
             if (Array.isArray(appData.recipes) && appData.recipes.length > 0) {
               dispatch({ type: 'SET_RECIPES', payload: appData.recipes });
             }
+            if (Array.isArray(appData.receipts) && appData.receipts.length > 0) {
+              dispatch({ type: 'SET_RECEIPTS', payload: appData.receipts });
+            }
           }
         } else {
           console.warn('⚠️ Cloud-Modus noch nicht implementiert, verwende lokalen Modus');
@@ -192,13 +282,22 @@ function AppContent() {
             if (Array.isArray(appData.recipes) && appData.recipes.length > 0) {
               dispatch({ type: 'SET_RECIPES', payload: appData.recipes });
             }
+            if (Array.isArray(appData.receipts) && appData.receipts.length > 0) {
+              dispatch({ type: 'SET_RECEIPTS', payload: appData.receipts });
+            }
           }
         }
         
                  // Design immer aus localStorage laden
-         const design = localStorage.getItem('chef_design');
+         const design = loadDesign();
          if (design) {
-           dispatch({ type: 'SET_CURRENT_DESIGN', payload: JSON.parse(design) });
+           try {
+             const parsedDesign = JSON.parse(design);
+             dispatch({ type: 'SET_CURRENT_DESIGN', payload: parsedDesign });
+           } catch (e) {
+             // Falls kein JSON, verwende direkt als String
+             dispatch({ type: 'SET_CURRENT_DESIGN', payload: design });
+           }
          }
          
          // Markiere initiales Laden als abgeschlossen
@@ -243,7 +342,7 @@ function AppContent() {
       case 'kalkulation':
         return ['kalkulation', 'rezepte', 'speisekarten', 'menus-buffets', 'nachkalkulationen'].includes(state.currentPage);
       case 'einkauf':
-        return ['einkauf', 'einkaufslisten', 'einkauf-planen', 'rechnungen'].includes(state.currentPage);
+        return ['einkauf', 'einkaufslisten', 'einkauf-planen', 'belege'].includes(state.currentPage);
       case 'inventur':
         return ['inventur', 'warenbestand', 'inventar-verwalten'].includes(state.currentPage);
       case 'personal':
@@ -251,7 +350,7 @@ function AppContent() {
       case 'haccp':
         return ['haccp', 'temperaturlisten', 'reinigungslisten', 'material-verluste'].includes(state.currentPage);
       case 'einstellungen':
-        return ['storage-settings', 'storage-management', 'development'].includes(state.currentPage);
+        return ['storage-settings', 'storage-management', 'development', 'accounting-options'].includes(state.currentPage);
       default:
         return false;
     }
@@ -540,6 +639,286 @@ function AppContent() {
     });
   };
 
+  const getReceiptSuppliers = () => {
+    const receipts = state.receipts || [];
+    const supplierNames = receipts
+      .map(receipt => receipt.supplierId ? getSupplierName(receipt.supplierId) : 'Unbekannt')
+      .filter(Boolean);
+    return Array.from(new Set(supplierNames)).sort();
+  };
+
+  const filteredAndSortedReceipts = () => {
+    const receipts = state.receipts || [];
+    const search = state.receiptSearchTerm.toLowerCase().trim();
+
+    const statusPriority: Record<ReceiptPaymentStatus, number> = {
+      offen: 1,
+      teilweise: 2,
+      bezahlt: 3,
+      überfällig: 4
+    };
+
+    const filtered = receipts.filter(receipt => {
+      const supplierName = receipt.supplierId ? getSupplierName(receipt.supplierId) : 'Unbekannt';
+      const paymentStatus = receipt.paymentStatus || 'offen';
+      const completionMatches =
+        state.receiptCompletionFilter === 'all' ||
+        (state.receiptCompletionFilter === 'completed' && receipt.isCompleted) ||
+        (state.receiptCompletionFilter === 'open' && !receipt.isCompleted);
+
+      const paymentStatusMatches =
+        !state.receiptSelectedPaymentStatus || paymentStatus === state.receiptSelectedPaymentStatus;
+
+      const supplierMatches =
+        !state.receiptSelectedSupplier || supplierName === state.receiptSelectedSupplier;
+
+      const lineItemText = receipt.receiptDetails?.lineItems
+        ?.map(item => item.description || '')
+        .join(' ')
+        .toLowerCase() || '';
+
+      const matchesSearch =
+        search.length === 0 ||
+        [
+          receipt.receiptNumber,
+          receipt.bookingNumber,
+          supplierName,
+          paymentStatus,
+          receipt.receiptDate,
+          receipt.dueDate,
+          lineItemText
+        ]
+          .filter(Boolean)
+          .some(value => value!.toString().toLowerCase().includes(search));
+
+      return completionMatches && paymentStatusMatches && supplierMatches && matchesSearch;
+    });
+
+    const directionFactor = state.receiptSortDirection === 'asc' ? 1 : -1;
+
+    const sorted = filtered.sort((a, b) => {
+      const field = state.receiptSortField;
+
+      const parseDate = (value?: string) => {
+        if (!value) return 0;
+        const date = new Date(value);
+        return isNaN(date.getTime()) ? 0 : date.getTime();
+      };
+
+      switch (field) {
+        case 'receiptDate':
+          return (parseDate(a.receiptDate) - parseDate(b.receiptDate)) * directionFactor;
+        case 'dueDate':
+          return (parseDate(a.dueDate) - parseDate(b.dueDate)) * directionFactor;
+        case 'supplier': {
+          const nameA = a.supplierId ? getSupplierName(a.supplierId) : '';
+          const nameB = b.supplierId ? getSupplierName(b.supplierId) : '';
+          return nameA.localeCompare(nameB, 'de-DE') * directionFactor;
+        }
+        case 'paymentStatus': {
+          const statusA = statusPriority[a.paymentStatus || 'offen'] || 0;
+          const statusB = statusPriority[b.paymentStatus || 'offen'] || 0;
+          return (statusA - statusB) * directionFactor;
+        }
+        case 'lineItemCount':
+          return ((a.lineItemCount || 0) - (b.lineItemCount || 0)) * directionFactor;
+        case 'totalGross': {
+          const totalA = a.receiptDetails?.totalGross ?? 0;
+          const totalB = b.receiptDetails?.totalGross ?? 0;
+          return (totalA - totalB) * directionFactor;
+        }
+        default:
+          return (parseDate(a.receiptDate) - parseDate(b.receiptDate)) * directionFactor;
+      }
+    });
+
+    return sorted;
+  };
+
+  const handleSelectReceipt = (receiptId: string) => {
+    if (state.selectedReceipts.includes(receiptId)) {
+      dispatch({
+        type: 'SET_SELECTED_RECEIPTS',
+        payload: state.selectedReceipts.filter(id => id !== receiptId)
+      });
+    } else {
+      dispatch({
+        type: 'SET_SELECTED_RECEIPTS',
+        payload: [...state.selectedReceipts, receiptId]
+      });
+    }
+  };
+
+  const handleSelectAllReceipts = () => {
+    const receipts = filteredAndSortedReceipts();
+    if (receipts.length === 0) {
+      dispatch({ type: 'SET_SELECTED_RECEIPTS', payload: [] });
+      return;
+    }
+
+    if (state.selectedReceipts.length === receipts.length) {
+      dispatch({ type: 'SET_SELECTED_RECEIPTS', payload: [] });
+    } else {
+      dispatch({ type: 'SET_SELECTED_RECEIPTS', payload: receipts.map(receipt => receipt.id) });
+    }
+  };
+
+  const handleUpdateReceipt = async (updatedReceipt: Receipt) => {
+    try {
+      console.log('💾 [RECEIPT] Speichere Beleg:', {
+        id: updatedReceipt.id,
+        receiptImagePath: updatedReceipt.receiptImagePath,
+        hasOcrResult: !!updatedReceipt.ocrResult,
+        hasProcessedOcrData: !!updatedReceipt.processedOcrData
+      });
+      
+      const receiptWithMeta: Receipt = {
+        ...updatedReceipt,
+        isDirty: true,
+        updatedAt: new Date()
+      };
+
+      const success = await storageLayer.save('receipts', [receiptWithMeta]);
+      if (success) {
+        console.log('✅ [RECEIPT] Beleg erfolgreich gespeichert:', {
+          id: receiptWithMeta.id,
+          receiptImagePath: receiptWithMeta.receiptImagePath
+        });
+        
+        // Prüfe ob Receipt bereits existiert
+        const existingReceipt = state.receipts.find(r => r.id === receiptWithMeta.id);
+        if (existingReceipt) {
+          // Update bestehenden Receipt
+          dispatch({
+            type: 'UPDATE_RECEIPT',
+            payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
+          });
+        } else {
+          // Füge neuen Receipt hinzu
+          dispatch({
+            type: 'ADD_RECEIPT',
+            payload: receiptWithMeta
+          });
+        }
+      } else {
+        console.warn('⚠️ [RECEIPT] Beleg konnte nicht gespeichert werden (save returned false)');
+      }
+    } catch (error) {
+      console.error('❌ [RECEIPT] Fehler beim Aktualisieren des Belegs:', error);
+    }
+  };
+
+  const handleBulkUpdateReceiptStatus = async (status: ReceiptPaymentStatus) => {
+    if (!state.selectedReceipts.length) {
+      return;
+    }
+
+    try {
+      const receiptsToUpdate = state.receipts
+        .filter(receipt => state.selectedReceipts.includes(receipt.id))
+        .map(receipt => ({
+          ...receipt,
+          paymentStatus: status,
+          isDirty: true,
+          updatedAt: new Date()
+        }));
+
+      if (receiptsToUpdate.length === 0) {
+        return;
+      }
+
+      const success = await storageLayer.save('receipts', receiptsToUpdate);
+      if (success) {
+        const updatedReceipts = state.receipts.map(receipt => {
+          const replacement = receiptsToUpdate.find(item => item.id === receipt.id);
+          return replacement || receipt;
+        });
+
+        dispatch({ type: 'SET_RECEIPTS', payload: updatedReceipts });
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Aktualisieren des Zahlstatus:', error);
+    }
+  };
+
+  const handleDeleteReceipts = async (
+    receiptIds?: string[],
+    onProgress?: (current: number, total: number) => void
+  ) => {
+    const idsToDelete = receiptIds && receiptIds.length ? receiptIds : state.selectedReceipts;
+
+    if (!idsToDelete.length) {
+      return;
+    }
+
+    try {
+      for (let index = 0; index < idsToDelete.length; index += 1) {
+        const receiptId = idsToDelete[index];
+        if (onProgress) {
+          onProgress(index, idsToDelete.length);
+        }
+
+        const success = await storageLayer.delete('receipts', receiptId);
+        if (!success) {
+          console.warn(`⚠️ Beleg ${receiptId} konnte nicht gelöscht werden`);
+        }
+      }
+
+      if (onProgress) {
+        onProgress(idsToDelete.length, idsToDelete.length);
+      }
+
+      dispatch({ type: 'DELETE_RECEIPTS', payload: idsToDelete });
+    } catch (error) {
+      console.error('❌ Fehler beim Löschen der Belege:', error);
+      // Entferne trotzdem lokal, um UI in konsistenten Zustand zu bringen
+      dispatch({ type: 'DELETE_RECEIPTS', payload: idsToDelete });
+    }
+  };
+
+  const handleCreateReceipt = async (): Promise<Receipt> => {
+    const today = new Date();
+    const dateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+      today.getDate()
+    ).padStart(2, '0')}`;
+
+    const newReceipt: Receipt = {
+      id: generateId(),
+      supplierId: '',
+      bookingNumber: '',
+      receiptDate: dateString,
+      receiptNumber: '',
+      receiptDetails: {
+        lineItems: [],
+        currency: 'EUR',
+        totalNet: 0,
+        totalVat: 0,
+        totalGross: 0
+      },
+      dueDate: '',
+      paymentStatus: 'offen',
+      lineItemCount: 0,
+      accounting: [],
+      isCompleted: false,
+      notes: '',
+      isDirty: true,
+      isNew: true,
+      syncStatus: 'pending',
+      createdAt: today,
+      updatedAt: today
+    };
+
+    dispatch({ type: 'ADD_RECEIPT', payload: newReceipt });
+
+    try {
+      await storageLayer.save('receipts', [newReceipt]);
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern des neuen Belegs:', error);
+    }
+
+    return newReceipt;
+  };
+
   // Hilfsfunktionen werden jetzt aus utils/helpers.ts und utils/recipeHelpers.ts importiert
 
   // Click-Outside-Handler für Dropdowns - entfernt, da jetzt in Artikelformular Hook
@@ -715,22 +1094,46 @@ function AppContent() {
           </div>
         );
 
-      case 'rechnungen':
+      case 'belege': {
+        const receiptSuppliers = getReceiptSuppliers();
         return (
-          <div className="container-fluid p-4">
-            <div style={{
-              backgroundColor: colors.paper || colors.card,
-              borderRadius: '12px',
-              boxShadow: colors.paperShadow || '0 4px 12px rgba(0,0,0,0.1)',
-              padding: '2rem',
-              minHeight: 'calc(100vh - 120px)',
-              border: `1px solid ${colors.cardBorder}`
-            }}>
-              <h1 style={{ color: colors.text, marginBottom: '2rem' }}>Rechnungen</h1>
-              <p style={{ color: colors.text }}>Hier werden Rechnungen verwaltet.</p>
-            </div>
-          </div>
+          <Belegverwaltung
+            receipts={state.receipts}
+            colors={colors}
+            searchTerm={state.receiptSearchTerm}
+            setSearchTerm={(term) => dispatch({ type: 'SET_RECEIPT_SEARCH_TERM', payload: term })}
+            sortField={state.receiptSortField}
+            setSortField={(field) => dispatch({ type: 'SET_RECEIPT_SORT_FIELD', payload: field })}
+            sortDirection={state.receiptSortDirection}
+            setSortDirection={(direction) => dispatch({ type: 'SET_RECEIPT_SORT_DIRECTION', payload: direction })}
+            selectedSupplier={state.receiptSelectedSupplier}
+            setSelectedSupplier={(supplier) =>
+              dispatch({ type: 'SET_RECEIPT_SELECTED_SUPPLIER', payload: supplier })
+            }
+            selectedPaymentStatus={state.receiptSelectedPaymentStatus}
+            setSelectedPaymentStatus={(status) =>
+              dispatch({ type: 'SET_RECEIPT_SELECTED_PAYMENT_STATUS', payload: status })
+            }
+            completionFilter={state.receiptCompletionFilter}
+            setCompletionFilter={(filter) =>
+              dispatch({ type: 'SET_RECEIPT_COMPLETION_FILTER', payload: filter })
+            }
+            filteredAndSortedReceipts={filteredAndSortedReceipts}
+            receiptSuppliers={receiptSuppliers}
+            selectedReceipts={state.selectedReceipts}
+            handleSelectReceipt={handleSelectReceipt}
+            handleSelectAll={handleSelectAllReceipts}
+            handleDeleteReceipts={handleDeleteReceipts}
+            handleBulkMarkAsPaid={() => handleBulkUpdateReceiptStatus('bezahlt')}
+            handleBulkMarkAsOpen={() => handleBulkUpdateReceiptStatus('offen')}
+            onCreateReceipt={handleCreateReceipt}
+            onUpdateReceipt={handleUpdateReceipt}
+            formatPrice={formatPrice}
+            getSupplierName={getSupplierName}
+            suppliers={state.suppliers}
+          />
         );
+      }
 
       case 'inventur':
         return (
@@ -946,6 +1349,8 @@ function AppContent() {
               </div>
             </div>
           );
+      case 'accounting-options':
+        return <AccountingOptions colors={colors} />;
 
       case 'development':
         return <DevelopmentPage />;
@@ -1413,6 +1818,8 @@ function AppContent() {
                         onClick={() => {
                           dispatch({ type: 'SET_CURRENT_DESIGN', payload: key });
                           dispatch({ type: 'SET_SHOW_DESIGN_SELECTOR', payload: false });
+                          // Speichere Design sofort
+                          saveDesign(JSON.stringify(key));
                         }}
                       >
                         <div style={{ 

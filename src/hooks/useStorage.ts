@@ -1,6 +1,91 @@
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import { StorageMode, CloudStorageType, StorageLayer } from '../services/storageLayer';
 
+// Hilfsfunktionen für Design-Speicherung in localOptions
+const loadDesign = (): string | null => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        return typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      // Migriere zu neuer Struktur
+      saveDesign(oldKey);
+      // Lösche alten Key
+      localStorage.removeItem('chef_design');
+      return oldKey;
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des Designs:', error);
+  }
+  return null;
+};
+
+// Hilfsfunktion zum Laden des gespeicherten Designs (mit Fallback)
+const loadSavedDesign = (): string => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        const design = typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+        try {
+          return JSON.parse(design);
+        } catch (e) {
+          return design;
+        }
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      try {
+        return JSON.parse(oldKey);
+      } catch (e) {
+        return oldKey;
+      }
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des gespeicherten Designs:', error);
+  }
+  return 'warm'; // Fallback auf 'warm' wenn kein Design gespeichert ist
+};
+
+const saveDesign = (design: string | any) => {
+  try {
+    // Lade bestehende localOptions
+    const localOptionsStr = localStorage.getItem('localOptions');
+    let localOptions: any = {};
+    
+    if (localOptionsStr) {
+      try {
+        localOptions = JSON.parse(localOptionsStr);
+      } catch (e) {
+        // Falls Parsing fehlschlägt, starte mit leerem Objekt
+        localOptions = {};
+      }
+    }
+    
+    // Speichere Design (als String, da es bereits JSON-stringified sein kann)
+    const designValue = typeof design === 'string' ? design : JSON.stringify(design);
+    localOptions.design = designValue;
+    
+    // Speichere zurück
+    localStorage.setItem('localOptions', JSON.stringify(localOptions));
+  } catch (error) {
+    console.error('Fehler beim Speichern des Designs:', error);
+  }
+};
+
 export const useStorage = () => {
   const [storageMode, setStorageMode] = useState<StorageMode>('local');
   const [cloudType, setCloudType] = useState<CloudStorageType | undefined>(undefined);
@@ -73,21 +158,32 @@ export const useStorage = () => {
       const articles = await storageLayer.load('articles');
       const suppliers = await storageLayer.load('suppliers');
       const recipes = await storageLayer.load('recipes');
+      const receipts = await storageLayer.load('receipts');
       // Design immer aus LocalStorage laden (nicht über StorageLayer)
-      const design = localStorage.getItem('chef_design');
+      const designStr = loadDesign();
+      let design = loadSavedDesign(); // Verwende gespeichertes Design oder Fallback
+      if (designStr) {
+        try {
+          design = JSON.parse(designStr);
+        } catch (e) {
+          design = designStr;
+        }
+      }
       
       console.log('📁 Daten über StorageLayer geladen');
       return {
         articles: articles || [],
         suppliers: suppliers || [],
         recipes: recipes || [],
-        design: design ? JSON.parse(design) : 'warm',
+        receipts: receipts || [],
+        design: design,
         einkaufsListe: [], // Backward compatibility - nicht mehr in DB
         inventurListe: [] // Backward compatibility - nicht mehr in DB
       };
     } catch (error) {
       console.error('❌ Fehler beim Laden der Daten über StorageLayer:', error);
-      return { articles: [], suppliers: [], recipes: [], design: 'warm', einkaufsListe: [], inventurListe: [] };
+      const savedDesign = loadSavedDesign();
+      return { articles: [], suppliers: [], recipes: [], receipts: [], design: savedDesign, einkaufsListe: [], inventurListe: [] };
     }
   }, [storageMode]);
 
@@ -103,7 +199,7 @@ export const useStorage = () => {
         if (value !== null && value !== undefined) {
           if (key === 'design') {
             // Design immer in LocalStorage speichern (nicht über StorageLayer)
-            localStorage.setItem('chef_design', JSON.stringify(value));
+            saveDesign(value);
             console.log('💾 Design in LocalStorage gespeichert');
           } else {
             // StorageLayer erwartet Arrays, also konvertiere einzelne Werte zu Arrays

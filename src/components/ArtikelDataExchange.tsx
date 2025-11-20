@@ -157,15 +157,70 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
   ]);
   
   // Export-Filter State
-  const [exportFilters, setExportFilters] = useState<ExportFilters>(() => {
-    // Versuche gespeicherte Filter aus localStorage zu laden
-    const savedFilters = localStorage.getItem('artikelExportFilters');
-    if (savedFilters) {
-      try {
-        return JSON.parse(savedFilters);
-      } catch (e) {
-        console.warn('Fehler beim Laden der gespeicherten Filter:', e);
+  // Hilfsfunktionen für Export-Filter-Speicherung in localOptions
+  const loadExportFilters = (): ExportFilters | null => {
+    try {
+      // Lade aus neuer zentraler Struktur
+      const localOptionsStr = localStorage.getItem('localOptions');
+      if (localOptionsStr) {
+        const localOptions = JSON.parse(localOptionsStr);
+        if (localOptions?.artikelExportFilters) {
+          return typeof localOptions.artikelExportFilters === 'string' 
+            ? JSON.parse(localOptions.artikelExportFilters) 
+            : localOptions.artikelExportFilters;
+        }
       }
+      
+      // Migration: Prüfe alten Key (kann später entfernt werden)
+      const oldKey = localStorage.getItem('artikelExportFilters');
+      if (oldKey) {
+        try {
+          const filters = JSON.parse(oldKey);
+          // Migriere zu neuer Struktur
+          saveExportFilters(filters);
+          // Lösche alten Key
+          localStorage.removeItem('artikelExportFilters');
+          return filters;
+        } catch (e) {
+          console.warn('Fehler beim Parsen der gespeicherten Filter:', e);
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Export-Filter:', error);
+    }
+    return null;
+  };
+
+  const saveExportFilters = (filters: ExportFilters) => {
+    try {
+      // Lade bestehende localOptions
+      const localOptionsStr = localStorage.getItem('localOptions');
+      let localOptions: any = {};
+      
+      if (localOptionsStr) {
+        try {
+          localOptions = JSON.parse(localOptionsStr);
+        } catch (e) {
+          // Falls Parsing fehlschlägt, starte mit leerem Objekt
+          localOptions = {};
+        }
+      }
+      
+      // Speichere Filter
+      localOptions.artikelExportFilters = filters;
+      
+      // Speichere zurück
+      localStorage.setItem('localOptions', JSON.stringify(localOptions));
+    } catch (error) {
+      console.error('Fehler beim Speichern der Export-Filter:', error);
+    }
+  };
+
+  const [exportFilters, setExportFilters] = useState<ExportFilters>(() => {
+    // Versuche gespeicherte Filter aus localOptions zu laden
+    const savedFilters = loadExportFilters();
+    if (savedFilters) {
+      return savedFilters;
     }
     
     // Standard-Filter
@@ -264,8 +319,8 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
         [filterType]: value
       };
       
-      // Speichere Filter in localStorage
-      localStorage.setItem('artikelExportFilters', JSON.stringify(newFilters));
+      // Speichere Filter in localOptions
+      saveExportFilters(newFilters);
       
       return newFilters;
     });
@@ -281,8 +336,8 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
         }
       };
       
-      // Speichere Filter in localStorage
-      localStorage.setItem('artikelExportFilters', JSON.stringify(newFilters));
+      // Speichere Filter in localOptions
+      saveExportFilters(newFilters);
       
       return newFilters;
     });
@@ -298,12 +353,22 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
     };
     
     setExportFilters(defaultFilters);
-    localStorage.setItem('artikelExportFilters', JSON.stringify(defaultFilters));
+    saveExportFilters(defaultFilters);
   };
 
   // Clear localStorage and reset filters - for debugging
   const clearAllFilters = () => {
-    localStorage.removeItem('artikelExportFilters');
+    // Entferne Filter aus localOptions
+    try {
+      const localOptionsStr = localStorage.getItem('localOptions');
+      if (localOptionsStr) {
+        const localOptions = JSON.parse(localOptionsStr);
+        delete localOptions.artikelExportFilters;
+        localStorage.setItem('localOptions', JSON.stringify(localOptions));
+      }
+    } catch (error) {
+      console.error('Fehler beim Löschen der Export-Filter:', error);
+    }
     resetFilters();
   };
   

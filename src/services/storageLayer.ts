@@ -154,7 +154,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   async cleanupCorruptedData(): Promise<void> {
     console.log('🧹 Starte Bereinigung korrupter LocalStorage-Daten...');
     
-    const keysToCheck = ['articles', 'suppliers', 'recipes', 'einkaufsListe', 'inventurListe'];
+    const keysToCheck = ['articles', 'suppliers', 'recipes', 'receipts', 'einkaufsListe', 'inventurListe'];
     let cleanedCount = 0;
     
     for (const key of keysToCheck) {
@@ -171,37 +171,36 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   /**
    * Speichert ein Bild im lokalen Dateisystem
+   * Verwendet IndexedDB für große Dateien (PDFs oder > 1MB), LocalStorage für kleine Bilder
    */
   async saveImage(imagePath: string, file: File): Promise<boolean> {
     try {
-      console.log(`📷 LocalStorage: Speichere Bild unter ${imagePath}`);
+      const isPDF = file.type === 'application/pdf';
+      const isLargeFile = file.size > 1024 * 1024; // > 1MB
+      const useIndexedDB = isPDF || isLargeFile;
       
-      // Konvertiere File zu Base64 für LocalStorage
-      const base64 = await this.fileToBase64(file);
+      console.log(`📷 LocalStorage: Speichere Bild unter ${imagePath}`, {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        useIndexedDB: useIndexedDB
+      });
       
-      // Lade bestehende Bilder-Struktur
-      const existingImages = this.loadImageStructure();
-      
-      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/articles/{articleId}"
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
       const pathParts = imagePath.split('/');
-      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles')) {
-        const entityType = pathParts[1]; // 'recipes' oder 'articles'
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
         const entityId = pathParts[2];
         
-        // Erstelle verschachtelte Struktur falls nicht vorhanden
-        if (!existingImages.pictures) existingImages.pictures = {};
-        if (!existingImages.pictures[entityType]) existingImages.pictures[entityType] = {};
-        
-        // Speichere das Bild unter der Entity-ID
-        existingImages.pictures[entityType][entityId] = base64;
-        
-        // Speichere die gesamte Struktur zurück
-        localStorage.setItem('chef_images', JSON.stringify(existingImages));
-        
-        console.log(`✅ LocalStorage: Bild erfolgreich gespeichert unter chef_images.pictures.${entityType}.${entityId}`);
-        return true;
+        if (useIndexedDB) {
+          // Verwende IndexedDB für große Dateien
+          return await this.saveImageToIndexedDB(imagePath, file, entityType, entityId);
+        } else {
+          // Verwende LocalStorage für kleine Bilder
+          return await this.saveImageToLocalStorage(imagePath, file, entityType, entityId);
+        }
       } else {
-        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId} oder pictures/articles/{articleId}`);
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
     } catch (error) {
       console.error(`❌ LocalStorage Fehler beim Speichern des Bildes ${imagePath}:`, error);
@@ -210,7 +209,108 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   /**
+   * Speichert ein Bild in IndexedDB (für große Dateien)
+   */
+  private async saveImageToIndexedDB(imagePath: string, file: File, entityType: string, entityId: string): Promise<boolean> {
+    try {
+      const db = await this.openIndexedDB();
+      const transaction = db.transaction(['images'], 'readwrite');
+      const store = transaction.objectStore('images');
+      
+      // File erbt von Blob, daher können wir es direkt verwenden
+      // Speichere File (als Blob) in IndexedDB
+      await store.put({
+        path: imagePath,
+        entityType: entityType,
+        entityId: entityId,
+        file: file, // File ist bereits ein Blob
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Markiere in LocalStorage, dass dieses Bild in IndexedDB gespeichert ist
+      // Speichere auch den Dateityp für spätere Erkennung
+      const existingImages = this.loadImageStructure();
+      if (!existingImages.pictures) existingImages.pictures = {};
+      if (!existingImages.pictures[entityType]) existingImages.pictures[entityType] = {};
+      existingImages.pictures[entityType][entityId] = { 
+        _indexedDB: true, 
+        path: imagePath,
+        fileType: file.type // Speichere MIME-Type für PDF-Erkennung
+      };
+      localStorage.setItem('chef_images', JSON.stringify(existingImages));
+      
+      console.log(`✅ IndexedDB: Bild erfolgreich gespeichert unter ${imagePath}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ IndexedDB Fehler beim Speichern des Bildes ${imagePath}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Speichert ein Bild in LocalStorage (für kleine Bilder)
+   */
+  private async saveImageToLocalStorage(imagePath: string, file: File, entityType: string, entityId: string): Promise<boolean> {
+    try {
+      // Konvertiere File zu Base64 für LocalStorage
+      const base64 = await this.fileToBase64(file);
+      
+      // Lade bestehende Bilder-Struktur
+      const existingImages = this.loadImageStructure();
+      
+      // Erstelle verschachtelte Struktur falls nicht vorhanden
+      if (!existingImages.pictures) existingImages.pictures = {};
+      if (!existingImages.pictures[entityType]) existingImages.pictures[entityType] = {};
+      
+      // Speichere das Bild unter der Entity-ID
+      existingImages.pictures[entityType][entityId] = base64;
+      
+      // Speichere die gesamte Struktur zurück
+      try {
+        localStorage.setItem('chef_images', JSON.stringify(existingImages));
+        console.log(`✅ LocalStorage: Bild erfolgreich gespeichert unter chef_images.pictures.${entityType}.${entityId}`);
+        return true;
+      } catch (quotaError: any) {
+        // Falls LocalStorage voll ist, versuche IndexedDB als Fallback
+        if (quotaError.name === 'QuotaExceededError') {
+          console.warn('⚠️ LocalStorage voll, versuche IndexedDB als Fallback...');
+          return await this.saveImageToIndexedDB(imagePath, file, entityType, entityId);
+        }
+        throw quotaError;
+      }
+    } catch (error) {
+      console.error(`❌ LocalStorage Fehler beim Speichern des Bildes ${imagePath}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Öffnet IndexedDB für Bildspeicherung
+   */
+  private async openIndexedDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('chef_images_db', 1);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+      
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains('images')) {
+          const objectStore = db.createObjectStore('images', { keyPath: 'path' });
+          objectStore.createIndex('entityType', 'entityType', { unique: false });
+          objectStore.createIndex('entityId', 'entityId', { unique: false });
+        }
+      };
+    });
+  }
+
+  /**
    * Lädt ein Bild aus dem lokalen Dateisystem
+   * Prüft zuerst LocalStorage, dann IndexedDB
    */
   async loadImage(imagePath: string): Promise<string | null> {
     try {
@@ -218,25 +318,75 @@ export class LocalStorageAdapter implements StorageAdapter {
       
       // Lade Bilder-Struktur
       const imageStructure = this.loadImageStructure();
+      console.log(`📷 LocalStorage: Bildstruktur geladen:`, Object.keys(imageStructure?.pictures || {}));
       
-      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/articles/{articleId}"
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
       const pathParts = imagePath.split('/');
-      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles')) {
-        const entityType = pathParts[1]; // 'recipes' oder 'articles'
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
         const entityId = pathParts[2];
         
-        // Navigiere durch die verschachtelte Struktur
-        const base64 = imageStructure?.pictures?.[entityType]?.[entityId];
+        console.log(`📷 LocalStorage: Suche Bild für entityType: ${entityType}, entityId: ${entityId}`);
         
-        if (!base64) {
-          console.log(`📷 LocalStorage: Kein Bild gefunden unter chef_images.pictures.${entityType}.${entityId}`);
-          return null;
+        // Navigiere durch die verschachtelte Struktur
+        const imageData = imageStructure?.pictures?.[entityType]?.[entityId];
+        console.log(`📷 LocalStorage: imageData gefunden:`, imageData ? (typeof imageData === 'object' ? `IndexedDB-Verweis (fileType: ${imageData.fileType || 'nicht gespeichert'})` : 'Base64-String') : 'null');
+        
+        if (imageData) {
+          // Prüfe ob es ein IndexedDB-Verweis ist
+          if (typeof imageData === 'object' && imageData._indexedDB) {
+            // Wenn fileType nicht gespeichert ist, aber wir wissen, dass es ein IndexedDB-Verweis ist,
+            // aktualisiere den Verweis mit dem fileType aus IndexedDB
+            if (!imageData.fileType) {
+              try {
+                const db = await this.openIndexedDB();
+                const transaction = db.transaction(['images'], 'readonly');
+                const store = transaction.objectStore('images');
+                const request = store.get(imagePath);
+                const result = await new Promise<any>((resolve) => {
+                  request.onsuccess = () => resolve(request.result);
+                  request.onerror = () => resolve(null);
+                });
+                if (result && result.fileType) {
+                  // Aktualisiere LocalStorage mit fileType
+                  imageData.fileType = result.fileType;
+                  imageStructure.pictures[entityType][entityId] = imageData;
+                  localStorage.setItem('chef_images', JSON.stringify(imageStructure));
+                  console.log(`📷 LocalStorage: fileType aktualisiert: ${result.fileType}`);
+                }
+              } catch (e) {
+                // Ignoriere Fehler
+              }
+            }
+            
+            // Lade aus IndexedDB
+            console.log(`📷 LocalStorage: Lade aus IndexedDB...`);
+            const indexedDBResult = await this.loadImageFromIndexedDB(imagePath);
+            if (indexedDBResult) {
+              console.log(`✅ LocalStorage: Bild erfolgreich aus IndexedDB geladen`);
+              return indexedDBResult;
+            } else {
+              console.warn(`⚠️ LocalStorage: IndexedDB-Verweis vorhanden, aber Bild konnte nicht geladen werden`);
+            }
+          } else if (typeof imageData === 'string') {
+            // Base64-String aus LocalStorage
+            console.log(`✅ LocalStorage: Bild erfolgreich geladen von chef_images.pictures.${entityType}.${entityId} (Base64)`);
+            return imageData;
+          }
         }
         
-        console.log(`✅ LocalStorage: Bild erfolgreich geladen von chef_images.pictures.${entityType}.${entityId}`);
-        return base64;
+        // Versuche auch direkt aus IndexedDB zu laden (für Migration oder wenn kein Verweis in LocalStorage)
+        console.log(`📷 LocalStorage: Versuche direkt aus IndexedDB zu laden...`);
+        const indexedDBImage = await this.loadImageFromIndexedDB(imagePath);
+        if (indexedDBImage) {
+          console.log(`✅ LocalStorage: Bild erfolgreich direkt aus IndexedDB geladen`);
+          return indexedDBImage;
+        }
+        
+        console.log(`📷 LocalStorage: Kein Bild gefunden unter chef_images.pictures.${entityType}.${entityId}`);
+        return null;
       } else {
-        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId} oder pictures/articles/{articleId}`);
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
     } catch (error) {
       console.error(`❌ LocalStorage Fehler beim Laden des Bildes ${imagePath}:`, error);
@@ -245,7 +395,74 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   /**
+   * Lädt ein Bild aus IndexedDB
+   * Für PDFs wird eine Blob URL erstellt (besser für iframes), für Bilder eine Data URL
+   */
+  private async loadImageFromIndexedDB(imagePath: string): Promise<string | null> {
+    try {
+      console.log(`📷 IndexedDB: Öffne Datenbank für ${imagePath}`);
+      const db = await this.openIndexedDB();
+      console.log(`📷 IndexedDB: Datenbank geöffnet, starte Transaktion`);
+      
+      const transaction = db.transaction(['images'], 'readonly');
+      const store = transaction.objectStore('images');
+      const request = store.get(imagePath);
+      
+      console.log(`📷 IndexedDB: Request gestartet für ${imagePath}`);
+      
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => {
+          console.log(`📷 IndexedDB: Request erfolgreich, prüfe Ergebnis...`);
+          const result = request.result;
+          console.log(`📷 IndexedDB: Ergebnis:`, result ? `Gefunden (fileType: ${result.fileType}, fileSize: ${result.fileSize})` : 'null');
+          
+          if (result && result.file) {
+            const isPDF = result.fileType === 'application/pdf' || imagePath.toLowerCase().endsWith('.pdf');
+            console.log(`📷 IndexedDB: Dateityp erkannt - isPDF: ${isPDF}`);
+            
+            if (isPDF) {
+              // Für PDFs: Erstelle Blob URL (funktioniert besser in iframes)
+              try {
+                const blob = result.file instanceof Blob ? result.file : new Blob([result.file], { type: result.fileType || 'application/pdf' });
+                const blobUrl = URL.createObjectURL(blob);
+                console.log(`✅ IndexedDB: PDF erfolgreich geladen von ${imagePath} (Blob URL erstellt): ${blobUrl.substring(0, 50)}...`);
+                resolve(blobUrl);
+              } catch (blobError) {
+                console.error(`❌ IndexedDB Fehler beim Erstellen der Blob URL:`, blobError);
+                resolve(null);
+              }
+            } else {
+              // Für Bilder: Konvertiere Blob zu Data URL
+              const reader = new FileReader();
+              reader.onload = () => {
+                console.log(`✅ IndexedDB: Bild erfolgreich geladen von ${imagePath}`);
+                resolve(reader.result as string);
+              };
+              reader.onerror = (error) => {
+                console.error(`❌ IndexedDB Fehler beim Lesen des Bildes ${imagePath}:`, error);
+                resolve(null);
+              };
+              reader.readAsDataURL(result.file);
+            }
+          } else {
+            console.log(`📷 IndexedDB: Kein Bild gefunden unter ${imagePath} (result: ${result ? 'vorhanden aber kein file' : 'null'})`);
+            resolve(null);
+          }
+        };
+        request.onerror = () => {
+          console.error(`❌ IndexedDB Fehler beim Laden des Bildes ${imagePath}:`, request.error);
+          resolve(null);
+        };
+      });
+    } catch (error) {
+      console.error(`❌ IndexedDB Fehler beim Öffnen der Datenbank:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Löscht ein Bild aus dem lokalen Dateisystem
+   * Löscht sowohl aus LocalStorage als auch aus IndexedDB
    */
   async deleteImage(imagePath: string): Promise<boolean> {
     try {
@@ -254,20 +471,36 @@ export class LocalStorageAdapter implements StorageAdapter {
       // Lade bestehende Bilder-Struktur
       const existingImages = this.loadImageStructure();
       
-      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/articles/{articleId}"
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
       const pathParts = imagePath.split('/');
-      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles')) {
-        const entityType = pathParts[1]; // 'recipes' oder 'articles'
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
         const entityId = pathParts[2];
         
-        // Prüfe ob das Bild existiert
+        let deleted = false;
+        
+        // Prüfe ob das Bild in LocalStorage existiert
         if (existingImages?.pictures?.[entityType]?.[entityId]) {
           // Lösche das Bild aus der Struktur
           delete existingImages.pictures[entityType][entityId];
           
           // Speichere die aktualisierte Struktur zurück
           localStorage.setItem('chef_images', JSON.stringify(existingImages));
-          
+          deleted = true;
+        }
+        
+        // Lösche auch aus IndexedDB (falls vorhanden)
+        try {
+          const db = await this.openIndexedDB();
+          const transaction = db.transaction(['images'], 'readwrite');
+          const store = transaction.objectStore('images');
+          await store.delete(imagePath);
+          deleted = true;
+        } catch (idbError) {
+          // Ignoriere Fehler wenn nicht in IndexedDB vorhanden
+        }
+        
+        if (deleted) {
           console.log(`✅ LocalStorage: Bild erfolgreich gelöscht von chef_images.pictures.${entityType}.${entityId}`);
           return true;
         } else {
@@ -275,7 +508,7 @@ export class LocalStorageAdapter implements StorageAdapter {
           return false;
         }
       } else {
-        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId} oder pictures/articles/{articleId}`);
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
     } catch (error) {
       console.error(`❌ LocalStorage Fehler beim Löschen des Bildes ${imagePath}:`, error);
@@ -617,7 +850,7 @@ class PostgreSQLAdapter implements StorageAdapter {
       const baseUrl = this.getBaseUrl();
       
       // Teste verfügbare Tabellen
-      const tablesToTest = ['articles', 'suppliers', 'recipes'];
+      const tablesToTest = ['articles', 'suppliers', 'recipes', 'receipts'];
       
       for (const table of tablesToTest) {
         try {
@@ -760,6 +993,67 @@ class PostgreSQLAdapter implements StorageAdapter {
       if (transformed.openFoodFactsCode) {
         transformed.open_food_facts_code = transformed.openFoodFactsCode;
         delete transformed.openFoodFactsCode;
+      }
+      
+      // Handle Receipt-spezifische Felder
+      if (transformed.receiptDate !== undefined) {
+        transformed.receipt_date = transformed.receiptDate;
+        delete transformed.receiptDate;
+      }
+
+      if (transformed.dueDate !== undefined) {
+        transformed.due_date = transformed.dueDate;
+        delete transformed.dueDate;
+      }
+
+      if (transformed.receiptNumber !== undefined) {
+        transformed.receipt_number = transformed.receiptNumber;
+        delete transformed.receiptNumber;
+      }
+
+      if (transformed.bookingNumber !== undefined) {
+        transformed.booking_number = transformed.bookingNumber;
+        delete transformed.bookingNumber;
+      }
+
+      if (transformed.paymentStatus !== undefined) {
+        transformed.payment_status = transformed.paymentStatus;
+        delete transformed.paymentStatus;
+      }
+
+      if (transformed.lineItemCount !== undefined) {
+        transformed.line_item_count = transformed.lineItemCount;
+        delete transformed.lineItemCount;
+      }
+
+      if (transformed.receiptDetails !== undefined) {
+        let details = transformed.receiptDetails;
+        if (typeof details === 'string') {
+          try {
+            details = JSON.parse(details);
+          } catch (error) {
+            console.warn('⚠️ Konnte receiptDetails-String nicht parsen:', error);
+            details = { lineItems: [], currency: 'EUR', totalNet: 0, totalVat: 0, totalGross: 0 };
+          }
+        }
+        transformed.receipt_details = details;
+        delete transformed.receiptDetails;
+      }
+
+      if (transformed.accounting !== undefined) {
+        if (typeof transformed.accounting === 'string') {
+          try {
+            transformed.accounting = JSON.parse(transformed.accounting);
+          } catch (error) {
+            console.warn('⚠️ Konnte accounting-String nicht parsen:', error);
+            transformed.accounting = [];
+          }
+        }
+      }
+
+      if (transformed.isCompleted !== undefined) {
+        transformed.is_completed = transformed.isCompleted;
+        delete transformed.isCompleted;
       }
       
       // Handle Recipe-spezifische Felder - transform camelCase to snake_case
@@ -976,6 +1270,51 @@ class PostgreSQLAdapter implements StorageAdapter {
       if (transformed.open_food_facts_code) {
         transformed.openFoodFactsCode = transformed.open_food_facts_code;
         delete transformed.open_food_facts_code;
+      }
+      
+      // Handle Receipt-spezifische Felder - convert back to camelCase
+      if (transformed.receipt_date !== undefined) {
+        transformed.receiptDate = transformed.receipt_date;
+        delete transformed.receipt_date;
+      }
+
+      if (transformed.due_date !== undefined) {
+        transformed.dueDate = transformed.due_date;
+        delete transformed.due_date;
+      }
+
+      if (transformed.receipt_number !== undefined) {
+        transformed.receiptNumber = transformed.receipt_number;
+        delete transformed.receipt_number;
+      }
+
+      if (transformed.booking_number !== undefined) {
+        transformed.bookingNumber = transformed.booking_number;
+        delete transformed.booking_number;
+      }
+
+      if (transformed.payment_status !== undefined) {
+        transformed.paymentStatus = transformed.payment_status;
+        delete transformed.payment_status;
+      }
+
+      if (transformed.line_item_count !== undefined) {
+        transformed.lineItemCount = transformed.line_item_count;
+        delete transformed.line_item_count;
+      }
+
+      if (transformed.receipt_details !== undefined) {
+        transformed.receiptDetails = this.parseJSONBField(transformed.receipt_details);
+        delete transformed.receipt_details;
+      }
+
+      if (transformed.accounting !== undefined) {
+        transformed.accounting = this.parseJSONBField(transformed.accounting);
+      }
+
+      if (transformed.is_completed !== undefined) {
+        transformed.isCompleted = transformed.is_completed;
+        delete transformed.is_completed;
       }
       
       // Handle nutrition fields - convert back to Frontend format
@@ -1489,6 +1828,7 @@ class PrismaAdapter implements StorageAdapter {
       'articles': 'articles',
       'suppliers': 'suppliers',
       'recipes': 'recipes',
+      'receipts': 'receipts',
       'einkaufsListe': 'einkaufsitems',
       'inventurListe': 'inventuritems',
     };
@@ -2839,6 +3179,7 @@ class CouchDBAdapter implements StorageAdapter {
       'articles': 'articles',
       'suppliers': 'suppliers',
       'recipes': 'recipes',
+      'receipts': 'receipts',
       'einkaufsListe': 'einkaufsitems',
       'inventurListe': 'inventuritems',
     };
@@ -3328,10 +3669,10 @@ class MinIOAdapter implements StorageAdapter {
         return false;
       }
       
-      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/articles/{articleId}"
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
       const pathParts = imagePath.split('/');
-      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles')) {
-        const entityType = pathParts[1]; // 'recipes' oder 'articles'
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
         const entityId = pathParts[2];
         
         // Extrahiere Dateiendung aus MIME-Type statt aus Dateinamen
@@ -3340,7 +3681,8 @@ class MinIOAdapter implements StorageAdapter {
           'image/jpg': 'jpg',
           'image/png': 'png',
           'image/gif': 'gif',
-          'image/webp': 'webp'
+          'image/webp': 'webp',
+          'application/pdf': 'pdf'
         };
         const fileExtension = mimeTypeMap[file.type] || file.name.split('.').pop()?.toLowerCase() || 'jpg';
         const fileName = `${entityType}/${entityId}.${fileExtension}`;
@@ -3368,7 +3710,7 @@ class MinIOAdapter implements StorageAdapter {
         console.log(`✅ MinIO: Bild erfolgreich gespeichert unter ${fileName}`, result);
         return true;
       } else {
-        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId} oder pictures/articles/{articleId}`);
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
     } catch (error) {
       console.error(`❌ MinIO Fehler beim Speichern des Bildes ${imagePath}:`, error);
@@ -3388,10 +3730,10 @@ class MinIOAdapter implements StorageAdapter {
         return null;
       }
       
-      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/articles/{articleId}"
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
       const pathParts = imagePath.split('/');
-      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles')) {
-        const entityType = pathParts[1]; // 'recipes' oder 'articles'
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
         const entityId = pathParts[2];
         const bucket = this.connectionData?.bucket || 'chefnumbers';
         
@@ -3461,7 +3803,7 @@ class MinIOAdapter implements StorageAdapter {
         console.log(`📦 MinIO: Kein Bild gefunden für ${imagePath}`);
         return null;
       } else {
-        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId} oder pictures/articles/{articleId}`);
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
     } catch (error) {
       console.error(`❌ MinIO Fehler beim Laden des Bildes ${imagePath}:`, error);
@@ -3481,10 +3823,10 @@ class MinIOAdapter implements StorageAdapter {
         return false;
       }
       
-      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/articles/{articleId}"
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
       const pathParts = imagePath.split('/');
-      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles')) {
-        const entityType = pathParts[1]; // 'recipes' oder 'articles'
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
         const entityId = pathParts[2];
         const bucket = this.connectionData?.bucket || 'chefnumbers';
         
@@ -3526,7 +3868,7 @@ class MinIOAdapter implements StorageAdapter {
         
         return true;
       } else {
-        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId} oder pictures/articles/{articleId}`);
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
     } catch (error) {
       console.error(`❌ MinIO Fehler beim Löschen des Bildes ${imagePath}:`, error);
@@ -3818,7 +4160,8 @@ export class StorageLayer {
     }
 
     try {
-      return await this.dataAdapter!.load<T>(key);
+      const result = await this.dataAdapter!.load<T>(key);
+      return result;
     } catch (error) {
       console.error(`❌ StorageLayer Fehler beim Laden von ${key}:`, error);
       throw error;
@@ -3834,8 +4177,8 @@ export class StorageLayer {
     }
 
     try {
-      // 1. Lösche das zugehörige Bild (falls vorhanden) für Artikel und Rezepte
-      if (key === 'articles' || key === 'recipes') {
+      // 1. Lösche das zugehörige Bild (falls vorhanden) für Artikel, Rezepte und Belege
+      if (key === 'articles' || key === 'recipes' || key === 'receipts') {
         const imagePath = `pictures/${key}/${id}`;
         try {
           console.log(`🗑️ Versuche zugehöriges Bild zu löschen: ${imagePath}`);

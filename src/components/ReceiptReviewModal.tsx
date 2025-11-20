@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { FaTimes, FaSave, FaEdit, FaPlus, FaImage, FaEuroSign, FaSearch, FaCheck, FaCalculator, FaCoins, FaExclamationTriangle, FaCopy } from 'react-icons/fa';
+import { FaTimes, FaSave, FaEdit, FaPlus, FaImage, FaEuroSign, FaSearch, FaCheck, FaCalculator, FaCoins, FaExclamationTriangle, FaCopy, FaPrint, FaCheckCircle, FaClock, FaPercent, FaCode, FaMinus, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { ExtendedReceiptData, ReceiptArticle } from '../services/ocrTypes';
 import { useArticleForm, Supplier } from '../hooks/useArticleForm';
-import { Supplier as SupplierType, PhoneType } from '../types';
+import { Supplier as SupplierType, PhoneType, ReceiptLineItem } from '../types';
 import { ArticleCategory, Unit, Article } from '../types';
 import { categoryManager } from '../utils/categoryManager';
-import { VAT_RATES } from '../constants/articleConstants';
+import { VAT_RATES, SKR3_TAX_ACCOUNTS } from '../constants/articleConstants';
 import { useAppContext } from '../contexts/AppContext';
 import { storageLayer } from '../services/storageLayer';
 import { UUIDUtils } from '../utils/uuidUtils';
+import { AccountingAccount, AccountingSettings, VatRate } from '../types/accounting';
+import { AccountingChartId } from '../constants/accountingTemplates';
 import CalculatorModal from './ui/CalculatorModal';
 import PriceConverterModal from './ui/PriceConverterModal';
 
@@ -21,6 +23,11 @@ interface ReceiptReviewModalProps {
   onSave?: (articles: ReceiptArticle[]) => void;
   onNewSupplier?: (supplierName: string) => void;
   receiptImage?: File | string; // Bild als File oder URL
+  receiptImagePath?: string; // Vollständiger Dateipfad
+  onUpdateReceiptData?: (updatedData: ExtendedReceiptData) => void; // Callback zum Aktualisieren der Receipt-Daten
+  receiptId?: string; // ID des Receipts für Updates
+  originalOcrResult?: any; // Originales OCR-Ergebnis vom Provider
+  onSaveReceipt?: (receiptUpdate: { processedOcrData?: ExtendedReceiptData; receiptDetails?: any; isCompleted?: boolean }) => Promise<void>; // Callback zum Speichern des Receipts
 }
 
 const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
@@ -31,7 +38,12 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   colors,
   onSave,
   onNewSupplier,
-  receiptImage
+  receiptImage,
+  receiptImagePath,
+  onUpdateReceiptData,
+  receiptId,
+  onSaveReceipt,
+  originalOcrResult
 }) => {
   const [selectedArticleIndex, setSelectedArticleIndex] = useState<number>(0);
   const [editedArticles, setEditedArticles] = useState<ReceiptArticle[]>(receiptData.articles);
@@ -41,14 +53,260 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   const [hideScannedSupplierName, setHideScannedSupplierName] = useState<boolean>(false);
   const [showArticleSearchModal, setShowArticleSearchModal] = useState<boolean>(false);
   const [articleSearchTerm, setArticleSearchTerm] = useState<string>('');
+  const [showJsonDialog, setShowJsonDialog] = useState<boolean>(false);
   const [receiptDate, setReceiptDate] = useState<string>(receiptData.date || '');
   const [receiptNumber, setReceiptNumber] = useState<string>(receiptData.receiptNumber || '');
+  const [isCompleted, setIsCompleted] = useState<boolean>(receiptData.isCompleted || false);
+  const [selectedTaxAccount, setSelectedTaxAccount] = useState<string>('');
+  const [showTaxAccountDropdown, setShowTaxAccountDropdown] = useState<boolean>(false);
+  const [taxAccountSearchTerm, setTaxAccountSearchTerm] = useState<string>('');
+  const [selectedTaxAccountIndex, setSelectedTaxAccountIndex] = useState<number>(-1);
+  const [accountingAccounts, setAccountingAccounts] = useState<AccountingAccount[]>([]);
+  const [selectedChartId, setSelectedChartId] = useState<AccountingChartId>('skr03');
+  const [vatRates, setVatRates] = useState<VatRate[]>(VAT_RATES);
+  const [receiptVatRate, setReceiptVatRate] = useState<number>(19);
+  const [showVatRateDropdown, setShowVatRateDropdown] = useState<boolean>(false);
+  const [vatRateSearchTerm, setVatRateSearchTerm] = useState<string>('');
+  const [selectedVatRateIndex, setSelectedVatRateIndex] = useState<number>(-1);
+  const [nettoPrices, setNettoPrices] = useState<boolean>(false);
+  const [showArticleCountControls, setShowArticleCountControls] = useState<boolean>(false);
+  
+  // Layout-Breiten (in Pixel)
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(receiptData.leftPanelWidth || 300);
+  const [rightPanelWidth, setRightPanelWidth] = useState<number>(receiptData.rightPanelWidth || 400);
+  const [isResizingLeft, setIsResizingLeft] = useState<boolean>(false);
+  const [isResizingRight, setIsResizingRight] = useState<boolean>(false);
+  const resizeStartXRef = useRef<number>(0);
+  const resizeStartLeftWidthRef = useRef<number>(0);
+  const resizeStartRightWidthRef = useRef<number>(0);
+  
+  // Resize-Handler für linkes Panel (Beleg-Übersicht)
+  const handleLeftResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingLeft(true);
+    resizeStartXRef.current = e.clientX;
+    resizeStartLeftWidthRef.current = leftPanelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [leftPanelWidth]);
+  
+  // Resize-Handler für rechtes Panel (Original-Beleg)
+  const handleRightResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingRight(true);
+    resizeStartXRef.current = e.clientX;
+    resizeStartRightWidthRef.current = rightPanelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [rightPanelWidth]);
+  
+  // Mouse-Move Handler für Resize
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingLeft) {
+        e.preventDefault();
+        e.stopPropagation();
+        const deltaX = e.clientX - resizeStartXRef.current;
+        const newWidth = Math.max(200, Math.min(600, resizeStartLeftWidthRef.current + deltaX));
+        setLeftPanelWidth(newWidth);
+      } else if (isResizingRight) {
+        e.preventDefault();
+        e.stopPropagation();
+        const deltaX = resizeStartXRef.current - e.clientX; // Umgekehrt, da wir von rechts nach links ziehen
+        const newWidth = Math.max(200, Math.min(800, resizeStartRightWidthRef.current + deltaX));
+        setRightPanelWidth(newWidth);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      if (isResizingLeft || isResizingRight) {
+        setIsResizingLeft(false);
+        setIsResizingRight(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // Speichere Breiten in processedOcrData
+        if (onUpdateReceiptDataRef.current) {
+          onUpdateReceiptDataRef.current({
+            ...receiptDataRef.current,
+            leftPanelWidth: leftPanelWidth,
+            rightPanelWidth: rightPanelWidth
+          });
+        }
+      }
+    };
+    
+    if (isResizingLeft || isResizingRight) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizingLeft, isResizingRight, leftPanelWidth, rightPanelWidth, onUpdateReceiptData]);
+  
+  // Speichere Breiten beim Ändern (debounced)
+  useEffect(() => {
+    // Prüfe ob Breiten sich geändert haben (nicht beim ersten Laden)
+    if (prevLeftPanelWidthRef.current !== null && 
+        prevRightPanelWidthRef.current !== null &&
+        !isResizingLeft && 
+        !isResizingRight && 
+        onUpdateReceiptDataRef.current &&
+        (prevLeftPanelWidthRef.current !== leftPanelWidth || 
+         prevRightPanelWidthRef.current !== rightPanelWidth)) {
+      const timeoutId = setTimeout(() => {
+        if (onUpdateReceiptDataRef.current) {
+          onUpdateReceiptDataRef.current({
+            ...receiptDataRef.current,
+            leftPanelWidth: leftPanelWidth,
+            rightPanelWidth: rightPanelWidth
+          });
+        }
+      }, 500); // Debounce: Speichere nach 500ms Inaktivität
+      
+      return () => clearTimeout(timeoutId);
+    }
+    // Aktualisiere Refs
+    prevLeftPanelWidthRef.current = leftPanelWidth;
+    prevRightPanelWidthRef.current = rightPanelWidth;
+  }, [leftPanelWidth, rightPanelWidth, isResizingLeft, isResizingRight]);
+  
+  // Funktion: Ermittle vatRate aus Kontonamen
+  const extractVatRateFromAccountName = useCallback((accountName: string): number | null => {
+    if (!accountName) return null;
+    
+    // Suche nach MwSt-Sätzen im Kontonamen (z.B. "19%", "7%", "0%")
+    // Prüfe zuerst auf explizite Prozentangaben
+    const percentMatch = accountName.match(/(\d+(?:\.\d+)?)\s*%/);
+    if (percentMatch) {
+      const rate = parseFloat(percentMatch[1]);
+      // Prüfe ob es ein gültiger MwSt-Satz ist (0, 7, 19, etc.)
+      if (rate === 0 || rate === 7 || rate === 19 || rate === 16 || rate === 5) {
+        return rate;
+      }
+    }
+    
+    // Fallback: Suche nach Textmustern
+    const nameLower = accountName.toLowerCase();
+    if (nameLower.includes('19%') || nameLower.includes('19 %') || nameLower.includes('regelsatz')) {
+      return 19;
+    }
+    if (nameLower.includes('7%') || nameLower.includes('7 %') || nameLower.includes('ermäßigt')) {
+      return 7;
+    }
+    if (nameLower.includes('0%') || nameLower.includes('0 %') || nameLower.includes('mwst-frei') || nameLower.includes('steuerfrei')) {
+      return 0;
+    }
+    if (nameLower.includes('16%') || nameLower.includes('16 %')) {
+      return 16;
+    }
+    if (nameLower.includes('5%') || nameLower.includes('5 %')) {
+      return 5;
+    }
+    
+    return null;
+  }, []);
+  
+  // Aktualisiere Steuerkonto und vatRate beim Artikelwechsel
+  useEffect(() => {
+    if (show && editedArticles.length > 0 && selectedArticleIndex < editedArticles.length) {
+      const selectedArticle = editedArticles[selectedArticleIndex];
+      setSelectedTaxAccount(selectedArticle.taxAccount || '');
+      setTaxAccountSearchTerm('');
+      
+      // Setze vatRate: zuerst aus Artikel, dann aus Steuerkonto, sonst Standard 19%
+      if (selectedArticle.vatRate !== undefined) {
+        setReceiptVatRate(selectedArticle.vatRate);
+      } else if (selectedArticle.taxAccount) {
+        // Versuche vatRate aus Steuerkonto zu ermitteln
+        const account = accountingAccounts.find(acc => acc.number === selectedArticle.taxAccount) || 
+                        SKR3_TAX_ACCOUNTS.find(acc => acc.number === selectedArticle.taxAccount);
+        if (account) {
+          const extractedVatRate = extractVatRateFromAccountName(account.name);
+          if (extractedVatRate !== null) {
+            setReceiptVatRate(extractedVatRate);
+            // Aktualisiere auch den Artikel mit der ermittelten vatRate
+            const updatedArticles = [...editedArticles];
+            updatedArticles[selectedArticleIndex] = {
+              ...selectedArticle,
+              vatRate: extractedVatRate
+            };
+            setEditedArticles(updatedArticles);
+          } else {
+            setReceiptVatRate(19);
+          }
+        } else {
+          setReceiptVatRate(19);
+        }
+      } else {
+        setReceiptVatRate(19);
+      }
+    }
+  }, [selectedArticleIndex, editedArticles, show, accountingAccounts, extractVatRateFromAccountName]);
+
+  // Berechne Artikelsummen nach Steuerkonten gruppiert
+  const taxAccountTotals = useMemo(() => {
+    const totals: Array<{ accountNumber: string; accountName: string; total: number }> = [];
+    const accountMap = new Map<string, number>();
+
+    editedArticles.forEach(article => {
+      const accountNumber = article.taxAccount || '';
+      if (accountNumber) {
+        const currentTotal = accountMap.get(accountNumber) || 0;
+        // Berechne Gesamtpreis: bundlePrice * quantity (falls vorhanden)
+        const articleTotal = (article.bundlePrice || 0) * (article.quantity || 1);
+        accountMap.set(accountNumber, currentTotal + articleTotal);
+      }
+    });
+
+    // Konvertiere Map zu Array und sortiere nach Kontonummer
+    accountMap.forEach((total, accountNumber) => {
+      const account = accountingAccounts.find(acc => acc.number === accountNumber) || 
+                      SKR3_TAX_ACCOUNTS.find(acc => acc.number === accountNumber);
+      totals.push({
+        accountNumber,
+        accountName: account?.name || 'Unbekanntes Konto',
+        total
+      });
+    });
+
+    // Sortiere nach Kontonummer
+    totals.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+
+    return totals;
+  }, [editedArticles, accountingAccounts]);
   
   // Bildansicht States
   const [imageZoom, setImageZoom] = useState<number>(1);
   const [imagePosition, setImagePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [imageUrl, setImageUrl] = useState<string>('');
+  
+  // Druck-Preview States
+  const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
+  const [printPreviewListPosition, setPrintPreviewListPosition] = useState<{ x: number; y: number }>(
+    receiptData.printListPosition || { x: 50, y: 50 }
+  ); // Position in Pixeln relativ zum Bild (aus State wiederhergestellt)
+  const [printPreviewImageSize, setPrintPreviewImageSize] = useState<{ width: number; height: number } | null>(null); // Bildgröße für Skalierung
+  const [isDraggingPrintList, setIsDraggingPrintList] = useState<boolean>(false);
+  const printListDragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const printImageRef = useRef<HTMLImageElement | null>(null);
+  const printPdfRef = useRef<HTMLIFrameElement | null>(null);
+  const printPdfCanvasRef = useRef<HTMLImageElement | null>(null);
+  const [pdfCanvasUrls, setPdfCanvasUrls] = useState<string[]>([]); // Array von Canvas-URLs, eine pro Seite (für Druck)
+  const [displayPdfCanvasUrls, setDisplayPdfCanvasUrls] = useState<string[]>([]); // Array von Canvas-URLs für Anzeige im Original-Beleg
+  const [currentPdfPage, setCurrentPdfPage] = useState<number>(0); // Aktuelle PDF-Seite für Anzeige
+  const prevPositionRef = useRef<{ x: number; y: number } | null>(null); // Referenz für vorherige Position zum Vermeiden von Endlosschleifen
+  const prevCompletedRef = useRef<boolean | null>(null); // Referenz für vorherigen Fertig-Status zum Vermeiden von Endlosschleifen
+  const prevImageZoomRef = useRef<number | null>(null); // Referenz für vorherigen Zoom zum Vermeiden von Endlosschleifen
+  const prevImagePositionRef = useRef<{ x: number; y: number } | null>(null); // Referenz für vorherige Bildposition zum Vermeiden von Endlosschleifen
+  const receiptDataRef = useRef<ExtendedReceiptData>(receiptData); // Ref für receiptData, um Endlosschleifen zu vermeiden
+  const onUpdateReceiptDataRef = useRef(onUpdateReceiptData); // Ref für onUpdateReceiptData, um Endlosschleifen zu vermeiden
+  const prevLeftPanelWidthRef = useRef<number | null>(null); // Referenz für vorherige linke Panel-Breite
+  const prevRightPanelWidthRef = useRef<number | null>(null); // Referenz für vorherige rechte Panel-Breite
   
   // Scan-Daten (aus OCR)
   const [scanTotals, setScanTotals] = useState<{
@@ -68,10 +326,27 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   const bundleUnitContainerRef = useRef<HTMLDivElement>(null);
   const categoryContainerRef = useRef<HTMLDivElement>(null);
   const contentUnitContainerRef = useRef<HTMLDivElement>(null);
+  const taxAccountDropdownRef = useRef<HTMLDivElement>(null);
+  const taxAccountDropdownListRef = useRef<HTMLDivElement>(null);
+  
+  // Refs für Dropdown-Listen (für Scroll-Funktionalität)
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
+  const bundleUnitDropdownRef = useRef<HTMLDivElement>(null);
+  const contentUnitDropdownRef = useRef<HTMLDivElement>(null);
+  const vatRateDropdownRef = useRef<HTMLDivElement>(null);
+  const vatRateDropdownListRef = useRef<HTMLDivElement>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  const vatRateInputRef = useRef<HTMLInputElement>(null);
+  const bundleUnitInputRef = useRef<HTMLInputElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
   const previousQuantityRef = useRef<number>(1);
   const previousLinkedArticleIdRef = useRef<string | undefined>(undefined);
   const isLinkingRef = useRef<boolean>(false);
+  const isChangingArticleRef = useRef<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isInitializedRef = useRef<boolean>(false);
+  const wheelHandlerRef = useRef<((e: WheelEvent) => void) | null>(null);
 
   // Artikelformular-Hook für den rechten Bereich
   const {
@@ -91,8 +366,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     selectedContentUnitIndex,
     showAdditivesDropdown,
     showAllergensDropdown,
-    showVatRateDropdown,
-    selectedVatRateIndex,
     selectedVatRate,
     showPriceConverter,
     showCalculator,
@@ -113,8 +386,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     setSelectedBundleUnitIndex,
     setShowContentUnitDropdown,
     setSelectedContentUnitIndex,
-    setShowVatRateDropdown,
-    setSelectedVatRateIndex,
     setSelectedVatRate,
     setShowPriceConverter,
     setShowCalculator,
@@ -141,7 +412,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     handleAllergenToggle,
     handlePriceChange,
     handleContentChange,
-    handleVatRateChange,
     handleApplyGrossPrice,
     handleApplyNetPrice,
     handleCalculatorResult,
@@ -380,7 +650,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             category: linkedArticle.category || selectedArticle.category || '',
             bundleUnit: linkedArticle.bundleUnit || selectedArticle.bundleUnit || 'Stück',
             contentUnit: linkedArticle.contentUnit || selectedArticle.contentUnit || 'Stück',
-            vatRate: linkedArticle.vatRate !== undefined ? linkedArticle.vatRate : (selectedArticle.vatRate || 19),
             // Behalte Preise aus dem Scan (können sich geändert haben)
             bundlePrice: selectedArticle.bundlePrice || linkedArticle.bundlePrice || 0,
             pricePerUnit: selectedArticle.pricePerUnit || linkedArticle.pricePerUnit || 0,
@@ -422,8 +691,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           console.log('📋 [AUTO-LINK] Übernommene Daten:', {
             category: linkedArticle.category,
             bundleUnit: linkedArticle.bundleUnit,
-            contentUnit: linkedArticle.contentUnit,
-            vatRate: linkedArticle.vatRate
+            contentUnit: linkedArticle.contentUnit
           });
           return; // Früh beenden, damit der zweite Effect die Änderung verarbeitet
         } else if (matchingArticles.length > 1) {
@@ -437,6 +705,28 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         } else if (!receiptSupplierId) {
           console.log('ℹ️ [AUTO-LINK] Kein Lieferant ausgewählt, überspringe Verknüpfung');
         }
+      }
+      
+      // Berechne price, falls er fehlt oder 0 ist
+      const quantity = selectedArticle.quantity || 1;
+      let calculatedPrice = selectedArticle.price;
+      if (!calculatedPrice || calculatedPrice === 0) {
+        // Berechne price aus bundlePrice und quantity
+        if (selectedArticle.bundlePrice) {
+          calculatedPrice = selectedArticle.bundlePrice * quantity;
+        } else {
+          calculatedPrice = 0;
+        }
+      }
+      
+      // Aktualisiere Artikel mit berechnetem price, falls nötig
+      if (calculatedPrice !== selectedArticle.price) {
+        const updatedArticles = [...editedArticles];
+        updatedArticles[selectedArticleIndex] = {
+          ...selectedArticle,
+          price: calculatedPrice
+        };
+        setEditedArticles(updatedArticles);
       }
       
       // Fülle Artikelformular mit Daten des ausgewählten Artikels
@@ -455,7 +745,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         contentUnit: selectedArticle.contentUnit || 'Stück',
         contentEanCode: selectedArticle.contentEanCode || '',
         pricePerUnit: selectedArticle.pricePerUnit || 0,
-        vatRate: selectedArticle.vatRate || 19,
         allergens: selectedArticle.allergens || [],
         additives: selectedArticle.additives || [],
         ingredients: selectedArticle.ingredients || '',
@@ -474,11 +763,15 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         notes: selectedArticle.notes || ''
       };
       
-      // Nur aktualisieren, wenn sich Daten tatsächlich unterscheiden
-      const formChanged = JSON.stringify(articleForm) !== JSON.stringify(newFormData);
-      if (formChanged) {
-        setArticleForm(newFormData);
-      }
+      // Beim Artikelwechsel IMMER das Formular aktualisieren, auch wenn sich die Daten nicht unterscheiden
+      // Dies verhindert, dass alte Formularwerte in den neuen Artikel geschrieben werden
+      isChangingArticleRef.current = true;
+      setArticleForm(newFormData);
+      
+      // Setze Flag nach kurzer Verzögerung zurück, damit Sync-Effect nicht sofort auslöst
+      setTimeout(() => {
+        isChangingArticleRef.current = false;
+      }, 100);
       
       // Setze Suchbegriff für Artikel-Suche auf OCR-Namen (falls vorhanden) oder längstes Wort des Artikelnamens
       const searchTerm = selectedArticle.nameOCR || getLongestWord(selectedArticle.name || '');
@@ -570,21 +863,152 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   }, [editedArticles, selectedArticleIndex, show]); // Reagiere nur auf editedArticles-Änderungen, nicht auf jeden Render
 
   // Funktion zum Anwenden des aktuellen MwSt-Satzes auf alle Artikel
-  const applyVatRateToAllArticles = () => {
-    const currentVatRate = articleForm.vatRate || 19;
+  // ENTFERNT: vatRate wurde durch accountingAccountNumber ersetzt
+  // const applyVatRateToAllArticles = () => {
+  //   // Diese Funktion ist nicht mehr relevant, da vatRate entfernt wurde
+  // };
+
+  // Funktion zum Anwenden des aktuellen Steuerkontos auf alle Artikel
+  const applyTaxAccountToAllArticles = () => {
+    if (!selectedTaxAccount) {
+      console.warn('⚠️ Kein Steuerkonto ausgewählt');
+      return;
+    }
     const updatedArticles = editedArticles.map(article => ({
       ...article,
-      vatRate: currentVatRate
+      taxAccount: selectedTaxAccount
     }));
     setEditedArticles(updatedArticles);
-    console.log(`✅ MwSt-Satz ${currentVatRate}% auf alle ${updatedArticles.length} Artikel angewendet`);
+    console.log(`✅ Steuerkonto ${selectedTaxAccount} auf alle ${updatedArticles.length} Artikel angewendet`);
   };
 
+  // Funktion zum Hinzufügen eines neuen leeren Artikels vor dem aktuell ausgewählten Artikel
+  const handleAddArticle = useCallback(() => {
+    const newArticle: ReceiptArticle = {
+      name: '',
+      nameOCR: '',
+      quantity: 1,
+      bundleUnit: 'Stück',
+      bundlePrice: 0,
+      price: 0,
+      pricePerUnit: 0,
+      content: 1,
+      contentUnit: 'Stück',
+      supplierId: receiptSupplierId || '',
+      taxAccount: selectedTaxAccount || '',
+      vatRate: receiptVatRate || 19,
+      category: '',
+      supplierArticleNumber: '',
+      bundleEanCode: '',
+      contentEanCode: '',
+      allergens: [],
+      additives: [],
+      ingredients: '',
+      nutrition: {
+        calories: 0,
+        kilojoules: 0,
+        protein: 0,
+        fat: 0,
+        carbohydrates: 0,
+        fiber: 0,
+        sugar: 0,
+        salt: 0,
+        alcohol: undefined
+      },
+      openFoodFactsCode: '',
+      notes: '',
+      excludeFromUpdate: false
+    };
+    
+    const updatedArticles = [...editedArticles];
+    // Füge neuen Artikel vor dem aktuell ausgewählten Artikel ein
+    updatedArticles.splice(selectedArticleIndex, 0, newArticle);
+    setEditedArticles(updatedArticles);
+    
+    // Fülle Formular sofort mit den Werten des neuen Artikels
+    const newFormData = {
+      name: newArticle.name || '',
+      category: newArticle.category || '',
+      supplierId: receiptSupplierId || newArticle.supplierId || '',
+      supplierArticleNumber: newArticle.supplierArticleNumber || '',
+      bundleUnit: newArticle.bundleUnit || 'Stück',
+      bundlePrice: newArticle.bundlePrice || 0,
+      bundleEanCode: newArticle.bundleEanCode || '',
+      content: newArticle.content || 1,
+      contentUnit: newArticle.contentUnit || 'Stück',
+      contentEanCode: newArticle.contentEanCode || '',
+      pricePerUnit: newArticle.pricePerUnit || 0,
+      allergens: newArticle.allergens || [],
+      additives: newArticle.additives || [],
+      ingredients: newArticle.ingredients || '',
+      nutrition: newArticle.nutrition || {
+        calories: 0,
+        kilojoules: 0,
+        protein: 0,
+        fat: 0,
+        carbohydrates: 0,
+        fiber: 0,
+        sugar: 0,
+        salt: 0,
+        alcohol: undefined
+      },
+      openFoodFactsCode: newArticle.openFoodFactsCode || '',
+      notes: newArticle.notes || ''
+    };
+    
+    // Setze Flag, um Sync-Effect während Artikelwechsel zu überspringen
+    isChangingArticleRef.current = true;
+    setArticleForm(newFormData);
+    
+    // Aktualisiere auch Input-Felder mit deutschem Format
+    const contentValue = newArticle.content || 1;
+    setBundlePriceInput((newArticle.bundlePrice || 0).toFixed(2).replace('.', ','));
+    setContentInput(contentValue.toFixed(2).replace('.', ','));
+    setPricePerUnitInput((newArticle.pricePerUnit || 0).toFixed(2).replace('.', ','));
+    
+    // Setze Suchbegriff zurück
+    setArticleSearchTerm('');
+    
+    // Aktualisiere previousQuantityRef
+    previousQuantityRef.current = newArticle.quantity || 1;
+    
+    // Setze Flag nach kurzer Verzögerung zurück
+    setTimeout(() => {
+      isChangingArticleRef.current = false;
+    }, 100);
+    
+    console.log('✅ Neuer Artikel hinzugefügt an Position', selectedArticleIndex);
+  }, [editedArticles, selectedArticleIndex, receiptSupplierId, selectedTaxAccount, receiptVatRate, setArticleForm, setBundlePriceInput, setContentInput, setPricePerUnitInput, setArticleSearchTerm]);
+
+  // Funktion zum Entfernen des aktuell ausgewählten Artikels
+  const handleRemoveArticle = useCallback(() => {
+    if (editedArticles.length <= 1) {
+      console.warn('⚠️ Kann nicht den letzten Artikel entfernen');
+      return;
+    }
+    
+    const updatedArticles = [...editedArticles];
+    updatedArticles.splice(selectedArticleIndex, 1);
+    setEditedArticles(updatedArticles);
+    
+    // Passe selectedArticleIndex an, falls nötig
+    const newIndex = selectedArticleIndex >= updatedArticles.length 
+      ? updatedArticles.length - 1 
+      : selectedArticleIndex;
+    setSelectedArticleIndex(newIndex);
+    
+    console.log('✅ Artikel entfernt von Position', selectedArticleIndex);
+  }, [editedArticles, selectedArticleIndex]);
+
   // Handler für Lieferanten-Auswahl für alle Artikel
-  const handleReceiptSupplierSelect = (supplier: Supplier | null) => {
+  const handleReceiptSupplierSelect = async (supplier: Supplier | null) => {
     if (supplier) {
       setReceiptSupplierId(supplier.id);
       setReceiptSupplierSearchTerm(supplier.name);
+      
+      // Übernehme nettoPrices vom Lieferanten
+      const supplierNettoPrices = (supplier as any).nettoPrices || false;
+      setNettoPrices(supplierNettoPrices);
       
       // Setze supplierId für alle Artikel
       const updatedArticles = editedArticles.map(article => ({
@@ -602,6 +1026,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       // Kein Lieferant ausgewählt
       setReceiptSupplierId('');
       setReceiptSupplierSearchTerm('');
+      setNettoPrices(false); // Reset auf Brutto
       
       // Setze supplierId für alle Artikel auf leer
       const updatedArticles = editedArticles.map(article => ({
@@ -618,10 +1043,60 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     }
     setShowSupplierDropdown(false);
   };
+  
+  // Handler für Änderung der Netto-Preise Checkbox
+  const handleNettoPricesChange = async (checked: boolean) => {
+    console.log('🔄 [NETTO-PREISE] Checkbox geändert:', checked);
+    console.log('🔄 [NETTO-PREISE] Aktueller State vor Update:', nettoPrices);
+    
+    // Setze State sofort
+    setNettoPrices(checked);
+    
+    // Aktualisiere Lieferant, wenn einer ausgewählt ist
+    if (receiptSupplierId) {
+      try {
+        // Verwende State statt props, falls props nicht aktualisiert wurden
+        const supplierFromState = state.suppliers.find(s => s.id === receiptSupplierId);
+        const supplier = supplierFromState || suppliers.find(s => s.id === receiptSupplierId);
+        
+        if (supplier) {
+          console.log('🔄 [NETTO-PREISE] Aktualisiere Lieferant:', supplier.name, 'von', supplier.nettoPrices, 'zu', checked);
+          
+          const updatedSupplier = {
+            ...supplier,
+            nettoPrices: checked,
+            isDirty: true,
+            updatedAt: new Date()
+          };
+          
+          // Speichere über StorageLayer
+          const success = await storageLayer.save('suppliers', [updatedSupplier]);
+          if (success) {
+            // Aktualisiere globalen State
+            dispatch({ 
+              type: 'UPDATE_SUPPLIER', 
+              payload: { id: supplier.id, supplier: updatedSupplier }
+            });
+            console.log('✅ Netto-Preise Einstellung im Lieferanten aktualisiert:', checked);
+          } else {
+            console.error('❌ Fehler beim Speichern des Lieferanten');
+          }
+        } else {
+          console.warn('⚠️ [NETTO-PREISE] Lieferant nicht gefunden:', receiptSupplierId);
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Aktualisieren der Netto-Preise Einstellung:', error);
+      }
+    } else {
+      console.log('ℹ️ [NETTO-PREISE] Kein Lieferant ausgewählt, nur State aktualisiert');
+    }
+  };
 
   // Reset aller States beim Schließen des Modals
   useEffect(() => {
     if (!show) {
+      // Reset Initialisierungs-Flag
+      isInitializedRef.current = false;
       // Setze articleForm zurück auf leere Werte
       setArticleForm({
         name: '',
@@ -635,7 +1110,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         contentUnit: 'Stück',
         contentEanCode: '',
         pricePerUnit: 0,
-        vatRate: 19,
         allergens: [],
         additives: [],
         ingredients: '',
@@ -681,6 +1155,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       return;
     }
     
+    // WICHTIG: Überspringe Sync während Artikelwechsel, um zu verhindern, dass alte Formularwerte
+    // in den neuen Artikel geschrieben werden
+    if (isChangingArticleRef.current) {
+      console.log('⏭️ [SYNC] Überspringe Sync - Artikelwechsel läuft gerade');
+      return;
+    }
+    
     if (editedArticles.length > 0 && selectedArticleIndex < editedArticles.length) {
       const currentArticle = editedArticles[selectedArticleIndex];
       
@@ -695,8 +1176,19 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       const updatedArticle = {
         ...currentArticle,
         ...articleForm,
-        supplierId: receiptSupplierId // Immer die receiptSupplierId verwenden
+        supplierId: receiptSupplierId, // Immer die receiptSupplierId verwenden
+        taxAccount: selectedTaxAccount,
+        vatRate: receiptVatRate
       };
+      
+      // Berechne price neu, wenn bundlePrice oder quantity vorhanden sind
+      const quantity = updatedArticle.quantity || 1;
+      if (updatedArticle.bundlePrice !== undefined) {
+        updatedArticle.price = updatedArticle.bundlePrice * quantity;
+      } else if (!updatedArticle.price && currentArticle.bundlePrice) {
+        // Falls price fehlt, aber bundlePrice vorhanden ist, berechne price
+        updatedArticle.price = currentArticle.bundlePrice * quantity;
+      }
       
       // Nur aktualisieren, wenn sich Daten tatsächlich unterscheiden
       const articleChanged = JSON.stringify(currentArticle) !== JSON.stringify(updatedArticle);
@@ -750,11 +1242,11 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             category: linkedArticle.category || article.category || '',
             bundleUnit: linkedArticle.bundleUnit || article.bundleUnit || 'Stück',
             contentUnit: linkedArticle.contentUnit || article.contentUnit || 'Stück',
-            vatRate: linkedArticle.vatRate !== undefined ? linkedArticle.vatRate : (article.vatRate || 19),
             // Behalte Preise aus dem Scan (können sich geändert haben)
             bundlePrice: article.bundlePrice || linkedArticle.bundlePrice || 0,
             pricePerUnit: article.pricePerUnit || linkedArticle.pricePerUnit || 0,
-            content: linkedArticle.content || article.content || 1,
+            // WICHTIG: content aus dem Scan hat Priorität (auch wenn 0), nur wenn nicht vorhanden, verwende linkedArticle.content
+            content: article.content !== undefined && article.content !== null ? article.content : (linkedArticle.content !== undefined && linkedArticle.content !== null ? linkedArticle.content : 1),
             // Übernehme weitere Felder aus dem bestehenden Artikel
             supplierArticleNumber: linkedArticle.supplierArticleNumber || article.supplierArticleNumber || '',
             bundleEanCode: linkedArticle.bundleEanCode || article.bundleEanCode || '',
@@ -838,11 +1330,11 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             category: linkedArticle.category || article.category || '',
             bundleUnit: linkedArticle.bundleUnit || article.bundleUnit || 'Stück',
             contentUnit: linkedArticle.contentUnit || article.contentUnit || 'Stück',
-            vatRate: linkedArticle.vatRate !== undefined ? linkedArticle.vatRate : (article.vatRate || 19),
             // Behalte Preise aus dem Scan (können sich geändert haben)
             bundlePrice: article.bundlePrice || linkedArticle.bundlePrice || 0,
             pricePerUnit: article.pricePerUnit || linkedArticle.pricePerUnit || 0,
-            content: linkedArticle.content || article.content || 1,
+            // WICHTIG: content aus dem Scan hat Priorität (auch wenn 0), nur wenn nicht vorhanden, verwende linkedArticle.content
+            content: article.content !== undefined && article.content !== null ? article.content : (linkedArticle.content !== undefined && linkedArticle.content !== null ? linkedArticle.content : 1),
             // Übernehme weitere Felder aus dem bestehenden Artikel
             supplierArticleNumber: linkedArticle.supplierArticleNumber || article.supplierArticleNumber || '',
             bundleEanCode: linkedArticle.bundleEanCode || article.bundleEanCode || '',
@@ -895,12 +1387,60 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     } else {
       console.log('ℹ️ [AUTO-LINK-ALL] Keine Verknüpfungen gefunden');
     }
+    
+    // Gib das aktualisierte Array zurück
+    return updatedArticles;
   };
+
+  // Lade AccountingAccounts und vatRates beim Öffnen
+  useEffect(() => {
+    if (show) {
+      const loadAccountingData = async () => {
+        try {
+          // Lade AccountingSettings für selectedChartId und vatRates
+          const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+          if (settings && settings.length > 0) {
+            const firstSettings = settings[0];
+            if (firstSettings.selectedChartId) {
+              setSelectedChartId(firstSettings.selectedChartId);
+            }
+            if (firstSettings.vatRates && firstSettings.vatRates.length > 0) {
+              setVatRates(firstSettings.vatRates);
+            }
+          }
+          
+          // Lade AccountingAccounts
+          const accounts = await storageLayer.load<AccountingAccount>('accountingAccounts');
+          if (accounts) {
+            // Filtere nur aktive Konten für den ausgewählten Chart
+            const activeAccounts = accounts.filter(acc => 
+              acc.status === 'active' && 
+              acc.chartId === (settings?.[0]?.selectedChartId || 'skr03')
+            );
+            setAccountingAccounts(activeAccounts);
+          }
+        } catch (error) {
+          console.error('❌ Fehler beim Laden der Accounting-Daten:', error);
+        }
+      };
+      
+      loadAccountingData();
+    }
+  }, [show]);
+
+  // Aktualisiere Refs, wenn sich Props ändern
+  useEffect(() => {
+    receiptDataRef.current = receiptData;
+    onUpdateReceiptDataRef.current = onUpdateReceiptData;
+  }, [receiptData, onUpdateReceiptData]);
 
   // Initialisiere editedArticles beim Öffnen und finde passenden Lieferanten
   useEffect(() => {
     if (show) {
-      console.log('🚀 [INIT] Initialisiere ReceiptReviewModal mit', receiptData.articles.length, 'Artikeln');
+      const isFirstInit = !isInitializedRef.current;
+      isInitializedRef.current = true;
+      
+      console.log('🚀 [INIT] Initialisiere ReceiptReviewModal mit', receiptData.articles.length, 'Artikeln', isFirstInit ? '(erstes Öffnen)' : '(Re-Render)');
       console.log('🚀 [INIT] Verfügbare Artikel in state.articles:', state.articles.length);
       
       // WICHTIG: Setze ZUERST editedArticles und selectedArticleIndex zurück,
@@ -927,7 +1467,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         contentUnit: 'Stück',
         contentEanCode: '',
         pricePerUnit: 0,
-        vatRate: 19,
         allergens: [],
         additives: [],
         ingredients: '',
@@ -993,8 +1532,10 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       // Finde passenden Lieferanten anhand des Namens
       if (receiptData.supplier) {
         console.log('🔍 [INIT] Suche nach Lieferant:', receiptData.supplier);
+        // Verwende State statt Props, da State nach Speichern aktualisiert wird
+        const suppliersToUse = state.suppliers.length > 0 ? state.suppliers : suppliers;
         // Prüfe zuerst auf exakte Übereinstimmung
-        const exactMatch = suppliers.find(s => 
+        const exactMatch = suppliersToUse.find(s => 
           s.name.toLowerCase() === receiptData.supplier!.toLowerCase()
         );
         
@@ -1002,6 +1543,15 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           console.log('✅ [INIT] Exakter Lieferant gefunden:', exactMatch.name);
           setReceiptSupplierId(exactMatch.id);
           setReceiptSupplierSearchTerm(exactMatch.name);
+          
+          // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen oder wenn Lieferant sich geändert hat
+          if (isFirstInit || receiptSupplierId !== exactMatch.id) {
+            const supplierNettoPrices = (exactMatch as any).nettoPrices || false;
+            setNettoPrices(supplierNettoPrices);
+            console.log('🔄 [INIT] nettoPrices vom Lieferanten übernommen:', supplierNettoPrices);
+          } else {
+            console.log('⏭️ [INIT] nettoPrices nicht überschrieben (bereits gesetzt)');
+          }
           
           // Setze supplierId für alle Artikel (verwende bereits normalisierte Artikel)
           const updatedArticles = normalizedArticles.map(article => {
@@ -1017,10 +1567,27 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           setEditedArticles(updatedArticles);
           
           // Versuche automatische Verknüpfung für alle Artikel nach Lieferanten-Auswahl
-          setTimeout(() => {
-            console.log('🔍 [INIT] Starte automatische Verknüpfung für alle Artikel...');
-            autoLinkAllArticles(updatedArticles, exactMatch.id);
-          }, 100);
+          // Nur wenn autoLinkPerformed noch nicht gesetzt ist
+          if (!receiptData.autoLinkPerformed) {
+            setTimeout(() => {
+              console.log('🔍 [INIT] Starte automatische Verknüpfung für alle Artikel...');
+              const linkedArticles = autoLinkAllArticles(updatedArticles, exactMatch.id);
+              setEditedArticles(linkedArticles);
+              
+              // Setze Flag und speichere
+              const updatedReceiptData: ExtendedReceiptData = {
+                ...receiptData,
+                autoLinkPerformed: true,
+                articles: linkedArticles
+              };
+              
+              if (onUpdateReceiptDataRef.current) {
+                onUpdateReceiptDataRef.current(updatedReceiptData);
+              }
+            }, 100);
+          } else {
+            console.log('⏭️ [INIT] Automatische Verknüpfung wurde bereits durchgeführt, überspringe');
+          }
         } else {
           // Schrittweise Volltextsuche mit Wort-für-Wort-Erweiterung
           const findSupplierByProgressiveSearch = (searchName: string): Supplier | null => {
@@ -1040,7 +1607,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               const searchTerm = words.slice(0, wordCount).join(' ');
               
               // Suche alle Lieferanten, deren Name den Suchbegriff enthält
-              const matches = suppliers.filter(s => 
+              // Verwende State statt Props, da State nach Speichern aktualisiert wird
+              const suppliersToUse = state.suppliers.length > 0 ? state.suppliers : suppliers;
+              const matches = suppliersToUse.filter(s => 
                 s.name.toLowerCase().includes(searchTerm)
               );
               
@@ -1074,6 +1643,15 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             setReceiptSupplierId(matchingSupplier.id);
             setReceiptSupplierSearchTerm(matchingSupplier.name);
             
+            // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen oder wenn Lieferant sich geändert hat
+            if (isFirstInit || receiptSupplierId !== matchingSupplier.id) {
+              const supplierNettoPrices = (matchingSupplier as any).nettoPrices || false;
+              setNettoPrices(supplierNettoPrices);
+              console.log('🔄 [INIT] nettoPrices vom Lieferanten übernommen:', supplierNettoPrices);
+            } else {
+              console.log('⏭️ [INIT] nettoPrices nicht überschrieben (bereits gesetzt)');
+            }
+            
             // Setze supplierId für alle Artikel (verwende bereits normalisierte Artikel)
             const updatedArticles = normalizedArticles.map(article => {
               // Stelle sicher, dass nameOCR gesetzt ist
@@ -1088,10 +1666,27 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             setEditedArticles(updatedArticles);
             
             // Versuche automatische Verknüpfung für alle Artikel nach Lieferanten-Auswahl
-            setTimeout(() => {
-              console.log('🔍 [INIT] Starte automatische Verknüpfung für alle Artikel...');
-              autoLinkAllArticles(updatedArticles, matchingSupplier.id);
-            }, 100);
+            // Nur wenn autoLinkPerformed noch nicht gesetzt ist
+            if (!receiptData.autoLinkPerformed) {
+              setTimeout(() => {
+                console.log('🔍 [INIT] Starte automatische Verknüpfung für alle Artikel...');
+                const linkedArticles = autoLinkAllArticles(updatedArticles, matchingSupplier.id);
+                setEditedArticles(linkedArticles);
+                
+                // Setze Flag und speichere
+                const updatedReceiptData: ExtendedReceiptData = {
+                  ...receiptData,
+                  autoLinkPerformed: true,
+                  articles: linkedArticles
+                };
+                
+                if (onUpdateReceiptDataRef.current) {
+                  onUpdateReceiptDataRef.current(updatedReceiptData);
+                }
+              }, 100);
+            } else {
+              console.log('⏭️ [INIT] Automatische Verknüpfung wurde bereits durchgeführt, überspringe');
+            }
           } else {
             // Kein Lieferant gefunden - setze auf "Kein Lieferant ausgewählt!"
             setReceiptSupplierId('');
@@ -1100,22 +1695,111 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         }
       } else if (receiptData.supplierId) {
         setReceiptSupplierId(receiptData.supplierId);
-        const supplier = suppliers.find(s => s.id === receiptData.supplierId);
+        // Verwende State statt Props, da State nach Speichern aktualisiert wird
+        const suppliersToUse = state.suppliers.length > 0 ? state.suppliers : suppliers;
+        const supplier = suppliersToUse.find(s => s.id === receiptData.supplierId);
         if (supplier) {
           setReceiptSupplierSearchTerm(supplier.name);
           setScannedSupplierName(supplier.name); // Kein Unterschied bei exakter ID-Übereinstimmung
+          
+          // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen oder wenn Lieferant sich geändert hat
+          if (isFirstInit || receiptSupplierId !== receiptData.supplierId) {
+            const supplierNettoPrices = (supplier as any).nettoPrices || false;
+            setNettoPrices(supplierNettoPrices);
+            console.log('🔄 [INIT] nettoPrices vom Lieferanten übernommen:', supplierNettoPrices);
+          } else {
+            console.log('⏭️ [INIT] nettoPrices nicht überschrieben (bereits gesetzt)');
+          }
         } else {
           // Lieferant-ID existiert nicht mehr - setze auf "Kein Lieferant ausgewählt!"
           setReceiptSupplierId('');
           setReceiptSupplierSearchTerm('');
+          setNettoPrices(false);
         }
       } else {
         // Kein Lieferant erkannt - setze auf "Kein Lieferant ausgewählt!"
         setReceiptSupplierId('');
         setReceiptSupplierSearchTerm('');
+        setNettoPrices(false);
       }
     }
-  }, [show, receiptData.articles, receiptData.supplier, receiptData.supplierId, suppliers]);
+    
+    // Fülle Formular mit dem ersten Artikel nach dem Initialisieren
+    // (außerhalb des if-Blocks, damit es immer ausgeführt wird)
+    if (show && receiptData.articles && receiptData.articles.length > 0) {
+      // Erstelle normalizedArticles erneut, falls sie nicht im Scope sind
+      const normalizedArticles = receiptData.articles.map(article => {
+        // Berechne Einzelpreis falls noch nicht korrekt gesetzt
+        let bundlePrice = article.bundlePrice || 0;
+        if (article.price && article.quantity && article.quantity > 0 && bundlePrice === article.price) {
+          // Falls bundlePrice noch gleich Gesamtpreis ist, berechne Einzelpreis
+          bundlePrice = article.price / article.quantity;
+        }
+        
+        // Stelle sicher, dass nameOCR gesetzt ist (aus dem ursprünglichen Namen)
+        const nameOCR = article.nameOCR || article.name || '';
+        
+        return {
+          ...article,
+          nameOCR: nameOCR,
+          bundlePrice: bundlePrice || article.pricePerUnit || 0,
+          content: 1,
+          contentUnit: article.contentUnit || 'Stück'
+        };
+      });
+      
+      if (normalizedArticles.length > 0) {
+        const firstArticle = normalizedArticles[0];
+        const initialFormData = {
+          name: firstArticle.name || '',
+          category: firstArticle.category || '',
+          supplierId: receiptData.supplierId || firstArticle.supplierId || '',
+          supplierArticleNumber: firstArticle.supplierArticleNumber || '',
+          bundleUnit: firstArticle.bundleUnit || 'Stück',
+          bundlePrice: firstArticle.bundlePrice || 0,
+          bundleEanCode: firstArticle.bundleEanCode || '',
+          content: firstArticle.linkedArticleId ? (firstArticle.content || 1) : 1,
+          contentUnit: firstArticle.contentUnit || 'Stück',
+          contentEanCode: firstArticle.contentEanCode || '',
+          pricePerUnit: firstArticle.pricePerUnit || 0,
+          allergens: firstArticle.allergens || [],
+          additives: firstArticle.additives || [],
+          ingredients: firstArticle.ingredients || '',
+          nutrition: firstArticle.nutrition || {
+            calories: 0,
+            kilojoules: 0,
+            protein: 0,
+            fat: 0,
+            carbohydrates: 0,
+            fiber: 0,
+            sugar: 0,
+            salt: 0,
+            alcohol: undefined
+          },
+          openFoodFactsCode: firstArticle.openFoodFactsCode || '',
+          notes: firstArticle.notes || ''
+        };
+        
+        setArticleForm(initialFormData);
+        
+        // Aktualisiere auch Input-Felder mit deutschem Format
+        const contentValue = firstArticle.linkedArticleId ? (firstArticle.content || 1) : 1;
+        setBundlePriceInput((firstArticle.bundlePrice || 0).toFixed(2).replace('.', ','));
+        setContentInput(contentValue.toFixed(2).replace('.', ','));
+        setPricePerUnitInput((firstArticle.pricePerUnit || 0).toFixed(2).replace('.', ','));
+        
+        // Setze Suchbegriff für Artikel-Suche
+        const searchTerm = firstArticle.nameOCR || getLongestWord(firstArticle.name || '');
+        setArticleSearchTerm(searchTerm);
+        
+        console.log('✅ [INIT] Formular mit erstem Artikel befüllt:', {
+          name: firstArticle.name,
+          category: firstArticle.category,
+          quantity: firstArticle.quantity
+        });
+      }
+    }
+  }, [show, receiptData.articles, receiptData.supplier, receiptData.supplierId]); // suppliers entfernt, um Re-Render nach Speichern zu vermeiden
 
   // Aktualisiere Scan-Daten wenn sich receiptData ändert
   useEffect(() => {
@@ -1125,16 +1809,155 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         vat7: receiptData.vat7 || 0,
         vat19: receiptData.vat19 || 0
       });
+      // Aktualisiere Datum nur beim Öffnen, nicht bei jeder Änderung
+      // (Belegnummer wird bereits im Initialisierungs-Effect gesetzt und sollte nicht überschrieben werden)
+      // Datum kann auch manuell geändert werden, daher nur beim Öffnen setzen
     }
-  }, [show, receiptData]);
+  }, [show, receiptData.totalAmount, receiptData.vat7, receiptData.vat19]);
+
+  // Schließe Steuerkonto-Dropdown beim Klick außerhalb
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showTaxAccountDropdown && taxAccountDropdownRef.current && !taxAccountDropdownRef.current.contains(event.target as Node)) {
+        setShowTaxAccountDropdown(false);
+      }
+    };
+
+    if (showTaxAccountDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTaxAccountDropdown]);
+
+  // Prüfe ob es ein PDF ist
+  const isPDF = useMemo(() => {
+    // Prüfe zuerst receiptImagePath (Dateipfad) - das ist am zuverlässigsten
+    if (receiptImagePath) {
+      const pathLower = receiptImagePath.toLowerCase();
+      if (pathLower.endsWith('.pdf')) {
+        console.log('📄 [PDF-CHECK] PDF erkannt über receiptImagePath (.pdf Endung):', receiptImagePath);
+        return true;
+      }
+      
+      // Prüfe auch in LocalStorage, ob der Dateityp gespeichert ist
+      try {
+        const imageStructureStr = localStorage.getItem('chef_images');
+        if (imageStructureStr) {
+          const imageStructure = JSON.parse(imageStructureStr);
+          const pathParts = receiptImagePath.split('/');
+          if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+            const entityType = pathParts[1];
+            const entityId = pathParts[2];
+            const imageData = imageStructure?.pictures?.[entityType]?.[entityId];
+            console.log('📄 [PDF-CHECK] imageData aus LocalStorage:', imageData);
+            if (imageData) {
+              if (typeof imageData === 'object' && imageData.fileType === 'application/pdf') {
+                console.log('📄 [PDF-CHECK] PDF erkannt über gespeicherten fileType in LocalStorage:', receiptImagePath);
+                return true;
+              }
+              // Prüfe auch, ob es ein IndexedDB-Verweis ist (dann müssen wir IndexedDB prüfen)
+              if (typeof imageData === 'object' && imageData._indexedDB) {
+                // Versuche direkt aus IndexedDB zu lesen (async, aber wir können es hier nicht awaiten)
+                // Stattdessen prüfen wir, ob imageUrl eine Blob URL ist UND receiptImagePath vorhanden ist
+                // Das deutet darauf hin, dass es aus IndexedDB geladen wurde
+                if (imageUrl && imageUrl.startsWith('blob:')) {
+                  // Wenn wir eine Blob URL haben und es ein IndexedDB-Verweis ist, 
+                  // müssen wir den fileType aus IndexedDB lesen
+                  // Da useMemo nicht async sein kann, prüfen wir stattdessen, ob wir den fileType
+                  // aus dem bereits geladenen IndexedDB-Eintrag haben können
+                  // Für jetzt: Wenn Blob URL vorhanden und IndexedDB-Verweis, nehmen wir an, es ist ein PDF
+                  // (da wir wissen, dass PDFs in IndexedDB gespeichert werden)
+                  console.log('📄 [PDF-CHECK] IndexedDB-Verweis gefunden, prüfe IndexedDB direkt...');
+                  // Wir können hier nicht async machen, daher prüfen wir imageUrl
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('📄 [PDF-CHECK] Fehler beim Parsen von LocalStorage:', e);
+      }
+    }
+    
+    // Prüfe imageUrl (geladenes Bild) - für Blob URLs müssen wir receiptImagePath prüfen
+    if (imageUrl) {
+      const urlLower = imageUrl.toLowerCase();
+      // Prüfe auf .pdf Endung oder PDF MIME-Type
+      if (urlLower.endsWith('.pdf') || urlLower.includes('application/pdf') || urlLower.includes('data:application/pdf')) {
+        console.log('📄 [PDF-CHECK] PDF erkannt über imageUrl:', imageUrl.substring(0, 50));
+        return true;
+      }
+      // Für blob: URLs: Wenn receiptImagePath vorhanden ist und es ein IndexedDB-Verweis ist,
+      // prüfen wir, ob der fileType in IndexedDB ein PDF ist
+      if (urlLower.startsWith('blob:') && receiptImagePath) {
+        // Versuche fileType aus IndexedDB zu lesen (async, aber wir können es hier nicht awaiten)
+        // Stattdessen: Wenn Blob URL vorhanden und receiptImagePath vorhanden, 
+        // prüfen wir, ob es ein IndexedDB-Verweis in LocalStorage ist
+        try {
+          const imageStructureStr = localStorage.getItem('chef_images');
+          if (imageStructureStr) {
+            const imageStructure = JSON.parse(imageStructureStr);
+            const pathParts = receiptImagePath.split('/');
+            if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+              const entityType = pathParts[1];
+              const entityId = pathParts[2];
+              const imageData = imageStructure?.pictures?.[entityType]?.[entityId];
+              if (imageData && typeof imageData === 'object' && imageData._indexedDB) {
+                // Es ist ein IndexedDB-Verweis - prüfe, ob fileType gespeichert ist
+                if (imageData.fileType === 'application/pdf') {
+                  console.log('📄 [PDF-CHECK] PDF erkannt über fileType in IndexedDB-Verweis:', receiptImagePath);
+                  return true;
+                }
+                // Wenn fileType nicht gespeichert ist, aber es ist ein IndexedDB-Verweis und eine Blob URL,
+                // nehmen wir an, es könnte ein PDF sein (da PDFs als Blob URLs geladen werden)
+                // Aber das ist nicht zuverlässig - besser: direkt aus IndexedDB lesen
+                console.log('📄 [PDF-CHECK] IndexedDB-Verweis ohne fileType, prüfe IndexedDB direkt...');
+              }
+            }
+          }
+        } catch (e) {
+          // Ignoriere Fehler
+        }
+      }
+    }
+    
+    // Fallback zu receiptImage
+    if (receiptImage) {
+      if (typeof receiptImage === 'string') {
+        const strLower = receiptImage.toLowerCase();
+        if (strLower.endsWith('.pdf') || strLower.includes('application/pdf') || strLower.includes('data:application/pdf')) {
+          console.log('📄 [PDF-CHECK] PDF erkannt über receiptImage (String):', receiptImage.substring(0, 50));
+          return true;
+        }
+      } else {
+        if (receiptImage.type === 'application/pdf') {
+          console.log('📄 [PDF-CHECK] PDF erkannt über receiptImage (File):', receiptImage.name);
+          return true;
+        }
+      }
+    }
+    
+    console.log('📄 [PDF-CHECK] Kein PDF erkannt - receiptImagePath:', receiptImagePath, 'imageUrl:', imageUrl?.substring(0, 50));
+    return false;
+  }, [receiptImage, imageUrl, receiptImagePath]);
 
   // Lade Bild-URL wenn receiptImage vorhanden
   useEffect(() => {
     console.log('🖼️ [IMAGE] receiptImage geändert:', receiptImage);
+    console.log('📄 [IMAGE] receiptImagePath:', receiptImagePath);
+    console.log('🖼️ [IMAGE] Aktueller imageUrl:', imageUrl);
+    
+    // Wenn receiptImagePath vorhanden ist, aber receiptImage nicht, dann wird das Bild
+    // von ReceiptReviewModalWithImage geladen und als receiptImage (String-URL) übergeben
+    // In diesem Fall müssen wir nichts tun, da receiptImage bereits die URL ist
+    
     if (receiptImage) {
       if (typeof receiptImage === 'string') {
-        // Bereits eine URL
-        console.log('🖼️ [IMAGE] Verwende URL:', receiptImage);
+        // Bereits eine URL (kann von ReceiptReviewModalWithImage kommen oder direkt übergeben)
+        console.log('🖼️ [IMAGE] Verwende URL:', receiptImage.substring(0, 100) + (receiptImage.length > 100 ? '...' : ''));
         setImageUrl(receiptImage);
       } else {
         // File-Objekt - konvertiere zu URL
@@ -1148,58 +1971,240 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           URL.revokeObjectURL(url);
         };
       }
+    } else if (receiptImagePath) {
+      // Wenn nur receiptImagePath vorhanden ist, wird das Bild von ReceiptReviewModalWithImage geladen
+      // Wir müssen hier nichts tun, da ReceiptReviewModalWithImage receiptImage als String-URL setzt
+      console.log('📄 [IMAGE] Warte auf Bild-Laden durch ReceiptReviewModalWithImage...');
     } else {
       console.log('🖼️ [IMAGE] Kein Bild vorhanden');
       setImageUrl('');
     }
-  }, [receiptImage]);
+  }, [receiptImage, receiptImagePath]);
+  
+  // Cleanup: Revoke Blob URLs wenn sie nicht mehr benötigt werden
+  useEffect(() => {
+    return () => {
+      if (imageUrl && imageUrl.startsWith('blob:')) {
+        console.log('🖼️ [IMAGE] Cleanup: Revoke Blob URL');
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [imageUrl]);
+
+  // Rendere PDF in Canvas für Druck - gibt Array von Canvas-URLs zurück (eine pro Seite)
+  const renderPdfToCanvas = useCallback(async (pdfUrl: string): Promise<string[]> => {
+    try {
+      // Lade PDF.js dynamisch über CDN
+      let pdfjsLib: any = (window as any).pdfjsLib;
+      
+      if (!pdfjsLib) {
+        // Lade PDF.js von CDN
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.async = true;
+        
+        await new Promise<void>((resolve, reject) => {
+          script.onload = () => {
+            pdfjsLib = (window as any).pdfjsLib || (window as any).pdfjs;
+            if (!pdfjsLib) {
+              reject(new Error('PDF.js konnte nicht geladen werden'));
+              return;
+            }
+            // Setze Worker-Pfad
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            (window as any).pdfjsLib = pdfjsLib;
+            resolve();
+          };
+          script.onerror = () => reject(new Error('Fehler beim Laden von PDF.js'));
+          document.head.appendChild(script);
+        });
+      }
+      
+      console.log('📄 [PDF-CANVAS] Starte Rendering von PDF:', pdfUrl.substring(0, 50));
+      
+      // Lade PDF (konvertiere Blob URL zu ArrayBuffer falls nötig)
+      let pdfData: any = pdfUrl;
+      if (pdfUrl.startsWith('blob:')) {
+        const response = await fetch(pdfUrl);
+        pdfData = await response.arrayBuffer();
+      }
+      
+      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+      const pdf = await loadingTask.promise;
+      console.log('📄 [PDF-CANVAS] PDF geladen, Seiten:', pdf.numPages);
+
+      const scale = 2.0; // Höhere Auflösung für Druck
+      const canvasUrls: string[] = [];
+      
+      // Rendere jede Seite in ein separates Canvas
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+        
+        // Erstelle Canvas für diese Seite
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) {
+          console.error(`❌ [PDF-CANVAS] Konnte Canvas-Context für Seite ${pageNum} nicht erstellen`);
+          continue;
+        }
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        // Weißer Hintergrund
+        context.fillStyle = 'white';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Rendere Seite auf Canvas
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        } as any).promise;
+        
+        // Konvertiere Canvas zu Data URL
+        const dataUrl = canvas.toDataURL('image/png');
+        canvasUrls.push(dataUrl);
+        
+        console.log(`✅ [PDF-CANVAS] Seite ${pageNum}/${pdf.numPages} gerendert:`, canvas.width, 'x', canvas.height);
+      }
+
+      console.log(`✅ [PDF-CANVAS] PDF erfolgreich gerendert: ${canvasUrls.length} Seiten`);
+      return canvasUrls;
+    } catch (error) {
+      console.error('❌ [PDF-CANVAS] Fehler beim Rendern des PDFs:', error);
+      return [];
+    }
+  }, []);
+
+  // Rendere PDF zu Canvas für Anzeige im Original-Beleg-Bereich
+  useEffect(() => {
+    if (show && isPDF && imageUrl && displayPdfCanvasUrls.length === 0) {
+      console.log('📄 [PDF-CANVAS-DISPLAY] Starte PDF-Rendering für Anzeige');
+      renderPdfToCanvas(imageUrl).then((canvasUrls) => {
+        if (canvasUrls.length > 0) {
+          setDisplayPdfCanvasUrls(canvasUrls);
+          setCurrentPdfPage(0); // Starte mit erster Seite
+          console.log(`✅ [PDF-CANVAS-DISPLAY] PDF erfolgreich gerendert: ${canvasUrls.length} Seiten`);
+        }
+      });
+    }
+    
+    // Cleanup: Entferne Canvas URLs wenn Modal geschlossen wird
+    if (!show && displayPdfCanvasUrls.length > 0) {
+      setDisplayPdfCanvasUrls([]);
+      setCurrentPdfPage(0);
+    }
+  }, [show, isPDF, imageUrl, displayPdfCanvasUrls.length, renderPdfToCanvas]);
+
+  // Rendere PDF zu Canvas wenn PDF geladen wird und Druck-Preview geöffnet wird
+  useEffect(() => {
+    if (showPrintPreview && isPDF && imageUrl && pdfCanvasUrls.length === 0) {
+      console.log('📄 [PDF-CANVAS] Starte PDF-Rendering für Druck-Preview');
+      renderPdfToCanvas(imageUrl).then((canvasUrls) => {
+        if (canvasUrls.length > 0) {
+          setPdfCanvasUrls(canvasUrls);
+          // Setze Größe basierend auf erster Seite
+          const img = new Image();
+          img.onload = () => {
+            setPrintPreviewImageSize({
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.src = canvasUrls[0];
+        }
+      });
+    }
+    
+    // Cleanup: Entferne Canvas URLs wenn Preview geschlossen wird
+    if (!showPrintPreview && pdfCanvasUrls.length > 0) {
+      setPdfCanvasUrls([]);
+    }
+  }, [showPrintPreview, isPDF, imageUrl, pdfCanvasUrls.length, renderPdfToCanvas]);
 
   // Berechne aktualisierte Beleg-Metadaten
   const calculateReceiptTotals = () => {
     const totalArticles = editedArticles.length;
     
-    // Berechne Gesamtpreis: Menge × Gebindepreis (oder Preis falls vorhanden)
-    const totalAmount = editedArticles.reduce((sum, article) => {
+    // Berechne Summe aller Artikelpreise: Menge × Gebindepreis (oder Preis falls vorhanden)
+    const articlesTotal = editedArticles.reduce((sum, article) => {
       const quantity = article.quantity || 1;
       const price = article.price || (article.bundlePrice ? article.bundlePrice * quantity : 0);
       return sum + price;
     }, 0);
     
-    const vat19 = editedArticles.reduce((sum, article) => {
-      const vatRate = article.vatRate || 19;
-      if (vatRate === 19) {
-        const quantity = article.quantity || 1;
-        const grossPrice = article.price || (article.bundlePrice ? article.bundlePrice * quantity : 0);
-        const netPrice = grossPrice / 1.19;
-        return sum + (grossPrice - netPrice);
-      }
-      return sum;
-    }, 0);
+    // MwSt-Berechnung: Verwende vatRate jedes Artikels
+    // Berücksichtige ob Preise Netto oder Brutto sind
+    let vat7 = 0;
+    let vat19 = 0;
     
-    const vat7 = editedArticles.reduce((sum, article) => {
-      const vatRate = article.vatRate || 19;
-      if (vatRate === 7) {
-        const quantity = article.quantity || 1;
-        const grossPrice = article.price || (article.bundlePrice ? article.bundlePrice * quantity : 0);
-        const netPrice = grossPrice / 1.07;
-        return sum + (grossPrice - netPrice);
+    editedArticles.forEach(article => {
+      const quantity = article.quantity || 1;
+      const basePrice = article.price || (article.bundlePrice ? article.bundlePrice * quantity : 0);
+      const vatRate = article.vatRate || 19; // Standard 19% falls nicht gesetzt
+      
+      if (vatRate === 0) {
+        // Keine MwSt
+        return;
       }
-      return sum;
-    }, 0);
+      
+      let grossPrice: number;
+      let netPrice: number;
+      let vatAmount: number;
+      
+      if (nettoPrices) {
+        // Preise sind Netto: berechne Brutto
+        netPrice = basePrice;
+        grossPrice = basePrice * (1 + vatRate / 100);
+        vatAmount = grossPrice - netPrice;
+      } else {
+        // Preise sind Brutto: berechne Netto
+        grossPrice = basePrice;
+        netPrice = grossPrice / (1 + vatRate / 100);
+        vatAmount = grossPrice - netPrice;
+      }
+      
+      // Summiere nach MwSt-Satz
+      if (Math.abs(vatRate - 7) < 0.01) {
+        vat7 += vatAmount;
+      } else if (Math.abs(vatRate - 19) < 0.01) {
+        vat19 += vatAmount;
+      }
+      // Andere MwSt-Sätze werden aktuell nicht separat summiert
+    });
 
-    return { totalArticles, totalAmount, vat7, vat19 };
+    // Berechne Nettosumme und Rechnungsbetrag je nach Preisart
+    let netSum: number;
+    let grossTotal: number;
+    
+    if (nettoPrices) {
+      // Bei Netto-Preisen: articlesTotal ist die Nettosumme
+      netSum = articlesTotal;
+      grossTotal = netSum + vat7 + vat19; // Rechnungsbetrag = Nettosumme + MwSt
+    } else {
+      // Bei Brutto-Preisen: articlesTotal ist der Rechnungsbetrag
+      grossTotal = articlesTotal;
+      netSum = grossTotal - vat7 - vat19; // Nettosumme = Rechnungsbetrag - MwSt
+    }
+
+    return { totalArticles, netSum, vat7, vat19, grossTotal };
   };
   
   // Berechnete Werte (aktualisiert sich automatisch bei Änderungen)
   const calculatedTotals = useMemo(() => {
     return calculateReceiptTotals();
-  }, [editedArticles]);
+  }, [editedArticles, nettoPrices]);
   
   // Prüfe, ob Werte sich von Scan-Daten unterscheiden
-  const isDifferentFromScan = (field: 'totalAmount' | 'vat7' | 'vat19'): boolean => {
-    const calculated = calculatedTotals[field];
-    const scanned = scanTotals[field];
-    return Math.abs(calculated - scanned) > 0.01; // Toleranz für Rundungsfehler
+  const isDifferentFromScan = (field: 'grossTotal' | 'vat7' | 'vat19'): boolean => {
+    if (field === 'grossTotal') {
+      return Math.abs(calculatedTotals.grossTotal - scanTotals.totalAmount) > 0.01; // Toleranz für Rundungsfehler
+    } else {
+      const calculated = calculatedTotals[field];
+      const scanned = scanTotals[field];
+      return Math.abs(calculated - scanned) > 0.01; // Toleranz für Rundungsfehler
+    }
   };
 
   // Berechne Anzahl der vollständigen Artikel (aktualisiert sich automatisch)
@@ -1209,19 +2214,94 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     ).length;
   }, [editedArticles, receiptSupplierId, receiptSupplierSearchTerm]);
 
+  // Hilfsfunktion: Rechne Preise von Brutto zu Netto um (wenn nötig)
+  const convertPricesToNetto = (article: ReceiptArticle): { bundlePrice: number; pricePerUnit: number } => {
+    const vatRate = article.vatRate || 19; // Standard 19% falls nicht gesetzt
+    
+    // Wenn bereits Netto-Preise, keine Umrechnung nötig
+    if (nettoPrices || vatRate === 0) {
+      return {
+        bundlePrice: article.bundlePrice || 0,
+        pricePerUnit: article.pricePerUnit || 0
+      };
+    }
+    
+    // Umrechnung von Brutto zu Netto: Netto = Brutto / (1 + MwSt-Satz/100)
+    const bundlePriceBrutto = article.bundlePrice || 0;
+    const pricePerUnitBrutto = article.pricePerUnit || 0;
+    
+    const bundlePriceNetto = bundlePriceBrutto / (1 + vatRate / 100);
+    const pricePerUnitNetto = pricePerUnitBrutto / (1 + vatRate / 100);
+    
+    console.log(`🔄 [PREIS-UMRECHNUNG] Artikel "${article.name}": Brutto → Netto (${vatRate}%)`, {
+      bundlePrice: `${bundlePriceBrutto.toFixed(2)} → ${bundlePriceNetto.toFixed(2)}`,
+      pricePerUnit: `${pricePerUnitBrutto.toFixed(2)} → ${pricePerUnitNetto.toFixed(2)}`
+    });
+    
+    return {
+      bundlePrice: bundlePriceNetto,
+      pricePerUnit: pricePerUnitNetto
+    };
+  };
+
   const handleSave = async () => {
     try {
-      // Filtere nur vollständige Artikel
+      // Wenn Beleg noch nicht abgeschlossen ist, speichere nur processedOcrData
+      if (!isCompleted) {
+        console.log('💾 Speichere Beleg-Daten (noch nicht abgeschlossen)...');
+        
+        // Aktualisiere processedOcrData mit aktuellen Werten
+        const updatedReceiptData: ExtendedReceiptData = {
+          ...receiptData,
+          supplier: receiptSupplierId ? suppliers.find(s => s.id === receiptSupplierId)?.name || receiptData.supplier : receiptData.supplier,
+          supplierId: receiptSupplierId || receiptData.supplierId,
+          date: receiptDate || receiptData.date,
+          receiptNumber: receiptNumber || receiptData.receiptNumber,
+          articles: editedArticles,
+          totalArticles: editedArticles.length,
+          totalAmount: calculatedTotals.grossTotal,
+          vat7: calculatedTotals.vat7,
+          vat19: calculatedTotals.vat19,
+          isCompleted: false,
+          printListPosition: receiptData.printListPosition,
+          leftPanelWidth: leftPanelWidth,
+          rightPanelWidth: rightPanelWidth,
+          autoLinkPerformed: receiptData.autoLinkPerformed // Behalte Flag beim Speichern
+        };
+        
+        // Aktualisiere über onUpdateReceiptData
+        if (onUpdateReceiptData) {
+          await onUpdateReceiptData(updatedReceiptData);
+        }
+        
+        // Oder über onSaveReceipt wenn vorhanden
+        if (onSaveReceipt) {
+          await onSaveReceipt({ processedOcrData: updatedReceiptData });
+        }
+        
+        console.log('✅ Beleg-Daten gespeichert');
+        return; // Beende hier, da noch nicht abgeschlossen
+      }
+      
+      // Wenn Beleg abgeschlossen ist, übernehme Artikel und speichere receiptDetails
+      console.log('💾 Übernehme Artikel und schließe Beleg ab...');
+      
+      // Filtere vollständige Artikel für die Verarbeitung (ohne excludeFromUpdate)
       const completeArticles = editedArticles.filter(article => 
+        isArticleComplete(article) && !article.excludeFromUpdate
+      );
+      
+      // Alle vollständigen Artikel für receiptDetails (inklusive excludeFromUpdate)
+      const allCompleteArticlesForReceipt = editedArticles.filter(article => 
         isArticleComplete(article)
       );
 
-      if (completeArticles.length === 0) {
+      if (allCompleteArticlesForReceipt.length === 0) {
         alert('Keine vollständigen Artikel zum Übernehmen gefunden.');
         return;
       }
 
-      console.log(`💾 Übernehme ${completeArticles.length} vollständige Artikel...`);
+      console.log(`💾 Übernehme ${completeArticles.length} vollständige Artikel (${allCompleteArticlesForReceipt.length} insgesamt für ReceiptDetails)...`);
 
       const articlesToSave: Article[] = [];
       const articlesToUpdate: Article[] = [];
@@ -1241,6 +2321,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               ? [...existingNamesOCR, currentOCRName]
               : existingNamesOCR;
             
+            // Rechne Preise von Brutto zu Netto um, wenn nötig
+            const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
+            
             const updatedArticle: Article = {
               ...existingArticle,
               name: receiptArticle.name || existingArticle.name,
@@ -1249,13 +2332,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               supplierId: receiptSupplierId || existingArticle.supplierId,
               supplierArticleNumber: receiptArticle.supplierArticleNumber || existingArticle.supplierArticleNumber,
               bundleUnit: (receiptArticle.bundleUnit || existingArticle.bundleUnit) as Unit,
-              bundlePrice: receiptArticle.bundlePrice || existingArticle.bundlePrice,
+              bundlePrice: convertedBundlePrice,
               bundleEanCode: receiptArticle.bundleEanCode || existingArticle.bundleEanCode,
-              content: receiptArticle.content || existingArticle.content,
+              content: receiptArticle.content !== undefined && receiptArticle.content !== null ? receiptArticle.content : existingArticle.content,
               contentUnit: (receiptArticle.contentUnit || existingArticle.contentUnit) as Unit,
               contentEanCode: receiptArticle.contentEanCode || existingArticle.contentEanCode,
-              pricePerUnit: receiptArticle.pricePerUnit || existingArticle.pricePerUnit,
-              vatRate: receiptArticle.vatRate !== undefined ? receiptArticle.vatRate : existingArticle.vatRate,
+              pricePerUnit: convertedPricePerUnit,
+              accountingAccountNumber: receiptArticle.taxAccount || existingArticle.accountingAccountNumber, // SKR-Konto übernehmen
               allergens: receiptArticle.allergens || existingArticle.allergens,
               additives: receiptArticle.additives || existingArticle.additives,
               ingredients: receiptArticle.ingredients || existingArticle.ingredients,
@@ -1271,6 +2354,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           } else {
             console.warn(`⚠️ Verknüpfter Artikel mit ID ${receiptArticle.linkedArticleId} nicht gefunden. Wird als neuer Artikel angelegt.`);
             // Falls verknüpfter Artikel nicht gefunden, als neuen Artikel anlegen
+            // Rechne Preise von Brutto zu Netto um, wenn nötig
+            const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
+            
             const newArticle: Article = {
               id: UUIDUtils.generateId(),
               name: receiptArticle.name || '',
@@ -1279,13 +2365,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               supplierId: receiptSupplierId || '',
               supplierArticleNumber: receiptArticle.supplierArticleNumber || '',
               bundleUnit: (receiptArticle.bundleUnit || '') as Unit,
-              bundlePrice: receiptArticle.bundlePrice || 0,
+              bundlePrice: convertedBundlePrice,
               bundleEanCode: receiptArticle.bundleEanCode || '',
               content: receiptArticle.content || 0,
               contentUnit: (receiptArticle.contentUnit || '') as Unit,
               contentEanCode: receiptArticle.contentEanCode || '',
-              pricePerUnit: receiptArticle.pricePerUnit || 0,
-              vatRate: receiptArticle.vatRate || 19,
+              pricePerUnit: convertedPricePerUnit,
+              accountingAccountNumber: receiptArticle.taxAccount, // SKR-Konto übernehmen
               allergens: receiptArticle.allergens || [],
               additives: receiptArticle.additives || [],
               ingredients: receiptArticle.ingredients || '',
@@ -1313,6 +2399,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           }
         } else {
           // Neuen Artikel anlegen
+          // Rechne Preise von Brutto zu Netto um, wenn nötig
+          const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
+          
           const newArticle: Article = {
             id: UUIDUtils.generateId(),
             name: receiptArticle.name || '',
@@ -1321,13 +2410,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             supplierId: receiptSupplierId || '',
             supplierArticleNumber: receiptArticle.supplierArticleNumber || '',
             bundleUnit: (receiptArticle.bundleUnit || '') as Unit,
-            bundlePrice: receiptArticle.bundlePrice || 0,
+            bundlePrice: convertedBundlePrice,
             bundleEanCode: receiptArticle.bundleEanCode || '',
             content: receiptArticle.content || 0,
             contentUnit: (receiptArticle.contentUnit || '') as Unit,
             contentEanCode: receiptArticle.contentEanCode || '',
-            pricePerUnit: receiptArticle.pricePerUnit || 0,
-            vatRate: receiptArticle.vatRate || 19,
+            pricePerUnit: convertedPricePerUnit,
+            accountingAccountNumber: receiptArticle.taxAccount, // SKR-Konto übernehmen
             allergens: receiptArticle.allergens || [],
             additives: receiptArticle.additives || [],
             ingredients: receiptArticle.ingredients || '',
@@ -1385,12 +2474,93 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         });
       }
 
+      // Erstelle receiptDetails mit article IDs
+      // Warte kurz, damit die Artikel im State aktualisiert sind
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Sammle alle article IDs (sowohl neue als auch aktualisierte)
+      const allArticleIds = new Map<string, string>();
+      articlesToSave.forEach(article => {
+        // Finde das passende ReceiptArticle
+        const receiptArticle = completeArticles.find(ra => 
+          ra.name === article.name && 
+          (!ra.linkedArticleId || ra.linkedArticleId === article.id)
+        );
+        if (receiptArticle) {
+          allArticleIds.set(receiptArticle.name + (receiptArticle.supplierArticleNumber || ''), article.id);
+        }
+      });
+      articlesToUpdate.forEach(article => {
+        allArticleIds.set(article.id, article.id);
+      });
+      
+      const receiptDetails = {
+        lineItems: allCompleteArticlesForReceipt.map((receiptArticle): ReceiptLineItem => {
+          // Finde die article ID (nur für Artikel ohne excludeFromUpdate)
+          let articleId: string | undefined;
+          if (!receiptArticle.excludeFromUpdate) {
+            if (receiptArticle.linkedArticleId) {
+              articleId = receiptArticle.linkedArticleId;
+            } else {
+              // Suche in den neu gespeicherten Artikeln über Map
+              const key = receiptArticle.name + (receiptArticle.supplierArticleNumber || '');
+              articleId = allArticleIds.get(key);
+            }
+          }
+          // Für Artikel mit excludeFromUpdate bleibt articleId undefined
+          
+          return {
+            id: UUIDUtils.generateId(),
+            articleId: articleId,
+            description: receiptArticle.name || '',
+            quantity: receiptArticle.quantity || 1,
+            unit: receiptArticle.bundleUnit || 'Stück',
+            unitPrice: receiptArticle.bundlePrice || 0,
+            vatRate: receiptArticle.vatRate || 19,
+            taxAccount: receiptArticle.taxAccount,
+            total: (receiptArticle.bundlePrice || 0) * (receiptArticle.quantity || 1)
+          };
+        }),
+        currency: 'EUR',
+        totalNet: calculatedTotals.netSum,
+        totalVat: calculatedTotals.vat7 + calculatedTotals.vat19,
+        totalGross: calculatedTotals.grossTotal
+      };
+      
+      // Aktualisiere Receipt mit receiptDetails und isCompleted=true
+      // Speichere auch processedOcrData mit Layout-Breiten
+      const finalProcessedOcrData: ExtendedReceiptData = {
+        ...receiptData,
+        supplier: receiptSupplierId ? suppliers.find(s => s.id === receiptSupplierId)?.name || receiptData.supplier : receiptData.supplier,
+        supplierId: receiptSupplierId || receiptData.supplierId,
+        date: receiptDate || receiptData.date,
+        receiptNumber: receiptNumber || receiptData.receiptNumber,
+        articles: editedArticles,
+          totalArticles: editedArticles.length,
+          totalAmount: calculatedTotals.grossTotal,
+          vat7: calculatedTotals.vat7,
+          vat19: calculatedTotals.vat19,
+          isCompleted: true,
+        printListPosition: receiptData.printListPosition,
+        leftPanelWidth: leftPanelWidth,
+        rightPanelWidth: rightPanelWidth
+      };
+      
+      if (onSaveReceipt) {
+        await onSaveReceipt({
+          processedOcrData: finalProcessedOcrData,
+          receiptDetails: receiptDetails,
+          isCompleted: true
+        });
+      }
+      
       // Callback aufrufen falls vorhanden
       if (onSave) {
         onSave(completeArticles);
       }
 
       console.log(`✅ Erfolgreich ${articlesToSave.length} neue und ${articlesToUpdate.length} aktualisierte Artikel übernommen.`);
+      console.log(`✅ ReceiptDetails mit ${receiptDetails.lineItems.length} LineItems gespeichert.`);
       
       onClose();
     } catch (error: any) {
@@ -1399,14 +2569,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     }
   };
 
-  // Handler für Bild-Zoom und Drag
-  const handleImageWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newZoom = Math.max(0.5, Math.min(5, imageZoom + delta));
-    setImageZoom(newZoom);
-  };
-
+  // Handler für Bild-Drag
   const handleImageMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // Nur linke Maustaste
     setIsDragging(true);
@@ -1441,13 +2604,620 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     }
   }, [isDragging, handleImageMouseMove, handleImageMouseUp]);
 
-  // Reset Zoom und Position beim Öffnen
+  // Event-Listener für Wheel-Event (nicht-passiv, damit preventDefault funktioniert)
+  useEffect(() => {
+    if (!show) return;
+    
+    // Prüfe ob ein Bild vorhanden ist (für normale Bilder) oder Canvas-URLs für PDFs
+    const hasImage = !isPDF && imageUrl;
+    const hasPdfCanvas = isPDF && displayPdfCanvasUrls.length > 0;
+    
+    if (!hasImage && !hasPdfCanvas) {
+      console.log('⏭️ [WHEEL] Kein Bild/PDF-Canvas vorhanden, Wheel-Handler nicht registriert');
+      return;
+    }
+    
+    // Warte kurz, damit der Container gerendert ist
+    const timeoutId = setTimeout(() => {
+      const container = imageContainerRef.current;
+      if (!container) {
+        console.log('⚠️ [WHEEL] imageContainerRef.current ist null');
+        return;
+      }
+
+      console.log('✅ [WHEEL] Registriere Wheel-Handler für Bildvergrößerung');
+
+      const wheelHandler = (e: WheelEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setImageZoom(prevZoom => {
+          const newZoom = Math.max(0.5, Math.min(5, prevZoom + delta));
+          return newZoom;
+        });
+      };
+
+      // Speichere Handler in Ref für Cleanup
+      wheelHandlerRef.current = wheelHandler;
+      container.addEventListener('wheel', wheelHandler, { passive: false });
+    }, 100);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      // Entferne Event-Listener falls vorhanden
+      const container = imageContainerRef.current;
+      const wheelHandler = wheelHandlerRef.current;
+      if (container && wheelHandler) {
+        console.log('🧹 [WHEEL] Entferne Wheel-Handler');
+        container.removeEventListener('wheel', wheelHandler);
+        wheelHandlerRef.current = null;
+      }
+    };
+  }, [show, isPDF, imageUrl, displayPdfCanvasUrls.length]);
+
+  // Scroll zu ausgewähltem Element in Category-Dropdown
+  useEffect(() => {
+    if (showCategoryDropdown && categoryDropdownRef.current && selectedCategoryIndex >= 0) {
+      const dropdown = categoryDropdownRef.current;
+      const selectedElement = dropdown.children[selectedCategoryIndex] as HTMLElement;
+      if (selectedElement) {
+        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedCategoryIndex, showCategoryDropdown]);
+
+  // Scroll zu ausgewähltem Element in BundleUnit-Dropdown
+  useEffect(() => {
+    if (showBundleUnitDropdown && bundleUnitDropdownRef.current && selectedBundleUnitIndex >= 0) {
+      const dropdown = bundleUnitDropdownRef.current;
+      const selectedElement = dropdown.children[selectedBundleUnitIndex] as HTMLElement;
+      if (selectedElement) {
+        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedBundleUnitIndex, showBundleUnitDropdown]);
+
+  // Scroll zu ausgewähltem Element in ContentUnit-Dropdown
+  useEffect(() => {
+    if (showContentUnitDropdown && contentUnitDropdownRef.current && selectedContentUnitIndex >= 0) {
+      const dropdown = contentUnitDropdownRef.current;
+      const selectedElement = dropdown.children[selectedContentUnitIndex] as HTMLElement;
+      if (selectedElement) {
+        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedContentUnitIndex, showContentUnitDropdown]);
+
+  // Scroll zu ausgewähltem Element in TaxAccount-Dropdown
+  useEffect(() => {
+    if (showTaxAccountDropdown && taxAccountDropdownListRef.current && selectedTaxAccountIndex >= 0) {
+      const dropdown = taxAccountDropdownListRef.current;
+      const selectedElement = dropdown.children[selectedTaxAccountIndex] as HTMLElement;
+      if (selectedElement) {
+        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedTaxAccountIndex, showTaxAccountDropdown]);
+
+  // Scroll zu ausgewähltem Element in VatRate-Dropdown
+  useEffect(() => {
+    if (showVatRateDropdown && vatRateDropdownListRef.current && selectedVatRateIndex >= 0) {
+      const dropdown = vatRateDropdownListRef.current;
+      const selectedElement = dropdown.children[selectedVatRateIndex] as HTMLElement;
+      if (selectedElement) {
+        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedVatRateIndex, showVatRateDropdown]);
+
+  // Handler für Drag & Drop der Druck-Preview-Liste
+  const handlePrintListMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Für PDFs verwenden wir das Canvas-Bild, für normale Bilder das img-Element
+    const elementRef = isPDF && pdfCanvasUrls.length > 0 ? printPdfCanvasRef.current : printImageRef.current;
+    if (e.button !== 0 || !elementRef || !printPreviewImageSize) return; // Nur linke Maustaste
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPrintList(true);
+    
+    // Berechne Position relativ zum Bild/PDF
+    const elementRect = elementRef.getBoundingClientRect();
+    const scaleX = printPreviewImageSize.width / elementRect.width;
+    const scaleY = printPreviewImageSize.height / elementRect.height;
+    
+    // Aktuelle Position in Pixeln relativ zur angezeigten Größe
+    const currentDisplayX = (printPreviewListPosition.x / scaleX);
+    const currentDisplayY = (printPreviewListPosition.y / scaleY);
+    
+    printListDragStartRef.current = {
+      x: e.clientX - elementRect.left - currentDisplayX,
+      y: e.clientY - elementRect.top - currentDisplayY
+    };
+  }, [printPreviewListPosition, printPreviewImageSize, isPDF, pdfCanvasUrls.length]);
+
+  const handlePrintListMouseMove = useCallback((e: MouseEvent) => {
+    // Für PDFs verwenden wir das Canvas-Bild, für normale Bilder das img-Element
+    const elementRef = isPDF && pdfCanvasUrls.length > 0 ? printPdfCanvasRef.current : printImageRef.current;
+    if (!isDraggingPrintList || !elementRef || !printPreviewImageSize) return;
+    
+    // Berechne Position relativ zum Bild/PDF-Container
+    const container = document.querySelector('[data-print-preview-container]') as HTMLElement;
+    if (container && elementRef) {
+      const rect = container.getBoundingClientRect();
+      const elementRect = elementRef.getBoundingClientRect();
+      
+      // Berechne Position relativ zur angezeigten Größe
+      const displayX = Math.max(0, Math.min(elementRect.width - 250, e.clientX - elementRect.left - printListDragStartRef.current.x));
+      const displayY = Math.max(0, Math.min(elementRect.height - 200, e.clientY - elementRect.top - printListDragStartRef.current.y));
+      
+      // Konvertiere zur natürlichen Größe (Skalierung)
+      const scaleX = printPreviewImageSize.width / elementRect.width;
+      const scaleY = printPreviewImageSize.height / elementRect.height;
+      
+      const naturalX = displayX * scaleX;
+      const naturalY = displayY * scaleY;
+      
+      setPrintPreviewListPosition({ 
+        x: Math.max(0, Math.min(printPreviewImageSize.width - 250, naturalX)), 
+        y: Math.max(0, Math.min(printPreviewImageSize.height - 200, naturalY))
+      });
+    } else {
+      setPrintPreviewListPosition({
+        x: e.clientX - printListDragStartRef.current.x,
+        y: e.clientY - printListDragStartRef.current.y
+      });
+    }
+  }, [isDraggingPrintList, printPreviewImageSize, isPDF, pdfCanvasUrls.length]);
+
+  const handlePrintListMouseUp = useCallback(() => {
+    setIsDraggingPrintList(false);
+  }, []);
+
+  // Event-Listener für globales Mouse-Move und Mouse-Up für Druck-Preview
+  useEffect(() => {
+    if (isDraggingPrintList) {
+      document.addEventListener('mousemove', handlePrintListMouseMove);
+      document.addEventListener('mouseup', handlePrintListMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handlePrintListMouseMove);
+        document.removeEventListener('mouseup', handlePrintListMouseUp);
+      };
+    }
+  }, [isDraggingPrintList, handlePrintListMouseMove, handlePrintListMouseUp]);
+
+  // Druckfunktion
+  const handlePrint = useCallback(() => {
+    // Für PDFs: Verwende Canvas-URLs wenn verfügbar
+    if (isPDF) {
+      if (pdfCanvasUrls.length === 0 || !printPreviewImageSize) {
+        console.warn('⚠️ PDF-Canvas nicht verfügbar für Druck');
+        return;
+      }
+    } else {
+      // Für Bilder: Prüfe ob Bild und Größe verfügbar sind
+      if (!printImageRef.current || !printPreviewImageSize) {
+        console.warn('⚠️ Bildgröße nicht verfügbar für Druck');
+        return;
+      }
+    }
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    // Berechne Position relativ zur Größe (in Prozent für Skalierung)
+    const imageWidth = printPreviewImageSize.width;
+    const imageHeight = printPreviewImageSize.height;
+    const positionPercentX = (printPreviewListPosition.x / imageWidth) * 100;
+    const positionPercentY = (printPreviewListPosition.y / imageHeight) * 100;
+
+    console.log('🖨️ Druck-Position:', {
+      pixelPosition: printPreviewListPosition,
+      imageSize: printPreviewImageSize,
+      percentPosition: { x: positionPercentX, y: positionPercentY },
+      isPDF: isPDF
+    });
+
+    // Erstelle HTML-Inhalt für PDF (mehrere Canvas-Bilder, eine pro Seite) oder Bild
+    let receiptContent: string;
+    if (isPDF && pdfCanvasUrls.length > 0) {
+      // Für PDFs: Erstelle ein Container pro Seite mit img-Element
+      // Verwende die tatsächliche Bildhöhe für bessere Seitenumbrüche
+      // Konvertiere Pixel-Höhe zu einer relativen Einheit für bessere Druckkompatibilität
+      const pageHeightPx = printPreviewImageSize?.height || 1400;
+      const pageWidthPx = printPreviewImageSize?.width || 1000;
+      // Verwende eine feste Höhe in mm für bessere Browser-Kompatibilität
+      const pageHeightMm = (pageHeightPx * 0.264583).toFixed(2); // Pixel zu mm (96 DPI)
+      
+      // Einfacher Ansatz: Jedes Bild in einem eigenen Div mit natürlicher Größe
+      receiptContent = pdfCanvasUrls.map((url, index) => {
+        const isFirstPage = index === 0;
+        return `
+          <div class="receipt-page-wrapper" style="${!isFirstPage ? 'page-break-before: always;' : ''}">
+            <img 
+              src="${url}" 
+              alt="Beleg Seite ${index + 1}" 
+              class="receipt-image receipt-page" 
+              data-page-index="${index}" 
+            />
+          </div>
+        `;
+      }).join('');
+    } else {
+      receiptContent = `<img src="${imageUrl}" alt="Beleg" class="receipt-image" />`;
+    }
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Beleg mit Steuerkonten-Summen</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            @page {
+              margin: 0;
+              size: auto;
+              orphans: 0;
+              widows: 0;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              min-height: 100%;
+            }
+            @media print {
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: auto;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .print-container {
+                position: relative;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+              }
+              .receipt-image { 
+                width: 100%; 
+                height: auto;
+                display: block;
+                max-width: 100%;
+              }
+              .receipt-page-wrapper {
+                page-break-inside: avoid;
+                break-inside: avoid;
+                width: 100%;
+                display: block;
+                position: relative;
+                page-break-after: auto;
+                max-height: 100vh; /* ANPASSBAR: Höhe der Seite - z.B. 100vh, 95vh, 297mm (A4) */
+                overflow: hidden;
+              }
+              .receipt-page-wrapper:not(:first-child) {
+                page-break-before: always;
+              }
+              .receipt-page {
+                width: 100%;
+                height: auto;
+                max-height: 100vh; /* ANPASSBAR: Maximale Höhe des Images - z.B. 100vh, 95vh, 297mm (A4) */
+                display: block;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                object-fit: contain;
+              }
+              .tax-account-list {
+                position: absolute;
+                left: ${positionPercentX}%;
+                top: ${positionPercentY}%;
+                transform: translate(0, 0);
+                background: white !important;
+                padding: 6px;
+                border: 1px solid #000;
+                font-family: Arial, sans-serif;
+                font-size: 7px;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                min-width: 120px;
+                z-index: 1000;
+              }
+              .tax-account-title {
+                font-weight: bold;
+                margin-bottom: 5px;
+                font-size: 8px;
+              }
+              .tax-account-item {
+                margin: 3px 0;
+                padding: 2px 0;
+                border-bottom: 1px solid #ccc;
+              }
+              .tax-account-item:last-child {
+                border-bottom: none;
+              }
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              min-height: 100%;
+            }
+            .print-container {
+              position: relative;
+              display: block;
+              width: 100%;
+              margin: 0;
+              padding: 0;
+              min-height: 100%;
+            }
+            .receipt-page-wrapper {
+              width: 100%;
+              display: block;
+              position: relative;
+              margin-bottom: 0;
+            }
+            .receipt-image {
+              width: 100%;
+              height: auto;
+              display: block;
+              max-width: 100%;
+            }
+            .tax-account-list {
+              position: absolute;
+              left: ${positionPercentX}%;
+              top: ${positionPercentY}%;
+              transform: translate(0, 0);
+              background: rgba(255, 255, 255, 0.95);
+              padding: 6px;
+              border: 1px solid #000;
+              font-family: Arial, sans-serif;
+              font-size: 7px;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+              min-width: 120px;
+              z-index: 1000;
+            }
+            .tax-account-title {
+              font-weight: bold;
+              margin-bottom: 5px;
+              font-size: 8px;
+            }
+            .tax-account-item {
+              margin: 3px 0;
+              padding: 2px 0;
+              border-bottom: 1px solid #ccc;
+            }
+            .tax-account-item:last-child {
+              border-bottom: none;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-container">
+            ${isPDF && pdfCanvasUrls.length > 0 
+              ? pdfCanvasUrls.map((url, index) => `
+                <div class="receipt-page-wrapper" style="${index > 0 ? 'page-break-before: always;' : ''}">
+                  <div style="position: relative; width: 100%;">
+                    <img 
+                      src="${url}" 
+                      alt="Beleg Seite ${index + 1}" 
+                      class="receipt-image receipt-page" 
+                      data-page-index="${index}" 
+                    />
+                    ${index === 0 ? `
+                      <div class="tax-account-list">
+                        <div class="tax-account-title">Artikelsummen nach Steuerkonten:</div>
+                        ${taxAccountTotals.map(item => `
+                          <div class="tax-account-item">
+                            ${item.total.toFixed(2).replace('.', ',')} € - ${item.accountNumber} - ${item.accountName}
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              `).join('')
+              : `
+                ${receiptContent}
+                <div class="tax-account-list">
+                  <div class="tax-account-title">Artikelsummen nach Steuerkonten:</div>
+                  ${taxAccountTotals.map(item => `
+                    <div class="tax-account-item">
+                      ${item.total.toFixed(2).replace('.', ',')} € - ${item.accountNumber} - ${item.accountName}
+                    </div>
+                  `).join('')}
+                </div>
+              `
+            }
+          </div>
+          <script>
+            // Warte bis alle Bilder geladen sind, dann drucken (nur einmal)
+            (function() {
+              let printCalled = false;
+              let loadedImages = 0;
+              
+              function callPrintOnce() {
+                if (!printCalled) {
+                  printCalled = true;
+                  setTimeout(function() {
+                    window.print();
+                  }, 300);
+                }
+              }
+              
+              function checkAllLoaded() {
+                loadedImages++;
+                const totalImages = document.querySelectorAll('.receipt-image').length;
+                if (loadedImages >= totalImages && totalImages > 0) {
+                  callPrintOnce();
+                }
+              }
+              
+              // Warte bis DOM geladen ist
+              if (document.readyState === 'complete') {
+                const images = document.querySelectorAll('.receipt-image');
+                if (images.length === 0) {
+                  callPrintOnce();
+                } else {
+                  images.forEach(function(img) {
+                    if (img.complete) {
+                      checkAllLoaded();
+                    } else {
+                      img.onload = checkAllLoaded;
+                      img.onerror = checkAllLoaded; // Auch bei Fehler weitermachen
+                    }
+                  });
+                }
+              } else {
+                window.addEventListener('load', function() {
+                  const images = document.querySelectorAll('.receipt-image');
+                  if (images.length === 0) {
+                    callPrintOnce();
+                  } else {
+                    images.forEach(function(img) {
+                      if (img.complete) {
+                        checkAllLoaded();
+                      } else {
+                        img.onload = checkAllLoaded;
+                        img.onerror = checkAllLoaded;
+                      }
+                    });
+                  }
+                });
+              }
+            })();
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  }, [imageUrl, pdfCanvasUrls, taxAccountTotals, printPreviewListPosition, printPreviewImageSize, isPDF]);
+
+  // Reset Zoom und Position beim Öffnen, Wiederherstellen der Druck-Position
+  // WICHTIG: Nur beim Öffnen (show wird true), nicht bei jeder receiptData-Änderung!
   useEffect(() => {
     if (show) {
-      setImageZoom(1);
-      setImagePosition({ x: 0, y: 0 });
+      // Wiederherstelle gespeicherte Bildansicht-Einstellungen
+      if (receiptData.imageZoom !== undefined) {
+        setImageZoom(receiptData.imageZoom);
+        prevImageZoomRef.current = receiptData.imageZoom;
+      } else {
+        setImageZoom(1);
+        prevImageZoomRef.current = 1;
+      }
+      
+      if (receiptData.imagePosition) {
+        setImagePosition(receiptData.imagePosition);
+        prevImagePositionRef.current = receiptData.imagePosition;
+      } else {
+        setImagePosition({ x: 0, y: 0 });
+        prevImagePositionRef.current = { x: 0, y: 0 };
+      }
+      
+      // Wiederherstelle gespeicherte Druck-Position
+      if (receiptData.printListPosition) {
+        setPrintPreviewListPosition(receiptData.printListPosition);
+      } else {
+        setPrintPreviewListPosition({ x: 50, y: 50 });
+      }
+      
+      // Wiederherstelle Layout-Breiten
+      if (receiptData.leftPanelWidth !== undefined) {
+        setLeftPanelWidth(receiptData.leftPanelWidth);
+      } else {
+        setLeftPanelWidth(300); // Standard-Breite
+      }
+      if (receiptData.rightPanelWidth !== undefined) {
+        setRightPanelWidth(receiptData.rightPanelWidth);
+      } else {
+        setRightPanelWidth(400); // Standard-Breite
+      }
+      
+      // Wiederherstelle Fertig-Status
+      setIsCompleted(receiptData.isCompleted || false);
     }
-  }, [show]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]); // Nur bei show-Änderung, nicht bei receiptData-Änderungen!
+  
+  // Speichere Position beim Ändern (nur wenn sie sich wirklich geändert hat)
+  useEffect(() => {
+    // Prüfe ob Position sich geändert hat (nicht beim ersten Laden)
+    if (prevPositionRef.current && 
+        onUpdateReceiptData && 
+        printPreviewListPosition &&
+        (prevPositionRef.current.x !== printPreviewListPosition.x || 
+         prevPositionRef.current.y !== printPreviewListPosition.y)) {
+      // Aktualisiere nur die Position, nicht die gesamten Daten
+      if (onUpdateReceiptDataRef.current) {
+        onUpdateReceiptDataRef.current({
+          ...receiptDataRef.current,
+          printListPosition: printPreviewListPosition
+        });
+      }
+    }
+    prevPositionRef.current = printPreviewListPosition;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printPreviewListPosition]); // Nur bei Änderung der Position, nicht bei jeder receiptData-Änderung
+
+  // Speichere Fertig-Status beim Ändern
+  useEffect(() => {
+    // Prüfe ob Status sich geändert hat (nicht beim ersten Laden)
+    if (prevCompletedRef.current !== null && 
+        onUpdateReceiptData && 
+        prevCompletedRef.current !== isCompleted) {
+      // Aktualisiere nur den Status, nicht die gesamten Daten
+      if (onUpdateReceiptDataRef.current) {
+        onUpdateReceiptDataRef.current({
+          ...receiptDataRef.current,
+          isCompleted: isCompleted
+        });
+      }
+    }
+    prevCompletedRef.current = isCompleted;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCompleted]); // Nur bei Änderung des Status, nicht bei jeder receiptData-Änderung
+
+  // Speichere Bild-Zoom beim Ändern (nur wenn er sich wirklich geändert hat)
+  useEffect(() => {
+    // Prüfe ob Zoom sich geändert hat (nicht beim ersten Laden)
+    if (prevImageZoomRef.current !== null && 
+        onUpdateReceiptData && 
+        prevImageZoomRef.current !== imageZoom) {
+      // Aktualisiere nur den Zoom, nicht die gesamten Daten
+      if (onUpdateReceiptDataRef.current) {
+        onUpdateReceiptDataRef.current({
+          ...receiptDataRef.current,
+          imageZoom: imageZoom
+        });
+      }
+    }
+    prevImageZoomRef.current = imageZoom;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageZoom]); // Nur bei Änderung des Zooms, nicht bei jeder receiptData-Änderung
+
+  // Speichere Bild-Position beim Ändern (nur wenn sie sich wirklich geändert hat)
+  useEffect(() => {
+    // Prüfe ob Position sich geändert hat (nicht beim ersten Laden)
+    if (prevImagePositionRef.current && 
+        onUpdateReceiptData && 
+        imagePosition &&
+        (prevImagePositionRef.current.x !== imagePosition.x || 
+         prevImagePositionRef.current.y !== imagePosition.y)) {
+      // Aktualisiere nur die Position, nicht die gesamten Daten
+      if (onUpdateReceiptDataRef.current) {
+        onUpdateReceiptDataRef.current({
+          ...receiptDataRef.current,
+          imagePosition: imagePosition
+        });
+      }
+    }
+    prevImagePositionRef.current = imagePosition;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imagePosition]); // Nur bei Änderung der Position, nicht bei jeder receiptData-Änderung
 
   if (!show) return null;
 
@@ -1467,16 +3237,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     >
       <div className="w-100" style={{ maxWidth: '95%', maxHeight: '90vh' }}>
         <div className="d-flex" style={{ height: '100%', maxHeight: '90vh' }}>
-          {/* Linke Seite: Artikel-Liste */}
+          {/* Linke Seite: Artikel-Liste (Beleg-Übersicht) */}
           <div 
             className="card"
             style={{
-              width: '300px',
-              backgroundColor: colors.card,
-              border: `1px solid ${colors.cardBorder}`,
+              width: `${leftPanelWidth}px`,
               display: 'flex',
               flexDirection: 'column',
-              marginRight: '1rem',
               flexShrink: 0,
               maxHeight: '90vh',
               height: '90vh'
@@ -1492,13 +3259,42 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             >
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <h5 className="mb-0 form-label-themed">Beleg-Übersicht</h5>
+                {/* Netto/Brutto Toggle-Button */}
+                <button
+                  type="button"
+                  className="btn btn-link p-0"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleNettoPricesChange(!nettoPrices);
+                  }}
+                  style={{
+                    color: nettoPrices ? (colors.accent || colors.primary) : colors.textSecondary,
+                    fontSize: '1.2rem',
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: 'transparent',
+                    padding: '0.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'color 0.2s ease'
+                  }}
+                  title={nettoPrices ? 'Netto-Preise (ohne MwSt) - Klicken für Brutto-Preise' : 'Brutto-Preise (mit MwSt) - Klicken für Netto-Preise'}
+                >
+                  {nettoPrices ? (
+                    <FaPercent />
+                  ) : (
+                    <FaEuroSign />
+                  )}
+                </button>
               </div>
               {/* Lieferant • Belegdatum - Fix im Header */}
               <div 
                 className="pt-2"
                 style={{ borderTop: `1px solid var(--theme-card-border)` }}
               >
-                <div style={{ fontSize: '0.9rem', color: colors.text }}>
+                <div className="text-theme-primary" style={{ fontSize: '0.9rem' }}>
                   <span style={{ fontWeight: 'bold' }}>
                     {receiptData.supplier || 'Nicht erkannt'}
                   </span>
@@ -1507,7 +3303,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                     {formatDate(receiptDate || receiptData.date)}
                   </span>
                   {receiptNumber && (
-                    <div style={{ fontSize: '0.75rem', color: colors.textSecondary, marginTop: '0.25rem' }}>
+                    <div className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
                       Belegnummer: {receiptNumber}
                     </div>
                   )}
@@ -1526,54 +3322,46 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             >
 
               {/* Artikel-Liste */}
-              <div className="mb-3">
+              <div className="card-list">
                 {editedArticles.map((article, index) => (
                   <div
                     key={index}
+                    className={`list-group-item ${selectedArticleIndex === index ? 'active' : ''}`}
                     onClick={() => setSelectedArticleIndex(index)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      const updatedArticles = [...editedArticles];
+                      updatedArticles[index] = {
+                        ...updatedArticles[index],
+                        excludeFromUpdate: !updatedArticles[index].excludeFromUpdate
+                      };
+                      setEditedArticles(updatedArticles);
+                    }}
                     style={{
-                      padding: '0.75rem',
-                      marginBottom: '0.5rem',
-                      border: `1px solid ${colors.cardBorder}`,
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      backgroundColor: selectedArticleIndex === index ? (colors.accent || colors.primary) + '20' : colors.light,
-                      transition: 'background-color 0.2s'
+                      opacity: article.excludeFromUpdate ? 0.5 : 1,
+                      cursor: 'pointer'
                     }}
-                    onMouseEnter={(e) => {
-                      if (selectedArticleIndex !== index) {
-                        e.currentTarget.style.backgroundColor = colors.secondary;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedArticleIndex !== index) {
-                        e.currentTarget.style.backgroundColor = colors.light;
-                      }
-                    }}
+                    title={article.excludeFromUpdate ? 'Dieser Artikel wird nicht mit den Stammdaten aktualisiert' : 'Doppelklick zum Ausblenden beim Update'}
                   >
                     {/* Zeile 1: Artikelbezeichnung mit Verknüpfungs-Status */}
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', color: colors.text, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {article.name || 'Unbenannt'}
-                      {article.linkedArticleId && (
-                        <FaCheck style={{ color: '#28a745', fontSize: '0.9rem' }} title="Mit Artikelstamm verknüpft" />
-                      )}
-                      {isArticleComplete(article) && !article.linkedArticleId && (
-                        <FaExclamationTriangle style={{ color: colors.accent || '#ffc107', fontSize: '0.9rem' }} title="Vollständig - wird als neuer Artikel angelegt" />
-                      )}
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="text-theme-primary" style={{ fontWeight: 'bold' }}>{article.name || 'Unbenannt'}</span>
+                        {article.linkedArticleId && (
+                          <FaCheck style={{ fontSize: '0.9rem', color: '#28a745' }} title="Mit Artikelstamm verknüpft" />
+                        )}
+                        {isArticleComplete(article) && !article.linkedArticleId && (
+                          <FaExclamationTriangle style={{ fontSize: '0.9rem', color: colors.accent || '#ffc107' }} title="Vollständig - wird als neuer Artikel angelegt" />
+                        )}
+                      </div>
+                      <span className="badge" style={{ fontSize: '0.7em', padding: '0.15rem 0.5rem' }}>
+                        {article.vatRate === 7 ? '2' : article.vatRate === 19 ? '1' : article.vatRate === 0 ? '0' : `${article.vatRate || 19}%`}
+                      </span>
                     </div>
                     
-                    {/* Zeile 2: Menge x Gebindeeinheit à Einzelpreis = Gesamtpreis MwSt-Rate */}
-                    <div style={{ fontSize: '0.85rem', marginBottom: '0.25rem', color: colors.textSecondary, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>
-                        {article.quantity || 1} × 1 {article.bundleUnit || 'Stück'} à {formatPrice(article.bundlePrice || 0)} = <strong>{formatPrice(article.price || 0)}</strong>
-                      </span>
-                      <span style={{ fontWeight: 'bold', color: colors.text }}>
-                        {(() => {
-                          // Mappe MwSt-Satz auf Rate: 19% = 1, 7% = 2
-                          const vatRate = article.vatRate || 19;
-                          return vatRate === 7 ? '2' : '1';
-                        })()}
-                      </span>
+                    {/* Zeile 2: Menge x Gebindeeinheit à Einzelpreis = Gesamtpreis */}
+                    <div className="text-sm text-muted">
+                      {article.quantity || 1} × 1 {article.bundleUnit || 'Stück'} à {formatPrice(article.bundlePrice || 0)} = <strong>{formatPrice(article.price || 0)}</strong>
                     </div>
                   </div>
                 ))}
@@ -1588,26 +3376,82 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               }}
             >
               <div style={{ fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                <div className="d-flex justify-content-between">
+                <div 
+                  className="d-flex justify-content-between align-items-center"
+                  onMouseEnter={() => setShowArticleCountControls(true)}
+                  onMouseLeave={() => setShowArticleCountControls(false)}
+                  style={{ position: 'relative' }}
+                >
                   <span style={{ color: colors.textSecondary }}>Anzahl Einzelposten:</span>
-                  <strong style={{ color: colors.text }}>{calculatedTotals.totalArticles}</strong>
+                  <div className="d-flex align-items-center gap-2" style={{ position: 'relative' }}>
+                    {showArticleCountControls && (
+                      <>
+                        <button
+                          className="btn btn-link p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveArticle();
+                          }}
+                          disabled={editedArticles.length <= 1}
+                          style={{ 
+                            color: editedArticles.length <= 1 ? colors.textSecondary : colors.text,
+                            cursor: editedArticles.length <= 1 ? 'not-allowed' : 'pointer',
+                            padding: '0.125rem',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                          title="Artikel entfernen"
+                        >
+                          <FaMinus size={12} />
+                        </button>
+                      </>
+                    )}
+                    <strong style={{ color: colors.text, minWidth: '2rem', textAlign: 'center' }}>
+                      {calculatedTotals.totalArticles}
+                    </strong>
+                    {showArticleCountControls && (
+                      <button
+                        className="btn btn-link p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddArticle();
+                        }}
+                        style={{ 
+                          color: colors.text,
+                          cursor: 'pointer',
+                          padding: '0.125rem',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="Neuen Artikel hinzufügen"
+                      >
+                        <FaPlus size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="d-flex justify-content-between mt-1">
-                  <span style={{ color: colors.textSecondary }}>Gesamtsumme:</span>
-                  <strong 
-                    style={{ 
-                      color: colors.text,
-                      backgroundColor: isDifferentFromScan('totalAmount') ? (colors.accent || '#ffc107') + '40' : 'transparent',
-                      padding: isDifferentFromScan('totalAmount') ? '0.125rem 0.25rem' : '0',
-                      borderRadius: isDifferentFromScan('totalAmount') ? '0.25rem' : '0'
-                    }}
-                    title={isDifferentFromScan('totalAmount') ? `Scan: ${formatPrice(scanTotals.totalAmount)}` : ''}
-                  >
-                    {formatPrice(calculatedTotals.totalAmount)}
+                  <span style={{ color: colors.textSecondary }}>Nettosumme:</span>
+                  <strong style={{ color: colors.text }}>
+                    {formatPrice(calculatedTotals.netSum)}
                   </strong>
                 </div>
                 <div className="d-flex justify-content-between mt-1">
-                  <span style={{ color: colors.textSecondary }}>2 USt 7%:</span>
+                  <span style={{ color: colors.textSecondary }}>1 USt. 19%:</span>
+                  <strong 
+                    style={{ 
+                      color: colors.text,
+                      backgroundColor: isDifferentFromScan('vat19') ? (colors.accent || '#ffc107') + '40' : 'transparent',
+                      padding: isDifferentFromScan('vat19') ? '0.125rem 0.25rem' : '0',
+                      borderRadius: isDifferentFromScan('vat19') ? '0.25rem' : '0'
+                    }}
+                    title={isDifferentFromScan('vat19') ? `Scan: ${formatPrice(scanTotals.vat19)}` : ''}
+                  >
+                    {formatPrice(calculatedTotals.vat19)}
+                  </strong>
+                </div>
+                <div className="d-flex justify-content-between mt-1">
+                  <span style={{ color: colors.textSecondary }}>2 USt. 7%:</span>
                   <strong 
                     style={{ 
                       color: colors.text,
@@ -1621,33 +3465,60 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                   </strong>
                 </div>
                 <div className="d-flex justify-content-between mt-1">
-                  <span style={{ color: colors.textSecondary }}>1 USt 19%:</span>
+                  <span style={{ color: colors.textSecondary }}>Rechnungsbetrag inkl. MwSt.:</span>
                   <strong 
                     style={{ 
                       color: colors.text,
-                      backgroundColor: isDifferentFromScan('vat19') ? (colors.accent || '#ffc107') + '40' : 'transparent',
-                      padding: isDifferentFromScan('vat19') ? '0.125rem 0.25rem' : '0',
-                      borderRadius: isDifferentFromScan('vat19') ? '0.25rem' : '0'
+                      backgroundColor: isDifferentFromScan('grossTotal') ? (colors.accent || '#ffc107') + '40' : 'transparent',
+                      padding: isDifferentFromScan('grossTotal') ? '0.125rem 0.25rem' : '0',
+                      borderRadius: isDifferentFromScan('grossTotal') ? '0.25rem' : '0'
                     }}
-                    title={isDifferentFromScan('vat19') ? `Scan: ${formatPrice(scanTotals.vat19)}` : ''}
+                    title={isDifferentFromScan('grossTotal') ? `Scan: ${formatPrice(scanTotals.totalAmount)}` : ''}
                   >
-                    {formatPrice(calculatedTotals.vat19)}
+                    {formatPrice(calculatedTotals.grossTotal)}
                   </strong>
                 </div>
               </div>
             </div>
           </div>
+          
+          {/* Resize-Handle zwischen Beleg-Übersicht und Artikel bearbeiten */}
+          <div
+            onMouseDown={handleLeftResizeStart}
+            style={{
+              width: '8px',
+              cursor: 'col-resize',
+              backgroundColor: isResizingLeft ? colors.primary : 'transparent',
+              flexShrink: 0,
+              position: 'relative',
+              margin: '0',
+              transition: 'background-color 0.2s'
+            }}
+            title="Ziehen zum Anpassen der Breite"
+          >
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '2px',
+                height: '40px',
+                backgroundColor: colors.cardBorder || '#dee2e6',
+                borderRadius: '1px'
+              }}
+            />
+          </div>
 
-          {/* Rechte Seite: Artikelformular */}
+          {/* Mitte: Artikelformular (Artikel bearbeiten) */}
           <div 
             className="card flex-grow-1"
             style={{
-              backgroundColor: colors.card,
-              border: `1px solid ${colors.cardBorder}`,
               display: 'flex',
               flexDirection: 'column',
               maxHeight: '90vh',
-              height: '90vh'
+              height: '90vh',
+              minWidth: '400px' // Minimale Breite für Artikelformular
             }}
           >
             <div className="card-header d-flex justify-content-between align-items-center">
@@ -2036,51 +3907,15 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                         Menge
                       </label>
                       <input
+                        ref={quantityInputRef}
                         type="number"
                         className="form-control form-control-themed text-center"
                         value={editedArticles[selectedArticleIndex]?.quantity || 1}
-                        onInput={(e) => {
-                          // Erkenne Stepper-Pfeile: Vergleiche mit vorherigem Wert
-                          const input = e.target as HTMLInputElement;
-                          const newValue = parseFloat(input.value);
-                          const previousValue = previousQuantityRef.current;
-                          
-                          if (!isNaN(newValue)) {
-                            // Wenn die Änderung genau 0.01 oder sehr klein ist (Stepper-Pfeil mit altem step),
-                            // oder wenn der Wert sich um genau 1 geändert hat (Stepper-Pfeil mit step="1"),
-                            // aber der neue Wert keine ganze Zahl ist, dann runden wir auf ganze Zahlen
-                            const diff = Math.abs(newValue - previousValue);
-                            
-                            // Stepper-Pfeil erkannt: wenn die Änderung sehr klein ist (0.01) ODER
-                            // wenn der neue Wert keine ganze Zahl ist und sich um ~1 geändert hat
-                            if ((diff > 0 && diff < 0.1) || (diff >= 0.9 && diff <= 1.1 && newValue % 1 !== 0)) {
-                              const roundedValue = Math.round(newValue);
-                              input.value = roundedValue.toString();
-                              const updatedArticles = [...editedArticles];
-                              updatedArticles[selectedArticleIndex] = {
-                                ...updatedArticles[selectedArticleIndex],
-                                quantity: roundedValue
-                              };
-                              setEditedArticles(updatedArticles);
-                              
-                              // Berechne Gesamtpreis neu
-                              const currentArticle = updatedArticles[selectedArticleIndex];
-                              if (currentArticle.bundlePrice) {
-                                const newPrice = currentArticle.bundlePrice * roundedValue;
-                                updatedArticles[selectedArticleIndex] = {
-                                  ...currentArticle,
-                                  price: newPrice
-                                };
-                                setEditedArticles(updatedArticles);
-                              }
-                              previousQuantityRef.current = roundedValue;
-                            } else {
-                              previousQuantityRef.current = newValue;
-                            }
-                          }
-                        }}
+                        min="1"
+                        step="1"
+                        tabIndex={1}
                         onChange={(e) => {
-                          const newQuantity = parseFloat(e.target.value) || 1;
+                          const newQuantity = Math.max(1, Math.round(parseFloat(e.target.value) || 1));
                           const updatedArticles = [...editedArticles];
                           updatedArticles[selectedArticleIndex] = {
                             ...updatedArticles[selectedArticleIndex],
@@ -2151,8 +3986,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                             setEditedArticles(updatedArticles);
                           }
                         }}
-                        min="0.01"
-                        step="1"
                       />
                     </div>
                     <div className="w-full md:w-5/12 px-2 mb-3">
@@ -2165,6 +3998,11 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                   className={`form-control form-control-themed ${isFieldInvalid('name', articleForm.name) ? 'is-invalid' : ''}`}
                                   value={articleForm.name}
                                   onChange={(e) => handleArticleNameChangeWithCategory(e.target.value)}
+                                  onFocus={(e) => {
+                                    // Cursor am Anfang positionieren, ohne Text zu markieren
+                                    e.target.setSelectionRange(0, 0);
+                                  }}
+                                  tabIndex={2}
                                   required
                                 />
                         <button
@@ -2172,10 +4010,15 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                           className="btn btn-outline-input"
                           title="Artikel aus Bestand übernehmen"
                           onClick={() => {
-                            // Setze Suchbegriff auf OCR-Namen für automatische Zuordnung
+                            // Setze Suchbegriff auf längstes Wort aus Artikelname für automatische Zuordnung
                             const currentArticle = editedArticles[selectedArticleIndex];
-                            const searchTerm = currentArticle.nameOCR || currentArticle.name || '';
-                            setArticleSearchTerm(searchTerm);
+                            const articleName = currentArticle.nameOCR || currentArticle.name || '';
+                            // Extrahiere das längste Wort aus dem Artikelnamen
+                            const words = articleName.trim().split(/\s+/).filter(word => word.length > 0);
+                            const longestWord = words.length > 0 
+                              ? words.reduce((longest, word) => word.length > longest.length ? word : longest, words[0])
+                              : '';
+                            setArticleSearchTerm(longestWord);
                             setShowArticleSearchModal(true);
                           }}
                         >
@@ -2193,13 +4036,20 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                           className="form-control"
                           value={articleForm.category}
                           onChange={(e) => handleCategoryInputChange(e.target.value)}
-                          onFocus={() => setShowCategoryDropdown(true)}
+                          onFocus={() => {
+                            setShowCategoryDropdown(true);
+                            setSelectedCategoryIndex(0); // Initialisiere auf erste Option
+                          }}
                           onBlur={handleCategoryInputBlur}
                           onKeyDown={handleCategoryKeyDown}
+                          tabIndex={3}
                           placeholder="Kategorie auswählen oder eingeben..."
                         />
                         {showCategoryDropdown && (
-                          <div className="absolute w-full" style={{
+                          <div 
+                            ref={categoryDropdownRef}
+                            className="absolute w-full" 
+                            style={{
                             top: '100%',
                             left: 0,
                             zIndex: 1000,
@@ -2266,82 +4116,397 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                     </div>
                     <div className="md:w-4/12 px-2 mb-3">
                       <label className="form-label">
-                        Lieferanten-Artikelnummer
+                        Artikelnummer
                       </label>
                       <input
                         type="text"
                         className="form-control"
                         value={articleForm.supplierArticleNumber}
                         onChange={(e) => setArticleForm(prev => ({ ...prev, supplierArticleNumber: e.target.value }))}
+                        tabIndex={4}
                       />
                     </div>
-                    <div className="md:w-1/6 px-2 mb-3">
-                      <label className="form-label text-center block">
-                        MwSt-Satz
+                    <div className="md:w-1/3 px-2 mb-3">
+                      <label className="form-label block">
+                        Steuerkonto ({selectedChartId.toUpperCase().replace(/SKR(\d)/, 'SKR $1')})
                       </label>
-                      <div className="relative">
+                      <div className="relative" ref={taxAccountDropdownRef}>
                         <div className="input-group">
                           <input
                             type="text"
-                            className="form-control form-control-themed text-center"
-                            value={`${articleForm.vatRate}%`}
-                            onClick={() => setShowVatRateDropdown(true)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                setShowVatRateDropdown(!showVatRateDropdown);
+                            className="form-control form-control-themed"
+                            tabIndex={5}
+                            value={showTaxAccountDropdown || taxAccountSearchTerm ? taxAccountSearchTerm : (selectedTaxAccount ? (() => {
+                              const account = accountingAccounts.find(acc => acc.number === selectedTaxAccount) || 
+                                            SKR3_TAX_ACCOUNTS.find(acc => acc.number === selectedTaxAccount);
+                              return account ? `${account.number} - ${account.name}` : selectedTaxAccount;
+                            })() : '')}
+                            onClick={() => {
+                              setShowTaxAccountDropdown(true);
+                              setSelectedTaxAccountIndex(0); // Initialisiere auf erste Option
+                              if (selectedTaxAccount) {
+                                // Setze das ausgewählte Konto zurück, damit der Benutzer neu suchen kann
+                                setSelectedTaxAccount('');
+                                setTaxAccountSearchTerm('');
                               }
                             }}
-                            readOnly
-                            style={{ cursor: 'pointer' }}
+                            onFocus={() => {
+                              setShowTaxAccountDropdown(true);
+                              setSelectedTaxAccountIndex(0); // Initialisiere auf erste Option
+                            }}
+                            onChange={(e) => {
+                              setTaxAccountSearchTerm(e.target.value);
+                              setShowTaxAccountDropdown(true);
+                              setSelectedTaxAccountIndex(0); // Reset auf erste Option bei Eingabe
+                              // Setze das ausgewählte Konto zurück, wenn der Benutzer tippt
+                              if (selectedTaxAccount) {
+                                setSelectedTaxAccount('');
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              const accountsToShow = accountingAccounts.length > 0 ? accountingAccounts : SKR3_TAX_ACCOUNTS;
+                              const filtered = accountsToShow.filter(account => {
+                                if (!taxAccountSearchTerm) return true;
+                                const searchLower = taxAccountSearchTerm.toLowerCase();
+                                return account.number.toLowerCase().includes(searchLower) || 
+                                       account.name.toLowerCase().includes(searchLower);
+                              });
+
+                              switch (e.key) {
+                                case 'ArrowDown':
+                                  e.preventDefault();
+                                  setShowTaxAccountDropdown(true);
+                                  setSelectedTaxAccountIndex(prev => {
+                                    if (prev < filtered.length - 1) return prev + 1;
+                                    return 0;
+                                  });
+                                  break;
+                                
+                                case 'ArrowUp':
+                                  e.preventDefault();
+                                  setShowTaxAccountDropdown(true);
+                                  setSelectedTaxAccountIndex(prev => {
+                                    if (prev > 0) return prev - 1;
+                                    return filtered.length - 1;
+                                  });
+                                  break;
+                                
+                                case 'Enter':
+                                  e.preventDefault();
+                                  if (showTaxAccountDropdown && selectedTaxAccountIndex >= 0 && selectedTaxAccountIndex < filtered.length) {
+                                    const account = filtered[selectedTaxAccountIndex];
+                                    const newTaxAccount = account.number;
+                                    setSelectedTaxAccount(newTaxAccount);
+                                    setTaxAccountSearchTerm('');
+                                    setShowTaxAccountDropdown(false);
+                                    
+                                    // Ermittle vatRate aus Kontonamen
+                                    const extractedVatRate = extractVatRateFromAccountName(account.name);
+                                    if (extractedVatRate !== null) {
+                                      setReceiptVatRate(extractedVatRate);
+                                      console.log(`✅ MwSt-Satz ${extractedVatRate}% aus Kontonamen "${account.name}" ermittelt`);
+                                      // vatRate ermittelt: Fokus direkt zu Gebindeeinheit
+                                      setTimeout(() => {
+                                        if (bundleUnitInputRef.current) {
+                                          bundleUnitInputRef.current.focus();
+                                        }
+                                      }, 100);
+                                    } else {
+                                      // Keine vatRate ermittelt: Fokus auf MwSt-Satz-Feld setzen
+                                      setTimeout(() => {
+                                        if (vatRateInputRef.current) {
+                                          vatRateInputRef.current.focus();
+                                        }
+                                      }, 100);
+                                    }
+                                    
+                                    // Speichere Steuerkonto und vatRate im aktuellen Artikel
+                                    if (editedArticles.length > 0 && selectedArticleIndex < editedArticles.length) {
+                                      const updatedArticles = [...editedArticles];
+                                      updatedArticles[selectedArticleIndex] = {
+                                        ...updatedArticles[selectedArticleIndex],
+                                        taxAccount: newTaxAccount,
+                                        vatRate: extractedVatRate !== null ? extractedVatRate : updatedArticles[selectedArticleIndex].vatRate || 19
+                                      };
+                                      setEditedArticles(updatedArticles);
+                                    }
+                                  } else if (!showTaxAccountDropdown) {
+                                    setShowTaxAccountDropdown(true);
+                                    setSelectedTaxAccountIndex(0);
+                                  }
+                                  break;
+                                
+                                case 'Escape':
+                                  e.preventDefault();
+                                  setShowTaxAccountDropdown(false);
+                                  setTaxAccountSearchTerm('');
+                                  setSelectedTaxAccountIndex(-1);
+                                  break;
+                                
+                                case 'Tab':
+                                  setShowTaxAccountDropdown(false);
+                                  setSelectedTaxAccountIndex(-1);
+                                  break;
+                              }
+                            }}
+                            placeholder="Steuerkonto suchen..."
+                            style={{ cursor: 'text' }}
                           />
                           <button
                             type="button"
                             className="btn btn-outline-input"
-                            title="MwSt-Satz auf alle Artikel anwenden"
-                            onClick={applyVatRateToAllArticles}
+                            title="Steuerkonto auf alle Artikel anwenden"
+                            onClick={applyTaxAccountToAllArticles}
                           >
                             <FaCopy />
                           </button>
                         </div>
-                        {showVatRateDropdown && (
-                          <div className="absolute" style={{
-                            top: '100%',
-                            right: 0,
-                            width: '200px',
-                            zIndex: 1000,
-                            backgroundColor: colors.card,
-                            border: `1px solid ${colors.cardBorder}`,
-                            borderRadius: '0 0 0.375rem 0.375rem',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                          }}>
-                            {VAT_RATES.map((vatRate, index) => (
-                              <div
-                                key={vatRate.value}
-                                className="px-3 py-2 cursor-pointer flex justify-between items-center"
-                                onClick={() => {
-                                  handleVatRateChange(vatRate.value);
+                        {showTaxAccountDropdown && (
+                          <div 
+                            ref={taxAccountDropdownListRef}
+                            className="absolute" 
+                            style={{
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              width: '100%',
+                              maxHeight: '300px',
+                              overflowY: 'auto',
+                              zIndex: 10000,
+                              backgroundColor: colors.card,
+                              border: `1px solid ${colors.cardBorder}`,
+                              borderRadius: '0 0 0.375rem 0.375rem',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                            }}
+                          >
+                            {(() => {
+                              // Verwende AccountingAccounts wenn verfügbar, sonst Fallback zu SKR3_TAX_ACCOUNTS
+                              const accountsToShow = accountingAccounts.length > 0 ? accountingAccounts : SKR3_TAX_ACCOUNTS;
+                              const filtered = accountsToShow.filter(account => {
+                                if (!taxAccountSearchTerm) return true;
+                                const searchLower = taxAccountSearchTerm.toLowerCase();
+                                return account.number.toLowerCase().includes(searchLower) || 
+                                       account.name.toLowerCase().includes(searchLower);
+                              });
+                              
+                              return filtered.length > 0 ? (
+                                filtered.map((account, index, filteredArray) => (
+                                <div
+                                  key={account.number}
+                                  className="px-3 py-2 cursor-pointer"
+                                  onClick={() => {
+                                    const newTaxAccount = account.number;
+                                    setSelectedTaxAccount(newTaxAccount);
+                                    setTaxAccountSearchTerm('');
+                                    setShowTaxAccountDropdown(false);
+                                    
+                                    // Ermittle vatRate aus Kontonamen
+                                    const extractedVatRate = extractVatRateFromAccountName(account.name);
+                                    if (extractedVatRate !== null) {
+                                      setReceiptVatRate(extractedVatRate);
+                                      console.log(`✅ MwSt-Satz ${extractedVatRate}% aus Kontonamen "${account.name}" ermittelt`);
+                                      // vatRate ermittelt: Fokus direkt zu Gebindeeinheit
+                                      setTimeout(() => {
+                                        if (bundleUnitInputRef.current) {
+                                          bundleUnitInputRef.current.focus();
+                                        }
+                                      }, 100);
+                                    } else {
+                                      // Keine vatRate ermittelt: Fokus auf MwSt-Satz-Feld setzen
+                                      setTimeout(() => {
+                                        if (vatRateInputRef.current) {
+                                          vatRateInputRef.current.focus();
+                                        }
+                                      }, 100);
+                                    }
+                                    
+                                    // Speichere Steuerkonto und vatRate im aktuellen Artikel
+                                    if (editedArticles.length > 0 && selectedArticleIndex < editedArticles.length) {
+                                      const updatedArticles = [...editedArticles];
+                                      updatedArticles[selectedArticleIndex] = {
+                                        ...updatedArticles[selectedArticleIndex],
+                                        taxAccount: newTaxAccount,
+                                        vatRate: extractedVatRate !== null ? extractedVatRate : updatedArticles[selectedArticleIndex].vatRate || 19
+                                      };
+                                      setEditedArticles(updatedArticles);
+                                    }
+                                  }}
+                                    style={{
+                                      color: colors.text,
+                                      borderBottom: index < filteredArray.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                                      cursor: 'pointer',
+                                      backgroundColor: selectedTaxAccountIndex === index ? (colors.accent || colors.primary) + '20' : (selectedTaxAccount === account.number ? (colors.accent || colors.primary) + '10' : 'transparent'),
+                                      minHeight: '38px'
+                                    }}
+                                    onMouseEnter={() => {
+                                      setSelectedTaxAccountIndex(index);
+                                    }}
+                                  >
+                                    <div style={{ fontSize: '0.9rem', fontWeight: selectedTaxAccount === account.number ? 'bold' : 'normal' }}>
+                                      <span style={{ display: 'inline-block', width: '50px', fontWeight: 'bold' }}>{account.number}</span>
+                                      <span>{account.name}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="px-3 py-2" style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
+                                  Keine Konten gefunden
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="md:w-1/3 px-2 mb-3">
+                      <label className="form-label block">
+                        MwSt-Satz
+                      </label>
+                      <div className="relative" ref={vatRateDropdownRef}>
+                        <input
+                          ref={vatRateInputRef}
+                          type="text"
+                          className="form-control form-control-themed"
+                          tabIndex={6}
+                          value={showVatRateDropdown || vatRateSearchTerm ? vatRateSearchTerm : (vatRates.find(r => r.value === receiptVatRate)?.label || `${receiptVatRate}%`)}
+                          onClick={() => {
+                            setShowVatRateDropdown(true);
+                            setSelectedVatRateIndex(0);
+                          }}
+                          onFocus={() => {
+                            setShowVatRateDropdown(true);
+                            setSelectedVatRateIndex(0);
+                          }}
+                          onChange={(e) => {
+                            setVatRateSearchTerm(e.target.value);
+                            setShowVatRateDropdown(true);
+                            setSelectedVatRateIndex(0);
+                          }}
+                          onKeyDown={(e) => {
+                            const filtered = vatRates.filter(rate => {
+                              if (!vatRateSearchTerm) return true;
+                              const searchLower = vatRateSearchTerm.toLowerCase();
+                              return rate.label.toLowerCase().includes(searchLower) || 
+                                     rate.value.toString().includes(vatRateSearchTerm);
+                            });
+
+                            switch (e.key) {
+                              case 'ArrowDown':
+                                e.preventDefault();
+                                setShowVatRateDropdown(true);
+                                setSelectedVatRateIndex(prev => {
+                                  if (prev < filtered.length - 1) return prev + 1;
+                                  return 0;
+                                });
+                                break;
+                              
+                              case 'ArrowUp':
+                                e.preventDefault();
+                                setShowVatRateDropdown(true);
+                                setSelectedVatRateIndex(prev => {
+                                  if (prev > 0) return prev - 1;
+                                  return filtered.length - 1;
+                                });
+                                break;
+                              
+                              case 'Enter':
+                                e.preventDefault();
+                                if (showVatRateDropdown && selectedVatRateIndex >= 0 && selectedVatRateIndex < filtered.length) {
+                                  const rate = filtered[selectedVatRateIndex];
+                                  const newVatRate = rate.value;
+                                  setReceiptVatRate(newVatRate);
+                                  setVatRateSearchTerm('');
                                   setShowVatRateDropdown(false);
+                                  
+                                  // Speichere vatRate im aktuellen Artikel
+                                  if (editedArticles.length > 0 && selectedArticleIndex < editedArticles.length) {
+                                    const updatedArticles = [...editedArticles];
+                                    updatedArticles[selectedArticleIndex] = {
+                                      ...updatedArticles[selectedArticleIndex],
+                                      vatRate: newVatRate
+                                    };
+                                    setEditedArticles(updatedArticles);
+                                  }
+                                } else if (!showVatRateDropdown) {
+                                  setShowVatRateDropdown(true);
+                                  setSelectedVatRateIndex(0);
+                                }
+                                break;
+                              
+                              case 'Escape':
+                                e.preventDefault();
+                                setShowVatRateDropdown(false);
+                                setVatRateSearchTerm('');
+                                setSelectedVatRateIndex(-1);
+                                break;
+                              
+                              case 'Tab':
+                                setShowVatRateDropdown(false);
+                                setSelectedVatRateIndex(-1);
+                                break;
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => {
+                              setShowVatRateDropdown(false);
+                              setSelectedVatRateIndex(-1);
+                            }, 200);
+                          }}
+                          placeholder="MwSt-Satz auswählen..."
+                        />
+                        {showVatRateDropdown && (
+                          <div 
+                            ref={vatRateDropdownListRef}
+                            className="absolute w-full" 
+                            style={{
+                              top: '100%',
+                              left: 0,
+                              zIndex: 1000,
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              backgroundColor: colors.card,
+                              border: `1px solid ${colors.cardBorder}`,
+                              borderRadius: '0 0 0.375rem 0.375rem',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                            }}
+                          >
+                            {vatRates.filter(rate => {
+                              if (!vatRateSearchTerm) return true;
+                              const searchLower = vatRateSearchTerm.toLowerCase();
+                              return rate.label.toLowerCase().includes(searchLower) || 
+                                     rate.value.toString().includes(vatRateSearchTerm);
+                            }).map((rate, index) => (
+                              <div
+                                key={rate.value}
+                                className="px-3 py-2 cursor-pointer"
+                                onClick={() => {
+                                  const newVatRate = rate.value;
+                                  setReceiptVatRate(newVatRate);
+                                  setVatRateSearchTerm('');
+                                  setShowVatRateDropdown(false);
+                                  
+                                  // Speichere vatRate im aktuellen Artikel
+                                  if (editedArticles.length > 0 && selectedArticleIndex < editedArticles.length) {
+                                    const updatedArticles = [...editedArticles];
+                                    updatedArticles[selectedArticleIndex] = {
+                                      ...updatedArticles[selectedArticleIndex],
+                                      vatRate: newVatRate
+                                    };
+                                    setEditedArticles(updatedArticles);
+                                  }
                                 }}
                                 style={{
                                   color: colors.text,
-                                  borderBottom: index < VAT_RATES.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                                  borderBottom: index < vatRates.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
                                   cursor: 'pointer',
                                   backgroundColor: selectedVatRateIndex === index ? (colors.accent || colors.primary) + '20' : 'transparent',
                                   minHeight: '38px'
                                 }}
-                                onMouseEnter={(e) => {
-                                  if (selectedVatRateIndex !== index) {
-                                    e.currentTarget.style.backgroundColor = (colors.accent || colors.primary) + '10';
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (selectedVatRateIndex !== index) {
-                                    e.currentTarget.style.backgroundColor = 'transparent';
-                                  }
+                                onMouseEnter={() => {
+                                  setSelectedVatRateIndex(index);
                                 }}
                               >
-                                <span>{vatRate.label}</span>
+                                {rate.label}
                               </div>
                             ))}
                           </div>
@@ -2372,32 +4537,45 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                         {/* Gebindeeinheit Dropdown */}
                         <div className="relative" ref={bundleUnitContainerRef} style={{ width: '30%', flexShrink: 0 }}>
                           <input
+                            ref={bundleUnitInputRef}
                             type="text"
                             className={`form-control form-control-themed ${isFieldInvalid('bundleUnit', articleForm.bundleUnit) ? 'is-invalid' : ''}`}
                             value={articleForm.bundleUnit}
                             onChange={(e) => handleBundleUnitInputChange(e.target.value)}
-                            onFocus={() => setShowBundleUnitDropdown(true)}
+                            onFocus={(e) => {
+                              setShowBundleUnitDropdown(true);
+                              setSelectedBundleUnitIndex(0); // Initialisiere auf erste Option
+                              // Markiere gesamten Text beim Fokus
+                              setTimeout(() => {
+                                e.target.select();
+                              }, 0);
+                            }}
                             onBlur={handleBundleUnitInputBlur}
                             onKeyDown={handleBundleUnitKeyDown}
+                            tabIndex={7}
                             placeholder="Einheit..."
                           />
                           {showBundleUnitDropdown && bundleUnitContainerRef.current && (() => {
                             const rect = bundleUnitContainerRef.current.getBoundingClientRect();
                             return (
-                              <div className="bundle-unit-dropdown" style={{
-                                position: 'fixed',
-                                width: '200%',
-                                maxWidth: '300px',
-                                zIndex: 1001,
-                                maxHeight: '200px',
-                                overflowY: 'auto',
-                                backgroundColor: colors.card,
-                                border: `1px solid ${colors.cardBorder}`,
-                                borderRadius: '0 0 0.375rem 0.375rem',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                top: `${rect.bottom}px`,
-                                left: `${rect.left}px`
-                              }}>
+                              <div 
+                                ref={bundleUnitDropdownRef}
+                                className="bundle-unit-dropdown" 
+                                style={{
+                                  position: 'fixed',
+                                  width: '200%',
+                                  maxWidth: '300px',
+                                  zIndex: 1001,
+                                  maxHeight: '200px',
+                                  overflowY: 'auto',
+                                  backgroundColor: colors.card,
+                                  border: `1px solid ${colors.cardBorder}`,
+                                  borderRadius: '0 0 0.375rem 0.375rem',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                  top: `${rect.bottom}px`,
+                                  left: `${rect.left}px`
+                                }}
+                              >
                               {getFilteredBundleUnits().length > 0 ? (
                                 getFilteredBundleUnits().map((unit, index) => (
                                   <div
@@ -2484,6 +4662,17 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                   pricePerUnit: newPricePerUnit
                                 };
                               });
+                              
+                              // Berechne price neu: bundlePrice * quantity
+                              const currentQuantity = editedArticles[selectedArticleIndex]?.quantity || 1;
+                              const newPrice = value * currentQuantity;
+                              const updatedArticles = [...editedArticles];
+                              updatedArticles[selectedArticleIndex] = {
+                                ...updatedArticles[selectedArticleIndex],
+                                bundlePrice: value,
+                                price: newPrice
+                              };
+                              setEditedArticles(updatedArticles);
                             }
                           }}
                           onBlur={() => {
@@ -2572,6 +4761,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                           type="text"
                           className={`form-control form-control-themed text-end ${isFieldInvalid('content', articleForm.content) ? 'is-invalid' : ''}`}
                           value={contentInput}
+                          tabIndex={8}
                           onChange={(e) => {
                             setContentInput(e.target.value);
                             const value = parseFloat(e.target.value.replace(',', '.'));
@@ -2636,28 +4826,60 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                             className={`form-control form-control-themed ${isFieldInvalid('contentUnit', articleForm.contentUnit) ? 'is-invalid' : ''}`}
                             value={articleForm.contentUnit}
                             onChange={(e) => handleContentUnitInputChange(e.target.value)}
-                            onFocus={() => setShowContentUnitDropdown(true)}
-                            onBlur={handleContentUnitInputBlur}
+                            onFocus={() => {
+                              setShowContentUnitDropdown(true);
+                              setSelectedContentUnitIndex(0); // Initialisiere auf erste Option
+                            }}
+                            onBlur={(e) => {
+                              handleContentUnitInputBlur();
+                              // Zirkuläre Navigation: Nächsten Artikel auswählen und Fokus auf Menge setzen
+                              setTimeout(() => {
+                                if (editedArticles.length > 0) {
+                                  // Berechne nächsten Artikel-Index (zirkulär)
+                                  const nextIndex = (selectedArticleIndex + 1) % editedArticles.length;
+                                  
+                                  // Wähle nächsten Artikel aus
+                                  setSelectedArticleIndex(nextIndex);
+                                  
+                                  // Setze Fokus auf Menge-Feld des neuen Artikels
+                                  setTimeout(() => {
+                                    if (quantityInputRef.current) {
+                                      quantityInputRef.current.focus();
+                                    }
+                                  }, 100); // Kurze Verzögerung für State-Update
+                                } else {
+                                  // Fallback: Fokus zurück auf Menge
+                                  if (quantityInputRef.current) {
+                                    quantityInputRef.current.focus();
+                                  }
+                                }
+                              }, 250); // Warte auf Blur-Handler
+                            }}
                             onKeyDown={handleContentUnitKeyDown}
+                            tabIndex={9}
                             placeholder="Einheit..."
                           />
                           {showContentUnitDropdown && contentUnitContainerRef.current && (() => {
                             const rect = contentUnitContainerRef.current.getBoundingClientRect();
                             return (
-                              <div className="content-unit-dropdown" style={{
-                                position: 'fixed',
-                                width: '200%',
-                                maxWidth: '300px',
-                                zIndex: 1001,
-                                maxHeight: '200px',
-                                overflowY: 'auto',
-                                backgroundColor: colors.card,
-                                border: `1px solid ${colors.cardBorder}`,
-                                borderRadius: '0 0 0.375rem 0.375rem',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                top: `${rect.bottom}px`,
-                                left: `${rect.left}px`
-                              }}>
+                              <div 
+                                ref={contentUnitDropdownRef}
+                                className="content-unit-dropdown" 
+                                style={{
+                                  position: 'fixed',
+                                  width: '200%',
+                                  maxWidth: '300px',
+                                  zIndex: 1001,
+                                  maxHeight: '200px',
+                                  overflowY: 'auto',
+                                  backgroundColor: colors.card,
+                                  border: `1px solid ${colors.cardBorder}`,
+                                  borderRadius: '0 0 0.375rem 0.375rem',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                  top: `${rect.bottom}px`,
+                                  left: `${rect.left}px`
+                                }}
+                              >
                               {getFilteredContentUnits().length > 0 ? (
                                 getFilteredContentUnits().map((unit, index) => (
                                   <div
@@ -2812,7 +5034,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                           }}
                           tabIndex={-1}
                           title="Taschenrechner"
-                          style={{ zIndex: 1002, position: 'relative' }}
+                          style={{ position: 'relative' }}
                         >
                           <FaCalculator />
                         </button>
@@ -2855,7 +5077,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                 </div>
               </form>
             </div>
-            <div className="card-footer d-flex justify-content-between">
+            <div className="card-footer d-flex justify-content-between align-items-center">
               <button
                 className="btn btn-outline-secondary"
                 onClick={onClose}
@@ -2863,36 +5085,78 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                 <FaTimes className="me-1" />
                 Abbrechen
               </button>
-              <button
-                className="btn btn-outline-primary"
-                onClick={handleSave}
-                disabled={completeArticlesCount === 0}
-              >
-                <FaSave className="me-1" />
-                {completeArticlesCount > 0 
-                  ? `${completeArticlesCount} Artikel übernehmen`
-                  : 'Keine vollständigen Artikel'
-                }
-              </button>
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  className="btn btn-link p-0"
+                  onClick={() => setIsCompleted(!isCompleted)}
+                  style={{ 
+                    color: isCompleted ? '#28a745' : colors.textSecondary,
+                    fontSize: '1.5rem',
+                    transition: 'all 0.2s'
+                  }}
+                  title={isCompleted ? 'Beleg als fertig markiert' : 'Beleg als fertig markieren'}
+                >
+                  {isCompleted ? <FaCheckCircle /> : <FaClock />}
+                </button>
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={handleSave}
+                  disabled={completeArticlesCount === 0}
+                >
+                  <FaSave className="me-1" />
+                  {isCompleted 
+                    ? (completeArticlesCount > 0 
+                        ? `${completeArticlesCount} Artikel übernehmen`
+                        : 'Keine vollständigen Artikel')
+                    : 'Beleg Speichern'
+                  }
+                </button>
+              </div>
             </div>
           </div>
           
-          {/* Rechte Seite: Bildansicht */}
+          {/* Resize-Handle zwischen Artikel bearbeiten und Original-Beleg */}
           {imageUrl && (
-            <div 
-              className="card"
-              style={{
-                width: '400px',
-                backgroundColor: colors.card,
-                border: `1px solid ${colors.cardBorder}`,
-                display: 'flex',
-                flexDirection: 'column',
-                marginLeft: '1rem',
-                flexShrink: 0,
-                maxHeight: '90vh',
-                height: '90vh'
-              }}
-            >
+            <>
+              <div
+                onMouseDown={handleRightResizeStart}
+                style={{
+                  width: '8px',
+                  cursor: 'col-resize',
+                  backgroundColor: isResizingRight ? colors.primary : 'transparent',
+                  flexShrink: 0,
+                  position: 'relative',
+                  margin: '0',
+                  transition: 'background-color 0.2s'
+                }}
+                title="Ziehen zum Anpassen der Breite"
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '2px',
+                    height: '40px',
+                    backgroundColor: colors.cardBorder || '#dee2e6',
+                    borderRadius: '1px'
+                  }}
+                />
+              </div>
+              
+              {/* Rechte Seite: Bildansicht (Original-Beleg) */}
+              <div 
+                className="card"
+                style={{
+                  width: `${rightPanelWidth}px`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexShrink: 0,
+                  maxHeight: '90vh',
+                  height: '90vh'
+                }}
+              >
               {/* Header */}
               <div 
                 className="card-header"
@@ -2903,22 +5167,41 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               >
                 <div className="d-flex justify-content-between align-items-center">
                   <h5 className="mb-0 form-label-themed">Original-Beleg</h5>
-                  <button
-                    className="btn btn-link p-0"
-                    onClick={() => {
-                      setImageZoom(1);
-                      setImagePosition({ x: 0, y: 0 });
-                    }}
-                    style={{ color: colors.text }}
-                    title="Zoom und Position zurücksetzen"
-                  >
-                    <FaImage />
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      className="btn btn-link p-0"
+                      onClick={() => setShowJsonDialog(true)}
+                      style={{ color: colors.text }}
+                      title="Scan-Ergebnis als JSON anzeigen"
+                    >
+                      <FaCode />
+                    </button>
+                    <button
+                      className="btn btn-link p-0"
+                      onClick={() => setShowPrintPreview(true)}
+                      style={{ color: colors.text }}
+                      title="Druck-Preview öffnen"
+                    >
+                      <FaPrint />
+                    </button>
+                    <button
+                      className="btn btn-link p-0"
+                      onClick={() => {
+                        setImageZoom(1);
+                        setImagePosition({ x: 0, y: 0 });
+                      }}
+                      style={{ color: colors.text }}
+                      title="Zoom und Position zurücksetzen"
+                    >
+                      <FaImage />
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Bildansicht */}
               <div 
+                ref={imageContainerRef}
                 className="card-body"
                 style={{
                   overflow: 'hidden',
@@ -2926,62 +5209,221 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                   padding: '0.75rem',
                   position: 'relative',
                   backgroundColor: '#f5f5f5',
-                  cursor: isDragging ? 'grabbing' : 'grab'
+                  cursor: (isPDF && displayPdfCanvasUrls.length === 0) ? 'default' : (isDragging ? 'grabbing' : 'grab')
                 }}
-                onWheel={handleImageWheel}
-                onMouseDown={handleImageMouseDown}
+                onMouseDown={(isPDF && displayPdfCanvasUrls.length === 0) ? undefined : handleImageMouseDown}
               >
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) translate(-50%, -50%) scale(${imageZoom})`,
-                    transformOrigin: 'center center',
-                    transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-                  }}
-                >
-                  <img
-                    src={imageUrl}
-                    alt="Original-Beleg"
+                {isPDF && displayPdfCanvasUrls.length > 0 ? (
+                  // PDF als Canvas-Bild anzeigen (mit Zoom/Pan)
+                  <div
                     style={{
-                      maxWidth: '100%',
-                      height: 'auto',
-                      display: 'block',
-                      userSelect: 'none',
-                      pointerEvents: 'none'
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) translate(-50%, -50%) scale(${imageZoom})`,
+                      transformOrigin: 'center center',
+                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                     }}
-                    draggable={false}
-                    onError={(e) => {
-                      console.error('🖼️ [IMAGE] Fehler beim Laden des Bildes:', imageUrl);
-                      e.currentTarget.style.display = 'none';
+                  >
+                    <img
+                      src={displayPdfCanvasUrls[currentPdfPage]}
+                      alt={`PDF-Beleg Seite ${currentPdfPage + 1}`}
+                      style={{
+                        maxWidth: '100%',
+                        height: 'auto',
+                        display: 'block',
+                        userSelect: 'none',
+                        pointerEvents: 'none'
+                      }}
+                      draggable={false}
+                      onError={(e) => {
+                        console.error('❌ [PDF-CANVAS] Fehler beim Laden des PDF-Canvas:', e);
+                        e.currentTarget.style.display = 'none';
+                      }}
+                      onLoad={() => {
+                        console.log(`✅ [PDF-CANVAS] PDF-Seite ${currentPdfPage + 1} erfolgreich geladen`);
+                      }}
+                    />
+                  </div>
+                ) : isPDF && !imageUrl ? (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    height: '100%',
+                    color: colors.text 
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <p>PDF wird geladen...</p>
+                    </div>
+                  </div>
+                ) : isPDF && imageUrl && displayPdfCanvasUrls.length === 0 ? (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    height: '100%',
+                    color: colors.text 
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <p>PDF wird gerendert...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) translate(-50%, -50%) scale(${imageZoom})`,
+                      transformOrigin: 'center center',
+                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                     }}
-                    onLoad={() => {
-                      console.log('🖼️ [IMAGE] Bild erfolgreich geladen:', imageUrl);
-                    }}
-                  />
-                </div>
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Original-Beleg"
+                      style={{
+                        maxWidth: '100%',
+                        height: 'auto',
+                        display: 'block',
+                        userSelect: 'none',
+                        pointerEvents: 'none'
+                      }}
+                      draggable={false}
+                      onError={(e) => {
+                        // Nur Fehler loggen wenn es kein PDF ist (PDFs werden im iframe geladen)
+                        if (!isPDF) {
+                          console.error('🖼️ [IMAGE] Fehler beim Laden des Bildes:', imageUrl);
+                          e.currentTarget.style.display = 'none';
+                        }
+                      }}
+                      onLoad={() => {
+                        // Nur Loggen wenn es kein PDF ist
+                        if (!isPDF) {
+                          console.log('🖼️ [IMAGE] Bild erfolgreich geladen:', imageUrl);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Footer mit Zoom-Anzeige */}
-              <div 
-                className="card-footer"
-                style={{
-                  flexShrink: 0,
-                  padding: '0.5rem 0.75rem',
-                  fontSize: '0.85rem',
-                  color: colors.textSecondary
-                }}
-              >
-                <div className="d-flex justify-content-between align-items-center">
-                  <span>Zoom: {Math.round(imageZoom * 100)}%</span>
-                  <span>Zum Vergrößern/Verkleinern: Mausrad</span>
+              {/* Steuerkonto-Summen oberhalb des Footers */}
+              {taxAccountTotals.length > 0 && (
+                <div 
+                  style={{
+                    flexShrink: 0,
+                    padding: '0.75rem',
+                    backgroundColor: 'transparent',
+                    borderTop: `1px solid ${colors.cardBorder}`,
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: colors.text }}>
+                    Artikelsummen nach Steuerkonten:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                    {taxAccountTotals.map((item) => (
+                      <div 
+                        key={item.accountNumber}
+                        style={{
+                          color: colors.text,
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '0.25rem',
+                          backgroundColor: colors.secondary + '80'
+                        }}
+                      >
+                        <span style={{ fontWeight: 'bold' }}>
+                          {item.total.toFixed(2).replace('.', ',')} €
+                        </span>
+                        {' - '}
+                        <span style={{ fontWeight: 'bold' }}>{item.accountNumber}</span>
+                        {' - '}
+                        <span>{item.accountName}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-1" style={{ fontSize: '0.75rem' }}>
-                  <span>Zum Verschieben: Linke Maustaste gedrückt halten</span>
+              )}
+
+              {/* Footer mit Zoom-Anzeige und Seitennavigation für PDFs */}
+              {(!isPDF || (isPDF && displayPdfCanvasUrls.length > 0)) && (
+                <div 
+                  className="card-footer"
+                  style={{
+                    flexShrink: 0,
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.85rem',
+                    color: colors.textSecondary
+                  }}
+                >
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div className="d-flex align-items-center gap-3">
+                      <span>Zoom: {Math.round(imageZoom * 100)}%</span>
+                      {isPDF && displayPdfCanvasUrls.length > 1 && (
+                        <div className="d-flex align-items-center gap-2">
+                          <button
+                            onClick={() => {
+                              if (currentPdfPage > 0) {
+                                setCurrentPdfPage(currentPdfPage - 1);
+                                // Reset Zoom und Position beim Seitenwechsel
+                                setImageZoom(1);
+                                setImagePosition({ x: 0, y: 0 });
+                              }
+                            }}
+                            disabled={currentPdfPage === 0}
+                            style={{
+                              background: 'transparent',
+                              border: `1px solid ${colors.cardBorder}`,
+                              borderRadius: '0.25rem',
+                              padding: '0.25rem 0.5rem',
+                              color: colors.text,
+                              cursor: currentPdfPage === 0 ? 'not-allowed' : 'pointer',
+                              opacity: currentPdfPage === 0 ? 0.5 : 1
+                            }}
+                            title="Vorherige Seite"
+                          >
+                            <FaChevronLeft />
+                          </button>
+                          <span>
+                            Seite {currentPdfPage + 1} von {displayPdfCanvasUrls.length}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (currentPdfPage < displayPdfCanvasUrls.length - 1) {
+                                setCurrentPdfPage(currentPdfPage + 1);
+                                // Reset Zoom und Position beim Seitenwechsel
+                                setImageZoom(1);
+                                setImagePosition({ x: 0, y: 0 });
+                              }
+                            }}
+                            disabled={currentPdfPage === displayPdfCanvasUrls.length - 1}
+                            style={{
+                              background: 'transparent',
+                              border: `1px solid ${colors.cardBorder}`,
+                              borderRadius: '0.25rem',
+                              padding: '0.25rem 0.5rem',
+                              color: colors.text,
+                              cursor: currentPdfPage === displayPdfCanvasUrls.length - 1 ? 'not-allowed' : 'pointer',
+                              opacity: currentPdfPage === displayPdfCanvasUrls.length - 1 ? 0.5 : 1
+                            }}
+                            title="Nächste Seite"
+                          >
+                            <FaChevronRight />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <span>Zum Vergrößern/Verkleinern: Mausrad</span>
+                  </div>
+                  <div className="mt-1" style={{ fontSize: '0.75rem' }}>
+                    <span>Zum Verschieben: Linke Maustaste gedrückt halten</span>
+                  </div>
                 </div>
+              )}
               </div>
-            </div>
+            </>
           )}
           {!imageUrl && receiptImage && (
             <div style={{ marginLeft: '1rem', padding: '1rem', color: colors.textSecondary }}>
@@ -3082,7 +5524,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               contentUnit: 'Stück', // Immer Stück!
               contentEanCode: article.contentEanCode || '',
               pricePerUnit: calculatedPricePerUnit,
-              vatRate: article.vatRate || 19,
               allergens: article.allergens || [],
               additives: article.additives || [],
               ingredients: article.ingredients || '',
@@ -3105,6 +5546,203 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         />
       )}
 
+      {/* Druck-Preview Modal */}
+      {showPrintPreview && imageUrl && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 10000,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '20px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPrintPreview(false);
+            }
+          }}
+        >
+          {/* Header */}
+          <div 
+            style={{
+              backgroundColor: colors.card,
+              padding: '1rem',
+              borderBottom: `1px solid ${colors.cardBorder}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1rem',
+              borderRadius: '0.375rem 0.375rem 0 0'
+            }}
+          >
+            <h5 style={{ margin: 0, color: colors.text }}>Druck-Preview</h5>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className="btn btn-primary"
+                onClick={handlePrint}
+                disabled={taxAccountTotals.length === 0}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <FaPrint />
+                Drucken
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowPrintPreview(false)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <FaTimes />
+                Schließen
+              </button>
+            </div>
+          </div>
+
+          {/* Preview-Bereich */}
+          <div 
+            style={{
+              flex: 1,
+              backgroundColor: colors.card,
+              borderRadius: '0 0 0.375rem 0.375rem',
+              padding: '20px',
+              overflow: 'auto',
+              position: 'relative',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start'
+            }}
+          >
+            {/* Beleg als Hintergrund */}
+            <div 
+              data-print-preview-container
+              style={{ position: 'relative', maxWidth: '100%', display: 'inline-block' }}
+            >
+              {isPDF && pdfCanvasUrls.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {pdfCanvasUrls.map((url, index) => (
+                    <img 
+                      key={index}
+                      ref={index === 0 ? printPdfCanvasRef : null}
+                      src={url} 
+                      alt={`PDF-Beleg Seite ${index + 1}`} 
+                      style={{
+                        maxWidth: '100%',
+                        height: 'auto',
+                        display: 'block',
+                        border: '1px solid #ddd'
+                      }}
+                      onLoad={(e) => {
+                        if (index === 0) {
+                          const img = e.currentTarget;
+                          setPrintPreviewImageSize({
+                            width: img.naturalWidth,
+                            height: img.naturalHeight
+                          });
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : isPDF && pdfCanvasUrls.length === 0 ? (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  padding: '2rem',
+                  color: colors.text 
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <p>PDF wird für Druck vorbereitet...</p>
+                  </div>
+                </div>
+              ) : (
+                <img 
+                  ref={printImageRef}
+                  src={imageUrl} 
+                  alt="Beleg" 
+                  style={{
+                    maxWidth: '100%',
+                    height: 'auto',
+                    display: 'block'
+                  }}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setPrintPreviewImageSize({
+                      width: img.naturalWidth,
+                      height: img.naturalHeight
+                    });
+                  }}
+                />
+              )}
+              
+              {/* Verschiebbare Artikelsummen-Liste */}
+              {taxAccountTotals.length > 0 && ((isPDF && pdfCanvasUrls.length > 0 ? printPdfCanvasRef.current : printImageRef.current) && printPreviewImageSize) && (
+                <div
+                  onMouseDown={handlePrintListMouseDown}
+                  style={{
+                    position: 'absolute',
+                    left: `${(printPreviewListPosition.x / printPreviewImageSize.width) * 100}%`,
+                    top: `${(printPreviewListPosition.y / printPreviewImageSize.height) * 100}%`,
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    padding: '13px',
+                    border: '2px dashed #007bff',
+                    borderRadius: '0.25rem',
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '16px',
+                    cursor: isDraggingPrintList ? 'grabbing' : 'grab',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    minWidth: '280px',
+                    userSelect: 'none'
+                  }}
+                >
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    marginBottom: '10px', 
+                    fontSize: '18px',
+                    color: '#007bff',
+                    borderBottom: '1px solid #007bff',
+                    paddingBottom: '5px'
+                  }}>
+                    Artikelsummen nach Steuerkonten:
+                  </div>
+                  {taxAccountTotals.map((item) => (
+                    <div 
+                      key={item.accountNumber}
+                      style={{
+                        margin: '6px 0',
+                        padding: '4px 0',
+                        borderBottom: '1px solid #ddd',
+                        fontSize: '14px'
+                      }}
+                    >
+                      <span style={{ fontWeight: 'bold' }}>
+                        {item.total.toFixed(2).replace('.', ',')} €
+                      </span>
+                      {' - '}
+                      <span style={{ fontWeight: 'bold' }}>{item.accountNumber}</span>
+                      {' - '}
+                      <span>{item.accountName}</span>
+                    </div>
+                  ))}
+                  <div style={{ 
+                    marginTop: '10px', 
+                    fontSize: '13px', 
+                    color: '#666',
+                    fontStyle: 'italic'
+                  }}>
+                    💡 Zum Verschieben: Linke Maustaste gedrückt halten
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Calculator Modal */}
       <CalculatorModal
         show={showCalculator}
@@ -3118,7 +5756,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         show={showPriceConverter}
         onClose={() => setShowPriceConverter(false)}
         bundlePrice={articleForm.bundlePrice || 0}
-        vatRate={selectedVatRate || articleForm.vatRate || 19}
+        vatRate={selectedVatRate || 19}
         onApplyGrossPrice={(grossPrice: number) => {
           setArticleForm(prev => {
             const newPricePerUnit = calculatePricePerUnit(grossPrice, prev.content);
@@ -3126,7 +5764,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             return { 
               ...prev, 
               bundlePrice: grossPrice,
-              vatRate: selectedVatRate || prev.vatRate,
               pricePerUnit: newPricePerUnit
             };
           });
@@ -3140,7 +5777,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             return { 
               ...prev, 
               bundlePrice: netPrice,
-              vatRate: selectedVatRate || prev.vatRate,
               pricePerUnit: newPricePerUnit
             };
           });
@@ -3152,6 +5788,87 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         }}
         colors={colors}
       />
+      
+      {/* JSON-Dialog für Scan-Ergebnis */}
+      {showJsonDialog && (
+        <div 
+          className="fixed top-0 left-0 w-full"
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 10001,
+            top: 56,
+            height: 'calc(100vh - 56px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+          onClick={() => setShowJsonDialog(false)}
+        >
+          <div 
+            className="card"
+            style={{
+              maxWidth: '90%',
+              width: '800px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="card-header d-flex justify-content-between align-items-center">
+              <h5 className="mb-0 form-label-themed">
+                <FaCode className="me-2" />
+                Scan-Ergebnis (JSON)
+              </h5>
+              <button
+                className="btn btn-link p-0"
+                onClick={() => setShowJsonDialog(false)}
+                style={{ color: colors.text }}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="card-body" style={{ overflow: 'auto', flex: 1 }}>
+              <pre
+                style={{
+                  margin: 0,
+                  padding: '1rem',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '0.25rem',
+                  fontSize: '0.875rem',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: 'calc(90vh - 120px)',
+                  overflow: 'auto'
+                }}
+              >
+                {originalOcrResult ? JSON.stringify(originalOcrResult, null, 2) : JSON.stringify(receiptData, null, 2)}
+              </pre>
+            </div>
+            <div className="card-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  const jsonText = originalOcrResult ? JSON.stringify(originalOcrResult, null, 2) : JSON.stringify(receiptData, null, 2);
+                  navigator.clipboard.writeText(jsonText);
+                }}
+                style={{ marginRight: '0.5rem' }}
+              >
+                <FaCopy className="me-1" />
+                JSON kopieren
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowJsonDialog(false)}
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -3181,7 +5898,7 @@ const ArticleSearchModal: React.FC<ArticleSearchModalProps> = ({
   const [filteredArticles, setFilteredArticles] = useState<any[]>([]);
   const [localSearchTerm, setLocalSearchTerm] = useState<string>('');
 
-  // Setze initialen Suchbegriff nur beim Öffnen des Modals
+  // Setze initialen Suchbegriff beim Öffnen des Modals oder wenn sich searchTerm ändert
   useEffect(() => {
     if (show) {
       setLocalSearchTerm(searchTerm || '');
@@ -3189,7 +5906,7 @@ const ArticleSearchModal: React.FC<ArticleSearchModalProps> = ({
       // Reset beim Schließen
       setLocalSearchTerm('');
     }
-  }, [show]); // Nur bei show-Änderung, nicht bei searchTerm
+  }, [show, searchTerm]); // Auch bei searchTerm-Änderung aktualisieren
 
   // Filtere Artikel nach Lieferant und Suchbegriff
   useEffect(() => {
@@ -3200,15 +5917,35 @@ const ArticleSearchModal: React.FC<ArticleSearchModalProps> = ({
     );
 
     if (localSearchTerm) {
-      const searchLower = localSearchTerm.toLowerCase();
-      filtered = filtered.filter(article => 
-        article.name?.toLowerCase().includes(searchLower) ||
-        // Suche auch in namesOCR Array
-        article.namesOCR?.some((ocrName: string) => ocrName.toLowerCase().includes(searchLower)) ||
-        article.supplierArticleNumber?.toLowerCase().includes(searchLower) ||
-        article.bundleEanCode?.toLowerCase().includes(searchLower) ||
-        article.category?.toLowerCase().includes(searchLower)
-      );
+      const searchLower = localSearchTerm.toLowerCase().trim();
+      // Teile Suchbegriff in Wörter auf für flexiblere Suche
+      const searchWords = searchLower.split(/\s+/).filter(word => word.length > 0);
+      
+      filtered = filtered.filter(article => {
+        // Wenn nur ein Wort, suche nach exakter Phrase oder Teilstring
+        if (searchWords.length === 1) {
+          const searchWord = searchWords[0];
+          return (
+            article.name?.toLowerCase().includes(searchWord) ||
+            article.namesOCR?.some((ocrName: string) => ocrName.toLowerCase().includes(searchWord)) ||
+            article.supplierArticleNumber?.toLowerCase().includes(searchWord) ||
+            article.bundleEanCode?.toLowerCase().includes(searchWord) ||
+            article.category?.toLowerCase().includes(searchWord)
+          );
+        } else {
+          // Bei mehreren Wörtern: alle Wörter müssen in mindestens einem Feld vorkommen
+          const articleText = [
+            article.name,
+            ...(article.namesOCR || []),
+            article.supplierArticleNumber,
+            article.bundleEanCode,
+            article.category
+          ].filter(Boolean).join(' ').toLowerCase();
+          
+          // Prüfe, ob alle Suchwörter im kombinierten Text enthalten sind
+          return searchWords.every(word => articleText.includes(word));
+        }
+      });
     }
 
     setFilteredArticles(filtered);
@@ -3236,9 +5973,7 @@ const ArticleSearchModal: React.FC<ArticleSearchModalProps> = ({
         style={{
           maxWidth: '800px',
           width: '90%',
-          maxHeight: '90vh',
-          backgroundColor: colors.card,
-          border: `1px solid ${colors.cardBorder}`
+          maxHeight: '90vh'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -3285,18 +6020,14 @@ const ArticleSearchModal: React.FC<ArticleSearchModalProps> = ({
                     className="card"
                     style={{
                       cursor: 'pointer',
-                      backgroundColor: colors.light,
-                      border: `1px solid ${colors.cardBorder}`,
                       transition: 'all 0.2s'
                     }}
                     onClick={() => onSelectArticle(article)}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.secondary;
-                      e.currentTarget.style.borderColor = colors.accent || colors.primary;
+                      e.currentTarget.classList.add('hover');
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.light;
-                      e.currentTarget.style.borderColor = colors.cardBorder;
+                      e.currentTarget.classList.remove('hover');
                     }}
                   >
                     <div className="card-body p-3">

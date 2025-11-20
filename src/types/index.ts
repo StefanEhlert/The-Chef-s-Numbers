@@ -47,6 +47,7 @@ export interface Supplier extends BaseEntity {
   };
   phoneNumbers: PhoneNumber[];
   notes?: string;
+  nettoPrices?: boolean; // true = Netto-Preise, false/undefined = Brutto-Preise
 }
 
 // Artikel-Kategorien
@@ -86,7 +87,7 @@ export interface Article extends BaseEntity {
   contentUnit: Unit;
   contentEanCode?: string; // EAN-Code für den Inhalt (z.B. Flaschen im Karton)
   pricePerUnit: number;
-  vatRate: number; // MwSt-Satz
+  accountingAccountNumber?: string; // SKR-Kontonummer
   allergens: string[];
   additives: string[];
   ingredients?: string;
@@ -235,12 +236,61 @@ export interface AppSettings {
 }
 
 // Datenbank-Schema
+export type ReceiptPaymentStatus = 'offen' | 'teilweise' | 'bezahlt' | 'überfällig';
+
+export interface ReceiptLineItem {
+  id: string;
+  articleId?: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  vatRate?: number;
+  taxAccount?: string;
+  total: number;
+}
+
+export interface ReceiptAccountingEntry {
+  id: string;
+  accountNumber: string;
+  accountName?: string;
+  amount: number;
+  vatRate?: number;
+}
+
+export interface Receipt extends BaseEntity {
+  supplierId?: string;
+  bookingNumber?: string;
+  receiptDate?: string;
+  receiptNumber?: string;
+  receiptDetails: {
+    lineItems: ReceiptLineItem[];
+    currency?: string;
+    totalNet?: number;
+    totalVat?: number;
+    totalGross?: number;
+  };
+  dueDate?: string;
+  paymentStatus: ReceiptPaymentStatus;
+  lineItemCount: number;
+  accounting: ReceiptAccountingEntry[];
+  isCompleted: boolean;
+  notes?: string;
+  // OCR-Felder
+  ocrResult?: any; // OCR-Result als JSON (Original, bleibt unverändert)
+  ocrProvider?: 'azure' | 'taggun'; // Verwendeter KI-Provider für OCR
+  receiptImagePath?: string; // Pfad zum gespeicherten Belegbild (z.B. "pictures/receipts/{receiptId}")
+  processedOcrData?: any; // Verarbeitete OCR-Daten für ReceiptReviewModal (ExtendedReceiptData)
+}
+
 export interface DatabaseSchema {
   suppliers: Supplier[];
   articles: Article[];
   recipes: Recipe[];
+  receipts: Receipt[];
   settings: AppSettings;
 }
 
 // Storage-Konfiguration (neu)
 export * from './storage'; 
+export * from './accounting';

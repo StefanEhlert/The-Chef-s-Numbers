@@ -58,6 +58,7 @@ export interface ReceiptArticle extends Partial<{
   contentEanCode: string;
   pricePerUnit: number;
   vatRate: number;
+  taxAccount?: string; // Steuerkonto (SKR 3) - Kontonummer
   allergens: string[];
   additives: string[];
   ingredients: string;
@@ -74,6 +75,7 @@ export interface ReceiptArticle extends Partial<{
   };
   openFoodFactsCode: string;
   notes: string;
+  excludeFromUpdate?: boolean; // true = Artikel wird nicht mit Stammdaten aktualisiert
 }> {}
 
 export interface ExtendedReceiptData {
@@ -97,6 +99,18 @@ export interface ExtendedReceiptData {
   vat19: number; // Umsatzsteuer 19%
   rawResponse?: string;
   error?: string;
+  // Druck-Preview Position der Artikelsummen-Liste
+  printListPosition?: { x: number; y: number }; // Position in Pixeln relativ zur natürlichen Bildgröße
+  // Bildansicht-Einstellungen
+  imageZoom?: number; // Zoom-Stufe des Original-Belegs (1.0 = 100%)
+  imagePosition?: { x: number; y: number }; // Position des Bildes beim Verschieben
+  // Layout-Einstellungen
+  leftPanelWidth?: number; // Breite des linken Panels (Beleg-Übersicht) in Pixel
+  rightPanelWidth?: number; // Breite des rechten Panels (Original-Beleg) in Pixel
+  // Beleg-Bearbeitungsstatus
+  isCompleted?: boolean; // true = Beleg ist fertig bearbeitet
+  // Automatische Verlinkung
+  autoLinkPerformed?: boolean; // true = autoLinkAllArticles wurde bereits einmal ausgeführt
 }
 
 /**
@@ -160,6 +174,7 @@ export function enrichReceiptData(
       contentEanCode: '', // Optional separat
       pricePerUnit: pricePerUnit, // Einzelpreis pro Einheit
       vatRate: 19, // Standard MwSt
+      taxAccount: undefined, // Steuerkonto wird manuell zugewiesen
       allergens: [],
       additives: [],
       ingredients: '',

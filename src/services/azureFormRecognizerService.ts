@@ -5,10 +5,60 @@
  */
 
 import { OCRResult } from './ocrTypes';
+import { storageLayer } from './storageLayer';
+import { OCRApiConfig, AccountingSettings } from '../types';
 
-const AZURE_ENDPOINT = process.env.REACT_APP_AZURE_ENDPOINT || 'https://the-chef-numbers.cognitiveservices.azure.com/';
-const AZURE_API_KEY = process.env.REACT_APP_AZURE_API_KEY || '';
 const AZURE_MODEL = 'prebuilt-receipt';
+
+// Fallback-Werte (falls keine Konfiguration vorhanden)
+const DEFAULT_AZURE_ENDPOINT = process.env.REACT_APP_AZURE_ENDPOINT || 'https://the-chef-numbers.cognitiveservices.azure.com/';
+const DEFAULT_AZURE_API_KEY = process.env.REACT_APP_AZURE_API_KEY || '';
+
+/**
+ * Lädt die Azure API-Konfiguration aus den Einstellungen
+ */
+async function loadAzureConfig(): Promise<{ endpoint: string; apiKey: string }> {
+  try {
+    // Lade aus accountingSettings
+    const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+    if (settings && settings.length > 0) {
+      const firstSettings = settings[0];
+      if (firstSettings.ocrApiConfigs && firstSettings.ocrApiConfigs.length > 0) {
+        const azureConfig = firstSettings.ocrApiConfigs.find((config) => config.provider === 'azure' && config.isActive);
+        if (azureConfig && azureConfig.apiEndpoint && azureConfig.apiKey) {
+          return {
+            endpoint: azureConfig.apiEndpoint,
+            apiKey: azureConfig.apiKey
+          };
+        }
+      }
+    }
+    
+    // Migration: Prüfe alte ocrApiConfigs (kann später entfernt werden)
+    try {
+      const oldConfigs = await storageLayer.load<OCRApiConfig>('ocrApiConfigs');
+      if (oldConfigs && oldConfigs.length > 0) {
+        const azureConfig = oldConfigs.find((config) => config.provider === 'azure' && config.isActive);
+        if (azureConfig && azureConfig.apiEndpoint && azureConfig.apiKey) {
+          return {
+            endpoint: azureConfig.apiEndpoint,
+            apiKey: azureConfig.apiKey
+          };
+        }
+      }
+    } catch (e) {
+      // Ignoriere Fehler bei Migration
+    }
+  } catch (error) {
+    console.warn('⚠️ Fehler beim Laden der Azure API-Konfiguration, verwende Fallback-Werte:', error);
+  }
+  
+  // Fallback auf Umgebungsvariablen oder Standardwerte
+  return {
+    endpoint: DEFAULT_AZURE_ENDPOINT,
+    apiKey: DEFAULT_AZURE_API_KEY
+  };
+}
 
 // Azure Form Recognizer API Response Types
 interface AzureAnalyzeResponse {
@@ -109,7 +159,7 @@ export function validateDocumentFile(file: File): { valid: boolean; error?: stri
 /**
  * Wartet auf das Ergebnis einer Analyse-Operation
  */
-async function waitForAnalysisResult(operationLocation: string): Promise<AzureOperationStatus> {
+async function waitForAnalysisResult(operationLocation: string, apiKey: string): Promise<AzureOperationStatus> {
   const maxAttempts = 60; // Maximal 60 Versuche (5 Minuten bei 5 Sekunden Intervall)
   const pollInterval = 5000; // 5 Sekunden zwischen Versuchen
 
@@ -118,7 +168,7 @@ async function waitForAnalysisResult(operationLocation: string): Promise<AzureOp
       const response = await fetch(operationLocation, {
         method: 'GET',
         headers: {
-          'Ocp-Apim-Subscription-Key': AZURE_API_KEY
+          'Ocp-Apim-Subscription-Key': apiKey
         }
       });
 
@@ -413,6 +463,16 @@ export async function analyzeDocumentWithAzureFormRecognizer(
     console.log('📄 Dateigröße:', file.size, 'bytes');
     console.log('📄 Dateityp:', file.type);
 
+    // Lade API-Konfiguration aus Einstellungen
+    const config = await loadAzureConfig();
+    
+    if (!config.apiKey) {
+      return {
+        error: 'Azure API-Key nicht konfiguriert. Bitte konfigurieren Sie den API-Key in den Einstellungen.',
+        rawResponse: ''
+      };
+    }
+
     // Validiere Datei
     const validation = validateDocumentFile(file);
     if (!validation.valid) {
@@ -426,16 +486,18 @@ export async function analyzeDocumentWithAzureFormRecognizer(
     const fileBlob = fileToBlob(file);
 
     // API-Endpoint für Analyse
-    // Verwende die stabile API-Version
-    const analyzeUrl = `${AZURE_ENDPOINT}formrecognizer/documentModels/${AZURE_MODEL}:analyze?api-version=2023-07-31`;
+    // Stelle sicher, dass der Endpoint mit einem Slash endet
+    const endpoint = config.endpoint.endsWith('/') ? config.endpoint : `${config.endpoint}/`;
+    const analyzeUrl = `${endpoint}formrecognizer/documentModels/${AZURE_MODEL}:analyze?api-version=2023-07-31`;
 
     console.log('📤 Azure Form Recognizer: Sende Anfrage an Azure API...');
+    console.log('📤 Endpoint:', endpoint);
 
     // Schritt 1: Analyse starten
     const analyzeResponse = await fetch(analyzeUrl, {
       method: 'POST',
       headers: {
-        'Ocp-Apim-Subscription-Key': AZURE_API_KEY
+        'Ocp-Apim-Subscription-Key': config.apiKey
         // Content-Type wird nicht gesetzt - Azure erkennt den Typ automatisch
       },
       body: fileBlob
@@ -456,7 +518,7 @@ export async function analyzeDocumentWithAzureFormRecognizer(
     console.log('✅ Azure Form Recognizer: Analyse gestartet, warte auf Ergebnis...');
 
     // Schritt 2: Warte auf Ergebnis
-    const operationStatus = await waitForAnalysisResult(operationLocation);
+    const operationStatus = await waitForAnalysisResult(operationLocation, config.apiKey);
 
     console.log('✅ Azure Form Recognizer: Analyse abgeschlossen');
     console.log('📋 Operation Status:', operationStatus.status);

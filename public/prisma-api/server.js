@@ -1,6 +1,6 @@
 // Chef Numbers Prisma REST API Server
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-11-03T01:06:18.469Z
+// Automatisch generiert am: 2025-11-17T23:03:58.594Z
 
 const express = require('express');
 const cors = require('cors');
@@ -148,6 +148,190 @@ app.post('/api/execute-sql', async (req, res) => {
       await mysqlConnection.end();
       console.log('🔌 MySQL-Verbindung geschlossen');
     }
+  }
+});
+
+// ========================================
+// AccountingAccount Routes
+// ========================================
+
+// GET all accountingaccounts
+app.get('/api/accountingaccounts', async (req, res) => {
+  try {
+    const data = await prisma.accountingAccount.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von accountingaccounts:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von accountingaccounts', details: error.message });
+  }
+});
+
+// GET single AccountingAccount
+app.get('/api/accountingaccounts/:id', async (req, res) => {
+  try {
+    const data = await prisma.accountingAccount.findUnique({
+      where: { db_id: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'AccountingAccount nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von AccountingAccount:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von AccountingAccount', details: error.message });
+  }
+});
+
+// POST new AccountingAccount
+app.post('/api/accountingaccounts', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues AccountingAccount: ${dataToInsert.db_id}`);
+    }
+    
+    const data = await prisma.accountingAccount.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von AccountingAccount:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von AccountingAccount', details: error.message });
+  }
+});
+
+// PUT update AccountingAccount
+app.put('/api/accountingaccounts/:id', async (req, res) => {
+  try {
+    const data = await prisma.accountingAccount.update({
+      where: { db_id: req.params.id },
+      data: req.body
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren von AccountingAccount:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von AccountingAccount', details: error.message });
+  }
+});
+
+// DELETE AccountingAccount (über Frontend-ID oder db_id)
+app.delete('/api/accountingaccounts', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.accountingAccount.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'AccountingAccount nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von AccountingAccount:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von AccountingAccount', details: error.message });
+  }
+});
+
+// ========================================
+// AccountingSettings Routes
+// ========================================
+
+// GET all accountingsettingss
+app.get('/api/accountingsettingss', async (req, res) => {
+  try {
+    const data = await prisma.accountingSettings.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von accountingsettingss:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von accountingsettingss', details: error.message });
+  }
+});
+
+// GET single AccountingSettings
+app.get('/api/accountingsettingss/:id', async (req, res) => {
+  try {
+    const data = await prisma.accountingSettings.findUnique({
+      where: { db_id: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'AccountingSettings nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von AccountingSettings:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von AccountingSettings', details: error.message });
+  }
+});
+
+// POST new AccountingSettings
+app.post('/api/accountingsettingss', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues AccountingSettings: ${dataToInsert.db_id}`);
+    }
+    
+    const data = await prisma.accountingSettings.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von AccountingSettings:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von AccountingSettings', details: error.message });
+  }
+});
+
+// PUT update AccountingSettings
+app.put('/api/accountingsettingss/:id', async (req, res) => {
+  try {
+    const data = await prisma.accountingSettings.update({
+      where: { db_id: req.params.id },
+      data: req.body
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren von AccountingSettings:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von AccountingSettings', details: error.message });
+  }
+});
+
+// DELETE AccountingSettings (über Frontend-ID oder db_id)
+app.delete('/api/accountingsettingss', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.accountingSettings.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'AccountingSettings nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von AccountingSettings:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von AccountingSettings', details: error.message });
   }
 });
 
@@ -427,6 +611,98 @@ app.delete('/api/recipes', async (req, res) => {
   }
 });
 
+// ========================================
+// Receipt Routes
+// ========================================
+
+// GET all receipts
+app.get('/api/receipts', async (req, res) => {
+  try {
+    const data = await prisma.receipt.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von receipts:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von receipts', details: error.message });
+  }
+});
+
+// GET single Receipt
+app.get('/api/receipts/:id', async (req, res) => {
+  try {
+    const data = await prisma.receipt.findUnique({
+      where: { db_id: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'Receipt nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von Receipt:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von Receipt', details: error.message });
+  }
+});
+
+// POST new Receipt
+app.post('/api/receipts', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues Receipt: ${dataToInsert.db_id}`);
+    }
+    
+    const data = await prisma.receipt.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von Receipt:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von Receipt', details: error.message });
+  }
+});
+
+// PUT update Receipt
+app.put('/api/receipts/:id', async (req, res) => {
+  try {
+    const data = await prisma.receipt.update({
+      where: { db_id: req.params.id },
+      data: req.body
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren von Receipt:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von Receipt', details: error.message });
+  }
+});
+
+// DELETE Receipt (über Frontend-ID oder db_id)
+app.delete('/api/receipts', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.receipt.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'Receipt nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von Receipt:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von Receipt', details: error.message });
+  }
+});
+
 // Error Handling
 app.use((err, req, res, next) => {
   console.error('Unbehandelter Fehler:', err);
@@ -456,7 +732,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Prisma API Server läuft auf Port ${PORT}`);
   console.log(`📊 Schema Version: 2.2.2`);
   console.log(`🔗 Endpunkte:`);
+  console.log(`   - /api/accountingaccounts`);
+  console.log(`   - /api/accountingsettingss`);
   console.log(`   - /api/suppliers`);
   console.log(`   - /api/articles`);
   console.log(`   - /api/recipes`);
+  console.log(`   - /api/receipts`);
 });

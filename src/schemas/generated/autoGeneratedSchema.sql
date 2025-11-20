@@ -1,5 +1,5 @@
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-11-03T01:06:18.417Z
+-- Generiert am: 2025-11-17T23:03:58.540Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -9,6 +9,80 @@
 CREATE TYPE IF NOT EXISTS sync_status_enum AS ENUM ('synced', 'pending', 'error', 'conflict');
 CREATE TYPE IF NOT EXISTS difficulty_enum AS ENUM ('1', '2', '3', '4', '5');
 CREATE TYPE IF NOT EXISTS unit_enum AS ENUM ('kg', 'g', 'l', 'ml', 'Stück', 'Packung', 'Dose', 'Glas', 'Bund', 'Portion');
+
+-- ========================================
+-- Tabelle: accountingaccounts (Interface: AccountingAccount)
+-- ========================================
+
+-- Erstelle Tabelle: accountingaccounts (Interface: AccountingAccount)
+CREATE TABLE IF NOT EXISTS accountingaccounts (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+chart_id TEXT,
+template_id TEXT,
+code TEXT,
+number TEXT,
+name TEXT NOT NULL,
+category TEXT NOT NULL,
+vat_tag TEXT,
+origin TEXT,
+status TEXT,
+notes TEXT,
+parent_id TEXT,
+path JSONB,
+sort_order DECIMAL,
+type TEXT,
+is_leaf BOOLEAN,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für accountingaccounts
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_accountingaccounts_id ON accountingaccounts(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_accountingaccounts_db_id ON accountingaccounts(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_accountingaccounts_created_at ON accountingaccounts(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_accountingaccounts_updated_at ON accountingaccounts(updated_at);
+
+-- ========================================
+-- Tabelle: accountingsettingss (Interface: AccountingSettings)
+-- ========================================
+
+-- Erstelle Tabelle: accountingsettingss (Interface: AccountingSettings)
+CREATE TABLE IF NOT EXISTS accountingsettingss (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+selected_chart_id TEXT,
+customizations_enabled BOOLEAN,
+ocr_api_configs TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für accountingsettingss
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_accountingsettingss_id ON accountingsettingss(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_accountingsettingss_db_id ON accountingsettingss(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_accountingsettingss_created_at ON accountingsettingss(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_accountingsettingss_updated_at ON accountingsettingss(updated_at);
 
 -- ========================================
 -- Tabelle: suppliers (Interface: Supplier)
@@ -54,6 +128,7 @@ CREATE TABLE IF NOT EXISTS articles (
 id UUID NOT NULL,
 db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 name TEXT NOT NULL,
+names_o_c_r JSONB,
 category TEXT NOT NULL,
 supplier_id UUID NOT NULL,
 supplier_article_number TEXT,
@@ -64,7 +139,7 @@ content DECIMAL,
 content_unit TEXT,
 content_ean_code TEXT,
 price_per_unit DECIMAL,
-vat_rate DECIMAL DEFAULT 19,
+accounting_account_number TEXT,
 allergens JSONB,
 additives JSONB,
 ingredients TEXT,
@@ -146,6 +221,45 @@ CREATE INDEX IF NOT EXISTS idx_recipes_created_at ON recipes(created_at);
 CREATE INDEX IF NOT EXISTS idx_recipes_updated_at ON recipes(updated_at);
 
 -- ========================================
+-- Tabelle: receipts (Interface: Receipt)
+-- ========================================
+
+-- Erstelle Tabelle: receipts (Interface: Receipt)
+CREATE TABLE IF NOT EXISTS receipts (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+supplier_id UUID,
+booking_number TEXT,
+receipt_date TEXT,
+receipt_number TEXT,
+receipt_details JSONB,
+due_date TEXT,
+payment_status TEXT,
+line_item_count DECIMAL,
+accounting TEXT,
+is_completed BOOLEAN,
+notes TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für receipts
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_receipts_id ON receipts(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_receipts_db_id ON receipts(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_receipts_created_at ON receipts(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_receipts_updated_at ON receipts(updated_at);
+
+-- ========================================
 -- Foreign Key Constraints (DEAKTIVIERT)
 -- ========================================
 -- Foreign Keys werden bewusst nicht erstellt, um ungewollte Löschungen zu vermeiden.
@@ -153,6 +267,11 @@ CREATE INDEX IF NOT EXISTS idx_recipes_updated_at ON recipes(updated_at);
 
 -- POTENTIELLER Foreign Key (deaktiviert):
 -- ALTER TABLE articles ADD CONSTRAINT fk_articles_supplier 
+--   FOREIGN KEY (supplier_id) REFERENCES suppliers(db_id) 
+--   ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- POTENTIELLER Foreign Key (deaktiviert):
+-- ALTER TABLE receipts ADD CONSTRAINT fk_receipts_supplier 
 --   FOREIGN KEY (supplier_id) REFERENCES suppliers(db_id) 
 --   ON DELETE SET NULL ON UPDATE CASCADE;
 

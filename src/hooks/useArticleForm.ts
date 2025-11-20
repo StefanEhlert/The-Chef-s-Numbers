@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { suggestCategory } from '../utils/helpers';
 import { categoryManager } from '../utils/categoryManager';
-import { VAT_RATES } from '../constants/articleConstants';
 import { ExtendedProductData } from '../services/nutritionAPI';
+import { storageLayer } from '../services/storageLayer';
+import { AccountingAccount } from '../types';
 
 // Interfaces
 export interface ArticleForm {
@@ -17,7 +18,7 @@ export interface ArticleForm {
   contentUnit: string;
   contentEanCode?: string; // EAN-Code für den Inhalt
   pricePerUnit: number;
-  vatRate: number;
+  accountingAccountNumber?: string; // SKR-Kontonummer
   additives: string[];
   allergens: string[];
   ingredients: string;
@@ -215,7 +216,7 @@ const initialArticleForm: ArticleForm = {
   contentUnit: '',
   contentEanCode: '',
   pricePerUnit: 0,
-  vatRate: 19,
+  accountingAccountNumber: '',
   additives: [],
   allergens: [],
   ingredients: '',
@@ -263,9 +264,11 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   const [showPriceConverter, setShowPriceConverter] = useState(false);
   const [selectedVatRate, setSelectedVatRate] = useState(19);
   
-  // MwSt-Dropdown-State
-  const [showVatRateDropdown, setShowVatRateDropdown] = useState(false);
-  const [selectedVatRateIndex, setSelectedVatRateIndex] = useState(-1);
+  // SKR-Konto-Dropdown-State
+  const [showAccountingAccountDropdown, setShowAccountingAccountDropdown] = useState(false);
+  const [accountingAccountSearchTerm, setAccountingAccountSearchTerm] = useState('');
+  const [selectedAccountingAccountIndex, setSelectedAccountingAccountIndex] = useState(-1);
+  const [accountingAccounts, setAccountingAccounts] = useState<AccountingAccount[]>([]);
   
   // Taschenrechner-State
   const [showCalculator, setShowCalculator] = useState(false);
@@ -375,55 +378,113 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     ).slice(0, 10);
   }, [contentUnitSearchTerm]);
 
+  // Lade AccountingAccounts beim ersten Aufruf
+  const loadAccountingAccounts = useCallback(async () => {
+    try {
+      const accounts = await storageLayer.load<AccountingAccount>('accountingAccounts');
+      if (accounts) {
+        // Filtere nur aktive Konten
+        const activeAccounts = accounts.filter(acc => acc.status === 'active');
+        setAccountingAccounts(activeAccounts);
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der AccountingAccounts:', error);
+      setAccountingAccounts([]);
+    }
+  }, []);
+
+  // Filterfunktion für AccountingAccounts
+  const getFilteredAccountingAccounts = useCallback(() => {
+    if (!accountingAccountSearchTerm) {
+      return accountingAccounts.slice(0, 20);
+    }
+    
+    const searchLower = accountingAccountSearchTerm.toLowerCase();
+    return accountingAccounts.filter(account =>
+      account.number.toLowerCase().includes(searchLower) ||
+      account.name.toLowerCase().includes(searchLower) ||
+      account.category.toLowerCase().includes(searchLower)
+    ).slice(0, 20);
+  }, [accountingAccountSearchTerm, accountingAccounts]);
+
   // Event-Handler
   const handleCategorySelect = useCallback((category: string) => {
     setArticleForm(prev => ({ ...prev, category }));
     setCategorySearchTerm('');
     setShowCategoryDropdown(false);
 
-    // Suche nach Artikeln mit der gleichen Kategorie und übernehme Nährwerte
+    // Suche nach Artikeln mit der gleichen Kategorie und übernehme Nährwerte und SKR-Konto
     if (articles && articles.length > 0) {
       const articlesWithSameCategory = articles.filter(article => 
-        article.category === category && 
-        article.nutritionInfo && 
-        (article.nutritionInfo.calories > 0 || 
-         article.nutritionInfo.protein > 0 || 
-         article.nutritionInfo.fat > 0 || 
-         article.nutritionInfo.carbohydrates > 0)
+        article.category === category
       );
 
       if (articlesWithSameCategory.length > 0) {
-        // Nehme den ersten Artikel mit Nährwerten
-        const referenceArticle = articlesWithSameCategory[0];
-        const nutrition = referenceArticle.nutritionInfo;
-        
-        // Übernehme nur die Nährwerte, wenn das aktuelle Formular noch keine hat
-        setArticleForm(prev => {
-          const currentNutrition = prev.nutrition;
-          const hasCurrentNutrition = currentNutrition.calories > 0 || 
-                                    currentNutrition.protein > 0 || 
-                                    currentNutrition.fat > 0 || 
-                                    currentNutrition.carbohydrates > 0;
+        // Suche nach Artikel mit Nährwerten
+        const articlesWithNutrition = articlesWithSameCategory.filter(article => 
+          article.nutritionInfo && 
+          (article.nutritionInfo.calories > 0 || 
+           article.nutritionInfo.protein > 0 || 
+           article.nutritionInfo.fat > 0 || 
+           article.nutritionInfo.carbohydrates > 0)
+        );
 
-          if (!hasCurrentNutrition && nutrition) {
-            // Zeige eine Benachrichtigung in der Konsole (kann später durch eine UI-Benachrichtigung ersetzt werden)
-            console.log(`Nährwerte von Artikel "${referenceArticle.name}" übernommen`);
-            
-            return {
-              ...prev,
-              nutrition: {
-                calories: nutrition.calories || 0,
-                kilojoules: nutrition.kilojoules || 0,
-                protein: nutrition.protein || 0,
-                fat: nutrition.fat || 0,
-                carbohydrates: nutrition.carbohydrates || 0,
-                fiber: nutrition.fiber || 0,
-                sugar: nutrition.sugar || 0,
-                salt: nutrition.salt || 0
-              }
-            };
+        // Suche nach Artikel mit SKR-Konto
+        const articlesWithAccountingAccount = articlesWithSameCategory.filter(article => 
+          article.accountingAccountNumber && article.accountingAccountNumber.trim() !== ''
+        );
+
+        // Übernehme Nährwerte und SKR-Konto in einem Update
+        setArticleForm(prev => {
+          let updatedForm = { ...prev };
+          let hasChanges = false;
+
+          // Übernehme Nährwerte, wenn vorhanden und noch keine vorhanden sind
+          if (articlesWithNutrition.length > 0) {
+            const referenceArticle = articlesWithNutrition[0];
+            const nutrition = referenceArticle.nutritionInfo;
+            const currentNutrition = prev.nutrition;
+            const hasCurrentNutrition = currentNutrition.calories > 0 || 
+                                      currentNutrition.protein > 0 || 
+                                      currentNutrition.fat > 0 || 
+                                      currentNutrition.carbohydrates > 0;
+
+            if (!hasCurrentNutrition && nutrition) {
+              console.log(`Nährwerte von Artikel "${referenceArticle.name}" übernommen`);
+              hasChanges = true;
+              updatedForm = {
+                ...updatedForm,
+                nutrition: {
+                  calories: nutrition.calories || 0,
+                  kilojoules: nutrition.kilojoules || 0,
+                  protein: nutrition.protein || 0,
+                  fat: nutrition.fat || 0,
+                  carbohydrates: nutrition.carbohydrates || 0,
+                  fiber: nutrition.fiber || 0,
+                  sugar: nutrition.sugar || 0,
+                  salt: nutrition.salt || 0
+                }
+              };
+            }
           }
-          return prev;
+
+          // Übernehme SKR-Konto, wenn vorhanden und noch keines vorhanden ist
+          if (articlesWithAccountingAccount.length > 0) {
+            const referenceArticle = articlesWithAccountingAccount[0];
+            const accountingAccountNumber = referenceArticle.accountingAccountNumber;
+            const hasCurrentAccountingAccount = prev.accountingAccountNumber && prev.accountingAccountNumber.trim() !== '';
+
+            if (!hasCurrentAccountingAccount && accountingAccountNumber) {
+              console.log(`SKR-Konto "${accountingAccountNumber}" von Artikel "${referenceArticle.name}" übernommen`);
+              hasChanges = true;
+              updatedForm = {
+                ...updatedForm,
+                accountingAccountNumber: accountingAccountNumber
+              };
+            }
+          }
+
+          return hasChanges ? updatedForm : prev;
         });
       }
     }
@@ -718,6 +779,68 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     }));
   }, []);
 
+  // AccountingAccount Handler
+  const handleAccountingAccountSelect = useCallback((account: AccountingAccount) => {
+    setArticleForm(prev => ({ ...prev, accountingAccountNumber: account.number }));
+    setAccountingAccountSearchTerm('');
+    setShowAccountingAccountDropdown(false);
+    setSelectedAccountingAccountIndex(-1);
+  }, []);
+
+  const handleAccountingAccountInputChange = useCallback((value: string) => {
+    setAccountingAccountSearchTerm(value);
+    setShowAccountingAccountDropdown(true);
+    setSelectedAccountingAccountIndex(-1);
+  }, []);
+
+  const handleAccountingAccountInputBlur = useCallback(() => {
+    // Verzögere das Schließen, damit onClick-Events noch ausgeführt werden können
+    setTimeout(() => {
+      setShowAccountingAccountDropdown(false);
+    }, 200);
+  }, []);
+
+  const handleAccountingAccountKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const filteredAccounts = getFilteredAccountingAccounts();
+    const totalOptions = filteredAccounts.length;
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedAccountingAccountIndex(prev => {
+          if (prev < totalOptions - 1) return prev + 1;
+          return 0;
+        });
+        break;
+      
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedAccountingAccountIndex(prev => {
+          if (prev > 0) return prev - 1;
+          return totalOptions - 1;
+        });
+        break;
+      
+      case 'Enter':
+        e.preventDefault();
+        if (selectedAccountingAccountIndex >= 0 && selectedAccountingAccountIndex < filteredAccounts.length) {
+          handleAccountingAccountSelect(filteredAccounts[selectedAccountingAccountIndex]);
+        }
+        break;
+      
+      case 'Escape':
+        e.preventDefault();
+        setShowAccountingAccountDropdown(false);
+        setSelectedAccountingAccountIndex(-1);
+        break;
+      
+      case 'Tab':
+        setShowAccountingAccountDropdown(false);
+        setSelectedAccountingAccountIndex(-1);
+        break;
+    }
+  }, [accountingAccountSearchTerm, selectedAccountingAccountIndex, getFilteredAccountingAccounts, handleAccountingAccountSelect]);
+
   const handlePriceChange = useCallback((newBundlePrice: number) => {
     const newPricePerUnit = calculatePricePerUnit(newBundlePrice, articleForm.content);
     setArticleForm(prev => ({
@@ -859,6 +982,8 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     setShowAdditivesDropdown(false);
     setShowAllergensDropdown(false);
     setShowPriceConverter(false);
+    setShowAccountingAccountDropdown(false);
+    setAccountingAccountSearchTerm('');
     setSelectedCategoryIndex(-1);
     setSelectedSupplierIndex(-1);
     setSelectedBundleUnitIndex(-1);
@@ -879,8 +1004,7 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
       contentUnit: article.contentUnit,
       contentEanCode: article.contentEanCode || '',
       pricePerUnit: article.pricePerUnit,
-
-      vatRate: article.vatRate || 19, // vatRate hinzufügen
+      accountingAccountNumber: article.accountingAccountNumber || '',
       additives: Array.isArray(article.additives) ? article.additives : [],
       allergens: Array.isArray(article.allergens) ? article.allergens : [],
       ingredients: article.ingredients || '', // ingredients hinzufügen
@@ -918,8 +1042,10 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     showAllergensDropdown,
     showPriceConverter,
     selectedVatRate,
-    showVatRateDropdown,
-    selectedVatRateIndex,
+    showAccountingAccountDropdown,
+    accountingAccountSearchTerm,
+    selectedAccountingAccountIndex,
+    accountingAccounts,
     showCalculator,
     bundlePriceInput,
     contentInput,
@@ -932,8 +1058,10 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     setPricePerUnitInput,
     setShowPriceConverter,
     setSelectedVatRate,
-    setShowVatRateDropdown,
-    setSelectedVatRateIndex,
+    setShowAccountingAccountDropdown,
+    setAccountingAccountSearchTerm,
+    setSelectedAccountingAccountIndex,
+    loadAccountingAccounts,
     setShowCalculator,
     setShowCategoryDropdown,
     setSelectedCategoryIndex,
@@ -957,6 +1085,7 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     getFilteredSuppliers,
     getFilteredBundleUnits,
     getFilteredContentUnits,
+    getFilteredAccountingAccounts,
 
     // Event-Handler
     handleCategorySelect,
@@ -980,7 +1109,10 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     handleAllergenToggle,
     handlePriceChange,
     handleContentChange,
-    handleVatRateChange,
+    handleAccountingAccountSelect,
+    handleAccountingAccountInputChange,
+    handleAccountingAccountInputBlur,
+    handleAccountingAccountKeyDown,
     handleApplyGrossPrice,
     handleApplyNetPrice,
     handleCalculatorResult,
@@ -996,7 +1128,6 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     CATEGORIES,
     UNITS,
     ADDITIVES,
-    ALLERGENS,
-    VAT_RATES
+    ALLERGENS
   };
 }; 

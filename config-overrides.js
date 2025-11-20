@@ -18,6 +18,7 @@ module.exports = function override(config, env) {
     "https": require.resolve("https-browserify"),
     "timers": require.resolve("timers-browserify"),
     "vm": require.resolve("vm-browserify"),
+    "process": require.resolve("process/browser"),
     "fs": false,
     "net": false,
     "tls": false,
@@ -31,6 +32,12 @@ module.exports = function override(config, env) {
       Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',
     }),
+  ];
+  
+  // Ignoriere Warnungen für PDF.js
+  config.ignoreWarnings = [
+    ...(config.ignoreWarnings || []),
+    /Failed to parse source map/,
   ];
 
   return config;

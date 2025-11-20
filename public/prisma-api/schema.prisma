@@ -1,6 +1,6 @@
 // Chef Numbers Prisma Schema
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-11-03T01:06:18.463Z
+// Automatisch generiert am: 2025-11-17T23:03:58.588Z
 
 generator client {
   provider = "prisma-client-js"
@@ -9,6 +9,56 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+// Model: AccountingAccount
+model AccountingAccount {
+  id                     String @db.VarChar(36)
+  db_id                  String @id @default(uuid()) @db.VarChar(36)
+  chartId                String? @map("chart_id") @db.Text
+  templateId             String? @map("template_id") @db.Text
+  code                   String? @db.Text
+  number                 String? @db.Text
+  name                   String @db.Text
+  category               String @db.Text
+  vatTag                 String? @map("vat_tag") @db.Text
+  origin                 String? @db.Text
+  status                 String? @db.Text
+  notes                  String? @db.Text
+  parentId               String? @map("parent_id") @db.Text
+  path                   Json?
+  sortOrder              Decimal? @map("sort_order") @db.Decimal(10, 4)
+  type                   String? @db.Text
+  isLeaf                 Boolean? @map("is_leaf")
+  isDirty                Boolean? @default(false) @map("is_dirty")
+  isNew                  Boolean? @default(false) @map("is_new")
+  syncStatus             String? @default("pending") @map("sync_status")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdBy              String? @map("created_by") @db.VarChar(36)
+  updatedBy              String? @map("updated_by") @db.VarChar(36)
+  lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
+
+  @@map("accountingaccounts")
+}
+
+// Model: AccountingSettings
+model AccountingSettings {
+  id                     String @db.VarChar(36)
+  db_id                  String @id @default(uuid()) @db.VarChar(36)
+  selectedChartId        String? @map("selected_chart_id") @db.Text
+  customizationsEnabled  Boolean? @map("customizations_enabled")
+  ocrApiConfigs          String? @map("ocr_api_configs") @db.Text
+  isDirty                Boolean? @default(false) @map("is_dirty")
+  isNew                  Boolean? @default(false) @map("is_new")
+  syncStatus             String? @default("pending") @map("sync_status")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdBy              String? @map("created_by") @db.VarChar(36)
+  updatedBy              String? @map("updated_by") @db.VarChar(36)
+  lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
+
+  @@map("accountingsettingss")
 }
 
 // Model: Supplier
@@ -39,6 +89,7 @@ model Article {
   id                     String @db.VarChar(36)
   db_id                  String @id @default(uuid()) @db.VarChar(36)
   name                   String @db.Text
+  namesOCR               Json? @map("names_o_c_r")
   category               String @db.Text
   supplierId             String @map("supplier_id") @db.VarChar(36)
   supplierArticleNumber  String? @map("supplier_article_number") @db.Text
@@ -49,7 +100,7 @@ model Article {
   contentUnit            String? @map("content_unit") @db.Text
   contentEanCode         String? @map("content_ean_code") @db.Text
   pricePerUnit           Decimal? @map("price_per_unit") @db.Decimal(10, 4)
-  vatRate                Decimal? @default(19) @map("vat_rate") @db.Decimal(10, 4)
+  accountingAccountNumber String? @map("accounting_account_number") @db.Text
   allergens              Json?
   additives              Json?
   ingredients            String? @db.Text
@@ -104,6 +155,33 @@ model Recipe {
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
 
   @@map("recipes")
+}
+
+// Model: Receipt
+model Receipt {
+  id                     String @db.VarChar(36)
+  db_id                  String @id @default(uuid()) @db.VarChar(36)
+  supplierId             String? @map("supplier_id") @db.VarChar(36)
+  bookingNumber          String? @map("booking_number") @db.Text
+  receiptDate            String? @map("receipt_date") @db.Text
+  receiptNumber          String? @map("receipt_number") @db.Text
+  receiptDetails         Json? @map("receipt_details")
+  dueDate                String? @map("due_date") @db.Text
+  paymentStatus          String? @map("payment_status") @db.Text
+  lineItemCount          Decimal? @map("line_item_count") @db.Decimal(10, 4)
+  accounting             String? @db.Text
+  isCompleted            Boolean? @map("is_completed")
+  notes                  String? @db.Text
+  isDirty                Boolean? @default(false) @map("is_dirty")
+  isNew                  Boolean? @default(false) @map("is_new")
+  syncStatus             String? @default("pending") @map("sync_status")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdBy              String? @map("created_by") @db.VarChar(36)
+  updatedBy              String? @map("updated_by") @db.VarChar(36)
+  lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
+
+  @@map("receipts")
 }
 
 // System-Tabellen

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
+import { Receipt, ReceiptPaymentStatus } from '../types';
+import type { AccountingSettings } from '../types/accounting';
 
 // App State Interface
 interface AppState {
@@ -37,6 +39,16 @@ interface AppState {
   selectedRecipes: string[];
   recipeSortBy: 'name' | 'portions' | 'costPerPortion' | 'sellingPrice' | 'energy' | 'timestamp';
   recipeSortOrder: 'asc' | 'desc';
+  
+  // Belegverwaltung
+  receipts: Receipt[];
+  receiptSearchTerm: string;
+  receiptSortField: 'receiptDate' | 'supplier' | 'dueDate' | 'paymentStatus' | 'lineItemCount' | 'totalGross';
+  receiptSortDirection: 'asc' | 'desc';
+  receiptSelectedSupplier: string;
+  receiptSelectedPaymentStatus: ReceiptPaymentStatus | '';
+  receiptCompletionFilter: 'all' | 'completed' | 'open';
+  selectedReceipts: string[];
   
   // Formulare
   showArticleForm: boolean;
@@ -99,14 +111,58 @@ type AppAction =
   | { type: 'SET_RECIPE_VIEW_MODE'; payload: 'list' | 'grid' }
   | { type: 'SET_RECIPE_SORT_BY'; payload: 'name' | 'portions' | 'costPerPortion' | 'sellingPrice' | 'energy' | 'timestamp' }
   | { type: 'SET_RECIPE_SORT_ORDER'; payload: 'asc' | 'desc' }
-  | { type: 'SET_SELECTED_RECIPES'; payload: string[] };
+  | { type: 'SET_SELECTED_RECIPES'; payload: string[] }
+  // Belegverwaltung Actions
+  | { type: 'SET_RECEIPTS'; payload: Receipt[] }
+  | { type: 'ADD_RECEIPT'; payload: Receipt }
+  | { type: 'UPDATE_RECEIPT'; payload: { id: string; receipt: Receipt } }
+  | { type: 'DELETE_RECEIPTS'; payload: string[] }
+  | { type: 'SET_RECEIPT_SEARCH_TERM'; payload: string }
+  | { type: 'SET_RECEIPT_SORT_FIELD'; payload: AppState['receiptSortField'] }
+  | { type: 'SET_RECEIPT_SORT_DIRECTION'; payload: 'asc' | 'desc' }
+  | { type: 'SET_RECEIPT_SELECTED_SUPPLIER'; payload: string }
+  | { type: 'SET_RECEIPT_SELECTED_PAYMENT_STATUS'; payload: ReceiptPaymentStatus | '' }
+  | { type: 'SET_RECEIPT_COMPLETION_FILTER'; payload: 'all' | 'completed' | 'open' }
+  | { type: 'SET_SELECTED_RECEIPTS'; payload: string[] };
+
+// Hilfsfunktion zum Laden des gespeicherten Designs
+const loadSavedDesign = (): string => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        const design = typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+        try {
+          return JSON.parse(design);
+        } catch (e) {
+          return design;
+        }
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      try {
+        return JSON.parse(oldKey);
+      } catch (e) {
+        return oldKey;
+      }
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des gespeicherten Designs:', error);
+  }
+  return 'warm'; // Fallback auf 'warm' wenn kein Design gespeichert ist
+};
 
 // Initial State
 const initialState: AppState = {
   sidebarOpen: true,
   isMobile: false,
   currentPage: 'dashboard',
-  currentDesign: 'warm',
+  currentDesign: loadSavedDesign(),
   showDesignSelector: false,
   articles: [],
   searchTerm: '',
@@ -129,6 +185,14 @@ const initialState: AppState = {
   selectedRecipes: [],
   recipeSortBy: 'name',
   recipeSortOrder: 'asc',
+  receipts: [],
+  receiptSearchTerm: '',
+  receiptSortField: 'receiptDate',
+  receiptSortDirection: 'desc',
+  receiptSelectedSupplier: '',
+  receiptSelectedPaymentStatus: '',
+  receiptCompletionFilter: 'all',
+  selectedReceipts: [],
   showArticleForm: false,
   editingArticle: null,
   newArticleName: '', // Initialize newArticleName
@@ -260,6 +324,37 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, recipeSortOrder: action.payload };
     case 'SET_SELECTED_RECIPES':
       return { ...state, selectedRecipes: action.payload };
+    case 'SET_RECEIPTS':
+      return { ...state, receipts: action.payload };
+    case 'ADD_RECEIPT':
+      return { ...state, receipts: [...state.receipts, action.payload] };
+    case 'UPDATE_RECEIPT':
+      return {
+        ...state,
+        receipts: state.receipts.map(receipt =>
+          receipt.id === action.payload.id ? action.payload.receipt : receipt
+        ),
+      };
+    case 'DELETE_RECEIPTS':
+      return {
+        ...state,
+        receipts: state.receipts.filter(receipt => !action.payload.includes(receipt.id)),
+        selectedReceipts: state.selectedReceipts.filter(id => !action.payload.includes(id)),
+      };
+    case 'SET_RECEIPT_SEARCH_TERM':
+      return { ...state, receiptSearchTerm: action.payload };
+    case 'SET_RECEIPT_SORT_FIELD':
+      return { ...state, receiptSortField: action.payload };
+    case 'SET_RECEIPT_SORT_DIRECTION':
+      return { ...state, receiptSortDirection: action.payload };
+    case 'SET_RECEIPT_SELECTED_SUPPLIER':
+      return { ...state, receiptSelectedSupplier: action.payload };
+    case 'SET_RECEIPT_SELECTED_PAYMENT_STATUS':
+      return { ...state, receiptSelectedPaymentStatus: action.payload };
+    case 'SET_RECEIPT_COMPLETION_FILTER':
+      return { ...state, receiptCompletionFilter: action.payload };
+    case 'SET_SELECTED_RECEIPTS':
+      return { ...state, selectedReceipts: action.payload };
     default:
       return state;
   }
@@ -284,9 +379,57 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Einfache App-Initialisierung (ohne Auto-Migration)
   useEffect(() => {
-    console.log('🚀 App wird initialisiert...');
-    setIsInitialized(true);
-    console.log('✅ App-Initialisierung abgeschlossen');
+    const initializeApp = async () => {
+      console.log('🚀 App wird initialisiert...');
+      
+      // Initialisiere vatRates in accountingSettings falls nicht vorhanden
+      try {
+        const { storageLayer } = await import('../services/storageLayer');
+        const { VAT_RATES } = await import('../constants/articleConstants');
+        
+        const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+        let needsUpdate = false;
+        let updatedSettings: AccountingSettings;
+        
+        if (!settings || settings.length === 0) {
+          // Erstelle neue Settings mit vatRates
+          const { generateId } = await import('../utils/storageUtils');
+          updatedSettings = {
+            id: generateId(),
+            vatRates: VAT_RATES,
+            updatedAt: new Date(),
+            isNew: true,
+            isDirty: true,
+            syncStatus: 'pending'
+          };
+          needsUpdate = true;
+        } else {
+          const firstSettings = settings[0];
+          if (!firstSettings.vatRates || firstSettings.vatRates.length === 0) {
+            // Füge vatRates hinzu
+            updatedSettings = {
+              ...firstSettings,
+              vatRates: VAT_RATES,
+              updatedAt: new Date(),
+              isDirty: true
+            };
+            needsUpdate = true;
+          }
+        }
+        
+        if (needsUpdate) {
+          await storageLayer.save('accountingSettings', [updatedSettings!]);
+          console.log('✅ vatRates in accountingSettings initialisiert');
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Initialisieren von vatRates:', error);
+      }
+      
+      setIsInitialized(true);
+      console.log('✅ App-Initialisierung abgeschlossen');
+    };
+    
+    initializeApp();
   }, []); // Dependency Array mit State-Variablen
 
   // Zeige Ladebildschirm während Initialisierung

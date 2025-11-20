@@ -128,13 +128,99 @@ interface StorageManagement {
   };
 }
 
+// Hilfsfunktion für Design-Speicherung in localOptions
+const loadDesign = (): string | null => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        return typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      // Migriere zu neuer Struktur
+      saveDesign(oldKey);
+      // Lösche alten Key
+      localStorage.removeItem('chef_design');
+      return oldKey;
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des Designs:', error);
+  }
+  return null;
+};
+
+// Hilfsfunktion zum Laden des gespeicherten Designs (mit Fallback)
+const loadSavedDesign = (): string => {
+  try {
+    // Lade aus neuer zentraler Struktur
+    const localOptionsStr = localStorage.getItem('localOptions');
+    if (localOptionsStr) {
+      const localOptions = JSON.parse(localOptionsStr);
+      if (localOptions?.design) {
+        const design = typeof localOptions.design === 'string' ? localOptions.design : JSON.stringify(localOptions.design);
+        try {
+          return JSON.parse(design);
+        } catch (e) {
+          return design;
+        }
+      }
+    }
+    
+    // Migration: Prüfe alten Key (kann später entfernt werden)
+    const oldKey = localStorage.getItem('chef_design');
+    if (oldKey) {
+      try {
+        return JSON.parse(oldKey);
+      } catch (e) {
+        return oldKey;
+      }
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden des gespeicherten Designs:', error);
+  }
+  return 'warm'; // Fallback auf 'warm' wenn kein Design gespeichert ist
+};
+
+const saveDesign = (design: string) => {
+  try {
+    // Lade bestehende localOptions
+    const localOptionsStr = localStorage.getItem('localOptions');
+    let localOptions: any = {};
+    
+    if (localOptionsStr) {
+      try {
+        localOptions = JSON.parse(localOptionsStr);
+      } catch (e) {
+        // Falls Parsing fehlschlägt, starte mit leerem Objekt
+        localOptions = {};
+      }
+    }
+    
+    // Speichere Design (als String, da es bereits JSON-stringified sein kann)
+    localOptions.design = typeof design === 'string' ? design : JSON.stringify(design);
+    
+    // Speichere zurück
+    localStorage.setItem('localOptions', JSON.stringify(localOptions));
+  } catch (error) {
+    console.error('Fehler beim Speichern des Designs:', error);
+  }
+};
+
 const StorageManagement: React.FC = () => {
   const appContext = useAppContext();
   const { state } = appContext;
 
   // Design-Farben laden
   const getCurrentColors = () => {
-    const design = state.currentDesign || 'warm'; // Fallback auf 'warm' wenn currentDesign noch nicht gesetzt ist
+    // Lade gespeichertes Design oder verwende currentDesign aus State
+    const savedDesign = loadSavedDesign();
+    const design = state.currentDesign || savedDesign; // Verwende gespeichertes Design als Fallback
     const template = designTemplates[design as keyof typeof designTemplates];
     if (!template) {
       console.warn(`Design template '${design}' nicht gefunden, verwende 'warm'`);
@@ -2771,7 +2857,7 @@ const StorageManagement: React.FC = () => {
       });
 
       // Standard LocalStorage-Schlüssel
-      const localStorageKeys = ['artikelExportFilter', 'chef_design'];
+      const localStorageKeys = ['localOptions'];
       for (const key of localStorageKeys) {
         const value = localStorage.getItem(key);
         if (value) {
@@ -3413,7 +3499,7 @@ const StorageManagement: React.FC = () => {
       const suppliers = await storageLayer.load('suppliers');
       const recipes = await storageLayer.load('recipes');
       // Design immer aus LocalStorage laden (nicht über StorageLayer)
-      const design = localStorage.getItem('chef_design');
+      const design = loadDesign();
       
       console.log('📊 Geladene Daten:', {
         articles: articles?.length || 0,
@@ -3438,12 +3524,18 @@ const StorageManagement: React.FC = () => {
         console.log(`✅ ${recipes.length} Rezepte in den State geladen`);
       }
       
-      if (design && design.length > 0) {
+      if (design) {
         // Design ist normalerweise ein einzelner Wert, nicht ein Array
         // Design aus LocalStorage parsen
-        const designString = design ? JSON.parse(design) : 'warm';
-        appContext.dispatch({ type: 'SET_CURRENT_DESIGN', payload: designString });
-        console.log(`✅ Design "${designString}" in den State geladen`);
+        try {
+          const designString = JSON.parse(design);
+          appContext.dispatch({ type: 'SET_CURRENT_DESIGN', payload: designString });
+          console.log(`✅ Design "${designString}" in den State geladen`);
+        } catch (e) {
+          // Falls kein JSON, verwende direkt als String
+          appContext.dispatch({ type: 'SET_CURRENT_DESIGN', payload: design });
+          console.log(`✅ Design "${design}" in den State geladen`);
+        }
       }
       
       console.log('✅ Alle App-Daten erfolgreich in den State geladen');

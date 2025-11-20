@@ -46,14 +46,29 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   const resizeStartX = React.useRef<number>(0);
   const resizeStartWidth = React.useRef<number>(60);
   
-  const FORM_WIDTH_STORAGE_KEY = 'recipeFormWidth';
-  
   const loadSavedWidth = (): number => {
     try {
-      const saved = localStorage.getItem(FORM_WIDTH_STORAGE_KEY);
-      if (saved) {
-        const width = parseFloat(saved);
+      // Lade aus neuer zentraler Struktur
+      const localOptionsStr = localStorage.getItem('localOptions');
+      if (localOptionsStr) {
+        const localOptions = JSON.parse(localOptionsStr);
+        if (localOptions?.formWidth?.recipeFormWidth) {
+          const width = parseFloat(localOptions.formWidth.recipeFormWidth);
+          if (!isNaN(width) && width >= 40 && width <= 90) {
+            return width;
+          }
+        }
+      }
+      
+      // Migration: Prüfe alten Key (kann später entfernt werden)
+      const oldKey = localStorage.getItem('recipeFormWidth');
+      if (oldKey) {
+        const width = parseFloat(oldKey);
         if (!isNaN(width) && width >= 40 && width <= 90) {
+          // Migriere zu neuer Struktur
+          saveWidth(width);
+          // Lösche alten Key
+          localStorage.removeItem('recipeFormWidth');
           return width;
         }
       }
@@ -65,7 +80,29 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
   
   const saveWidth = (width: number) => {
     try {
-      localStorage.setItem(FORM_WIDTH_STORAGE_KEY, width.toString());
+      // Lade bestehende localOptions
+      const localOptionsStr = localStorage.getItem('localOptions');
+      let localOptions: any = {};
+      
+      if (localOptionsStr) {
+        try {
+          localOptions = JSON.parse(localOptionsStr);
+        } catch (e) {
+          // Falls Parsing fehlschlägt, starte mit leerem Objekt
+          localOptions = {};
+        }
+      }
+      
+      // Stelle sicher, dass formWidth-Objekt existiert
+      if (!localOptions.formWidth) {
+        localOptions.formWidth = {};
+      }
+      
+      // Speichere Breite
+      localOptions.formWidth.recipeFormWidth = width.toString();
+      
+      // Speichere zurück
+      localStorage.setItem('localOptions', JSON.stringify(localOptions));
     } catch (error) {
       console.error('Fehler beim Speichern der Breite:', error);
     }

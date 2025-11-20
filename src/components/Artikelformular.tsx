@@ -67,16 +67,30 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [isInitialMount, setIsInitialMount] = useState(true); // Verhindert Transition beim ersten Öffnen
 
-  // Key für localStorage
-  const FORM_WIDTH_STORAGE_KEY = 'articleFormWidth';
-
   // Lade gespeicherte Breite
   const loadSavedWidth = (): number => {
     try {
-      const saved = localStorage.getItem(FORM_WIDTH_STORAGE_KEY);
-      if (saved) {
-        const width = parseFloat(saved);
+      // Lade aus neuer zentraler Struktur
+      const localOptionsStr = localStorage.getItem('localOptions');
+      if (localOptionsStr) {
+        const localOptions = JSON.parse(localOptionsStr);
+        if (localOptions?.formWidth?.articleFormWidth) {
+          const width = parseFloat(localOptions.formWidth.articleFormWidth);
+          if (!isNaN(width) && width >= 40 && width <= 90) {
+            return width;
+          }
+        }
+      }
+      
+      // Migration: Prüfe alten Key (kann später entfernt werden)
+      const oldKey = localStorage.getItem('articleFormWidth');
+      if (oldKey) {
+        const width = parseFloat(oldKey);
         if (!isNaN(width) && width >= 40 && width <= 90) {
+          // Migriere zu neuer Struktur
+          saveWidth(width);
+          // Lösche alten Key
+          localStorage.removeItem('articleFormWidth');
           return width;
         }
       }
@@ -89,7 +103,29 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   // Speichere Breite
   const saveWidth = (width: number) => {
     try {
-      localStorage.setItem(FORM_WIDTH_STORAGE_KEY, width.toString());
+      // Lade bestehende localOptions
+      const localOptionsStr = localStorage.getItem('localOptions');
+      let localOptions: any = {};
+      
+      if (localOptionsStr) {
+        try {
+          localOptions = JSON.parse(localOptionsStr);
+        } catch (e) {
+          // Falls Parsing fehlschlägt, starte mit leerem Objekt
+          localOptions = {};
+        }
+      }
+      
+      // Stelle sicher, dass formWidth-Objekt existiert
+      if (!localOptions.formWidth) {
+        localOptions.formWidth = {};
+      }
+      
+      // Speichere Breite
+      localOptions.formWidth.articleFormWidth = width.toString();
+      
+      // Speichere zurück
+      localStorage.setItem('localOptions', JSON.stringify(localOptions));
     } catch (error) {
       console.error('Fehler beim Speichern der Breite:', error);
     }
@@ -103,6 +139,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const resizeStartWidth = useRef<number>(60);
   const bundleUnitContainerRef = useRef<HTMLDivElement>(null);
   const contentUnitContainerRef = useRef<HTMLDivElement>(null);
+  const accountingAccountContainerRef = useRef<HTMLDivElement>(null);
   
   // State für das ausgewählte Bild-File
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -346,8 +383,10 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     showAllergensDropdown,
     showPriceConverter,
     selectedVatRate,
-    showVatRateDropdown,
-    selectedVatRateIndex,
+    showAccountingAccountDropdown,
+    accountingAccountSearchTerm,
+    selectedAccountingAccountIndex,
+    accountingAccounts,
     showCalculator,
     bundlePriceInput,
     contentInput,
@@ -360,8 +399,10 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     setPricePerUnitInput,
     setShowPriceConverter,
     setSelectedVatRate,
-    setShowVatRateDropdown,
-    setSelectedVatRateIndex,
+    setShowAccountingAccountDropdown,
+    setAccountingAccountSearchTerm,
+    setSelectedAccountingAccountIndex,
+    loadAccountingAccounts,
     setShowCalculator,
     setShowCategoryDropdown,
     setSelectedCategoryIndex,
@@ -385,6 +426,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     getFilteredSuppliers,
     getFilteredBundleUnits,
     getFilteredContentUnits,
+    getFilteredAccountingAccounts,
 
     // Event-Handler
     handleCategorySelect,
@@ -408,7 +450,10 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     handleAllergenToggle,
     handlePriceChange,
     handleContentChange,
-    handleVatRateChange,
+    handleAccountingAccountSelect,
+    handleAccountingAccountInputChange,
+    handleAccountingAccountInputBlur,
+    handleAccountingAccountKeyDown,
     handleApplyGrossPrice,
     handleApplyNetPrice,
     handleCalculatorResult,
@@ -423,8 +468,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     CATEGORIES,
     UNITS,
     ADDITIVES,
-    ALLERGENS,
-    VAT_RATES
+    ALLERGENS
   } = useArticleForm(suppliers, onNewSupplier, articles);
 
   // Debug-Log für articleForm Änderungen
@@ -458,6 +502,13 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
       dispatch({ type: 'SET_NEW_ARTICLE_NAME', payload: '' });
     }
   }, [state.editingArticle, state.newArticleName, setArticleForEditing, editingArticle, dispatch]);
+
+  // Lade AccountingAccounts beim Öffnen des Formulars
+  useEffect(() => {
+    if (show) {
+      loadAccountingAccounts();
+    }
+  }, [show, loadAccountingAccounts]);
 
   // Verhindere Scrolling im Hintergrund
   useEffect(() => {
@@ -505,6 +556,32 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
       }
     }
   }, [showContentUnitDropdown]);
+
+  // Passe die Breite des AccountingAccount-Dropdowns dynamisch an
+  useEffect(() => {
+    if (showAccountingAccountDropdown && accountingAccountContainerRef.current) {
+      const updateDropdownWidth = () => {
+        const input = accountingAccountContainerRef.current?.querySelector('input');
+        const dropdown = accountingAccountContainerRef.current?.querySelector('.accounting-account-dropdown') as HTMLElement;
+        if (input && dropdown) {
+          const inputWidth = input.offsetWidth;
+          const isSmallScreen = window.innerWidth < 768;
+          dropdown.style.width = isSmallScreen ? '400px' : `${inputWidth}px`;
+        }
+      };
+
+      // Initiale Berechnung nach kurzer Verzögerung (damit DOM gerendert ist)
+      const timeoutId = setTimeout(updateDropdownWidth, 10);
+
+      // Bei Resize aktualisieren
+      window.addEventListener('resize', updateDropdownWidth);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        window.removeEventListener('resize', updateDropdownWidth);
+      };
+    }
+  }, [showAccountingAccountDropdown]);
 
   // Positioniere Additives-Dropdown
   useEffect(() => {
@@ -1100,7 +1177,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                       </div>
                       <div className="md:w-4/12 px-2 mb-3">
                         <label className="form-label">
-                          Lieferanten-Artikelnummer
+                          Artikelnummer
                         </label>
                         <input
                           type="text"
@@ -1111,65 +1188,72 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                         />
                       </div>
                       <div className="md:w-1/6 px-2 mb-3">
-                        <label className="form-label text-center block">
-                          MwSt-Satz
+                        <label className="form-label">
+                          SKR-Konto
                         </label>
-                        <div className="relative">
+                        <div className="relative" ref={accountingAccountContainerRef}>
                           <input
                             type="text"
-                            className="form-control form-control-themed text-center"
-                            value={`${articleForm.vatRate}%`}
-                            onClick={() => setShowVatRateDropdown(true)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                setShowVatRateDropdown(!showVatRateDropdown);
+                            className="form-control text-center"
+                            value={
+                              showAccountingAccountDropdown && accountingAccountSearchTerm
+                                ? accountingAccountSearchTerm
+                                : articleForm.accountingAccountNumber || ''
+                            }
+                            onChange={(e) => handleAccountingAccountInputChange(e.target.value)}
+                            onFocus={() => {
+                              setShowAccountingAccountDropdown(true);
+                              // Setze den Suchbegriff auf die aktuelle Kontonummer, wenn vorhanden
+                              if (articleForm.accountingAccountNumber && !accountingAccountSearchTerm) {
+                                setAccountingAccountSearchTerm(articleForm.accountingAccountNumber);
                               }
                             }}
-                            readOnly
-                            tabIndex={-1}
-                            style={{ cursor: 'pointer' }}
+                            onBlur={handleAccountingAccountInputBlur}
+                            onKeyDown={handleAccountingAccountKeyDown}
+                            placeholder="Kontonummer oder Name suchen..."
+                            tabIndex={4}
+                            style={{ textAlign: 'center' }}
                           />
-                          {showVatRateDropdown && (
-                            <div className="absolute" style={{
+                          {showAccountingAccountDropdown && (
+                            <div className="absolute accounting-account-dropdown" style={{
                               top: '100%',
                               right: 0,
-                              width: '200px',
-                              zIndex: 1000,
+                              zIndex: 10000,
+                              maxHeight: '200px',
+                              overflowY: 'auto',
                               backgroundColor: colors.card,
                               border: `1px solid ${colors.cardBorder}`,
                               borderRadius: '0 0 0.375rem 0.375rem',
                               boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                             }}>
-                              {VAT_RATES.map((vatRate, index) => (
-                                <div
-                                  key={vatRate.value}
-                                  className="px-3 py-2 cursor-pointer flex justify-between items-center"
-                                  onClick={() => {
-                                    handleVatRateChange(vatRate.value);
-                                    setShowVatRateDropdown(false);
-                                  }}
-                                  style={{
-                                    color: colors.text,
-                                    borderBottom: index < VAT_RATES.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
-                                    cursor: 'pointer',
-                                    backgroundColor: selectedVatRateIndex === index ? colors.accent + '20' : 'transparent',
-                                    minHeight: '38px'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (selectedVatRateIndex !== index) {
-                                      e.currentTarget.style.backgroundColor = colors.accent + '10';
-                                    }
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (selectedVatRateIndex !== index) {
-                                      e.currentTarget.style.backgroundColor = 'transparent';
-                                    }
-                                  }}
-                                >
-                                  <span>{vatRate.label}</span>
+                              {getFilteredAccountingAccounts().length > 0 ? (
+                                getFilteredAccountingAccounts().map((account, index) => (
+                                  <div
+                                    key={account.id}
+                                    className="px-3 py-2 cursor-pointer"
+                                    onClick={() => handleAccountingAccountSelect(account)}
+                                    style={{
+                                      color: colors.text,
+                                      borderBottom: `1px solid ${colors.cardBorder}`,
+                                      cursor: 'pointer',
+                                      backgroundColor: selectedAccountingAccountIndex === index ? colors.accent + '20' : 'transparent'
+                                    }}
+                                    onMouseEnter={() => setSelectedAccountingAccountIndex(index)}
+                                    onMouseLeave={() => {
+                                      if (selectedAccountingAccountIndex !== index) {
+                                        setSelectedAccountingAccountIndex(-1);
+                                      }
+                                    }}
+                                  >
+                                    <div style={{ fontWeight: 'bold' }}>{account.number}</div>
+                                    <small style={{ color: colors.textSecondary }}>{account.name}</small>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
+                                  Kein Konto gefunden
                                 </div>
-                              ))}
+                              )}
                             </div>
                           )}
                         </div>

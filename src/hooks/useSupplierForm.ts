@@ -17,6 +17,7 @@ interface SupplierForm {
   };
   website: string;
   notes: string;
+  nettoPrices?: boolean;
 }
 
 interface UseSupplierFormProps {
@@ -52,7 +53,8 @@ export const useSupplierForm = ({
       country: 'Deutschland'
     },
     website: '',
-    notes: ''
+    notes: '',
+    nettoPrices: false
   });
 
   // Functions
@@ -69,7 +71,8 @@ export const useSupplierForm = ({
         country: 'Deutschland'
       },
       website: '',
-      notes: ''
+      notes: '',
+      nettoPrices: false
     });
   };
 
@@ -87,7 +90,8 @@ export const useSupplierForm = ({
         country: 'Deutschland'
       },
       website: supplier.website || '',
-      notes: supplier.notes || ''
+      notes: supplier.notes || '',
+      nettoPrices: supplier.nettoPrices || false
     });
     setShowSupplierForm(true);
   };

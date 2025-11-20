@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaTachometerAlt, FaDatabase, FaCalculator, FaShoppingCart, FaBoxes, FaUsers, FaShieldAlt, FaCog, FaChevronRight, FaList, FaUserFriends, FaClipboardList, FaUtensils, FaCalendarAlt, FaFileInvoice, FaWarehouse, FaThermometerHalf, FaBroom, FaExclamationTriangle, FaPalette } from 'react-icons/fa';
+import { FaTachometerAlt, FaDatabase, FaCalculator, FaShoppingCart, FaBoxes, FaUsers, FaShieldAlt, FaCog, FaChevronRight, FaList, FaUserFriends, FaClipboardList, FaUtensils, FaCalendarAlt, FaFileInvoice, FaWarehouse, FaThermometerHalf, FaBroom, FaExclamationTriangle, FaPalette, FaBalanceScale } from 'react-icons/fa';
 
 interface SidebarProps {
   state: any;
@@ -343,12 +343,12 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                 </div>
                 <div className="mb-0.5">
                   <button 
-                    className={`sidebar-sub-button ${state.currentPage === 'rechnungen' ? 'active' : ''}`}
+                    className={`sidebar-sub-button ${state.currentPage === 'belege' ? 'active' : ''}`}
                     onClick={() => { 
-                      dispatch({ type: 'SET_CURRENT_PAGE', payload: 'rechnungen' }); 
+                      dispatch({ type: 'SET_CURRENT_PAGE', payload: 'belege' }); 
                       if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
                     }}
-                    title="Rechnungen"
+                    title="Belegverwaltung"
                   >
                     <FaFileInvoice style={{ 
                       marginRight: '8px',
@@ -356,7 +356,7 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
                       fontSize: '14px',
                       color: colors.text
                     }} />
-                    <span>Rechnungen</span>
+                    <span>Belege</span>
                   </button>
                 </div>
               </div>
@@ -718,8 +718,26 @@ const Sidebar: React.FC<SidebarProps> = ({ state, dispatch, colors, accordionOpe
             <div 
               className={`accordion-content ${accordionOpen.einstellungen && state.sidebarOpen ? 'open' : 'closed'}`}
               style={{
-                maxHeight: accordionOpen.einstellungen && state.sidebarOpen ? '200px' : '0'
+                maxHeight: accordionOpen.einstellungen && state.sidebarOpen ? '260px' : '0'
               }}>
+                <div className="mb-0.5">
+                  <button 
+                    className={`sidebar-sub-button ${state.currentPage === 'accounting-options' ? 'active' : ''}`}
+                    onClick={() => { 
+                      dispatch({ type: 'SET_CURRENT_PAGE', payload: 'accounting-options' }); 
+                      if (state.isMobile) dispatch({ type: 'SET_SIDEBAR_OPEN', payload: false }); 
+                    }}
+                    title="Buchhaltung"
+                  >
+                    <FaBalanceScale style={{ 
+                      marginRight: '8px',
+                      marginLeft: '4px',
+                      fontSize: '14px',
+                      color: colors.text
+                    }} />
+                    <span>Buchhaltung</span>
+                  </button>
+                </div>
                 <div className="mb-0.5">
                   <button 
                     className={`sidebar-sub-button ${state.currentPage === 'storage-management' ? 'active' : ''}`}

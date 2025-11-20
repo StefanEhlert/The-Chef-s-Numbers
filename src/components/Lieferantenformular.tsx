@@ -41,14 +41,29 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   const resizeStartX = React.useRef<number>(0);
   const resizeStartWidth = React.useRef<number>(60);
   
-  const FORM_WIDTH_STORAGE_KEY = 'supplierFormWidth';
-  
   const loadSavedWidth = (): number => {
     try {
-      const saved = localStorage.getItem(FORM_WIDTH_STORAGE_KEY);
-      if (saved) {
-        const width = parseFloat(saved);
+      // Lade aus neuer zentraler Struktur
+      const localOptionsStr = localStorage.getItem('localOptions');
+      if (localOptionsStr) {
+        const localOptions = JSON.parse(localOptionsStr);
+        if (localOptions?.formWidth?.supplierFormWidth) {
+          const width = parseFloat(localOptions.formWidth.supplierFormWidth);
+          if (!isNaN(width) && width >= 40 && width <= 90) {
+            return width;
+          }
+        }
+      }
+      
+      // Migration: Prüfe alten Key (kann später entfernt werden)
+      const oldKey = localStorage.getItem('supplierFormWidth');
+      if (oldKey) {
+        const width = parseFloat(oldKey);
         if (!isNaN(width) && width >= 40 && width <= 90) {
+          // Migriere zu neuer Struktur
+          saveWidth(width);
+          // Lösche alten Key
+          localStorage.removeItem('supplierFormWidth');
           return width;
         }
       }
@@ -60,7 +75,29 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   
   const saveWidth = (width: number) => {
     try {
-      localStorage.setItem(FORM_WIDTH_STORAGE_KEY, width.toString());
+      // Lade bestehende localOptions
+      const localOptionsStr = localStorage.getItem('localOptions');
+      let localOptions: any = {};
+      
+      if (localOptionsStr) {
+        try {
+          localOptions = JSON.parse(localOptionsStr);
+        } catch (e) {
+          // Falls Parsing fehlschlägt, starte mit leerem Objekt
+          localOptions = {};
+        }
+      }
+      
+      // Stelle sicher, dass formWidth-Objekt existiert
+      if (!localOptions.formWidth) {
+        localOptions.formWidth = {};
+      }
+      
+      // Speichere Breite
+      localOptions.formWidth.supplierFormWidth = width.toString();
+      
+      // Speichere zurück
+      localStorage.setItem('localOptions', JSON.stringify(localOptions));
     } catch (error) {
       console.error('Fehler beim Speichern der Breite:', error);
     }
@@ -1211,16 +1248,34 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                           </button>
                         </div>
                       </div>
-                      <div className="w-full md:w-1/2 px-2 mb-3">
+                      <div className="w-full md:w-1/3 px-2 mb-3">
                         <label className="form-label form-label-themed">
                           Ansprechpartner
                         </label>
                         <input
                           type="text"
                           className="form-control form-control-themed"
-                          value={supplierForm.contactPerson}
+                          value={supplierForm.contactPerson || ''}
                           onChange={(e) => setSupplierForm(prev => ({ ...prev, contactPerson: e.target.value }))}
                         />
+                      </div>
+                      <div className="w-full md:w-1/6 px-2 mb-3">
+                        <label className="form-label form-label-themed">
+                          &nbsp;
+                        </label>
+                        <div className="form-check d-flex align-items-center" style={{ height: '38px' }}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="nettoPrices"
+                            checked={supplierForm.nettoPrices || false}
+                            onChange={(e) => setSupplierForm(prev => ({ ...prev, nettoPrices: e.target.checked }))}
+                            style={{ marginTop: 0 }}
+                          />
+                          <label className="form-check-label ms-2" htmlFor="nettoPrices" style={{ cursor: 'pointer', marginBottom: 0 }}>
+                            Netto-Preise
+                          </label>
+                        </div>
                       </div>
                       <div className="w-full md:w-1/2 px-2 mb-3">
                         <label className="form-label form-label-themed">
