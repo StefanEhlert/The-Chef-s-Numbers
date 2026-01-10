@@ -2245,7 +2245,11 @@ const StorageManagement: React.FC = () => {
     const nameMap: { [key: string]: string } = {
       'suppliers': 'Lieferanten',
       'articles': 'Artikel',
-      'recipes': 'Rezepte'
+      'recipes': 'Rezepte',
+      'receipts': 'Belege',
+      'accountingAccounts': 'Kontenrahmen',
+      'accountingSettings': 'Buchhaltungseinstellungen',
+      'units': 'Einheiten'
     };
     return nameMap[entityType] || entityType;
   };
@@ -2818,7 +2822,17 @@ const StorageManagement: React.FC = () => {
   const createBackup = async (): Promise<{ success: boolean; data?: any; message: string }> => {
     try {
       console.log('💾 Starte Backup-Erstellung...');
-      setBackupProgress({ current: 0, total: 6, item: 'Initialisierung', message: 'Backup wird vorbereitet...' });
+      const { storageLayer } = await import('../services/storageLayer');
+      
+      // Berechne Gesamtanzahl der Schritte
+      // State-Entities: suppliers, articles, recipes, receipts (4)
+      // StorageLayer-Entities: accountingAccounts, accountingSettings, units (3)
+      // LocalStorage: 1 Schritt
+      // Bilder: 1 Schritt
+      // Abschluss: 1 Schritt
+      const totalSteps = 4 + 3 + 1 + 1 + 1; // 10 Schritte
+      
+      setBackupProgress({ current: 0, total: totalSteps, item: 'Initialisierung', message: 'Backup wird vorbereitet...' });
       setBackupCompleted(false);
 
       const backup: any = {
@@ -2830,13 +2844,16 @@ const StorageManagement: React.FC = () => {
         images: {}
       };
 
+      let currentStep = 0;
+
       // 1. Sichere Entitäts-Daten aus dem State
-      const entityTypes = ['suppliers', 'articles', 'recipes'];
-      for (let i = 0; i < entityTypes.length; i++) {
-        const entityType = entityTypes[i];
+      const stateEntityTypes = ['suppliers', 'articles', 'recipes', 'receipts'];
+      for (let i = 0; i < stateEntityTypes.length; i++) {
+        const entityType = stateEntityTypes[i];
+        currentStep++;
         setBackupProgress({
-          current: i + 1,
-          total: 6,
+          current: currentStep,
+          total: totalSteps,
           item: getEntityNameGerman(entityType),
           message: `Sichere ${getEntityNameGerman(entityType)}...`
         });
@@ -2848,10 +2865,38 @@ const StorageManagement: React.FC = () => {
         }
       }
 
-      // 2. Sichere LocalStorage-Schlüssel
+      // 2. Sichere Entitäts-Daten aus StorageLayer (nicht im State)
+      const storageLayerEntityTypes = ['accountingAccounts', 'accountingSettings', 'units'];
+      for (let i = 0; i < storageLayerEntityTypes.length; i++) {
+        const entityType = storageLayerEntityTypes[i];
+        currentStep++;
+        setBackupProgress({
+          current: currentStep,
+          total: totalSteps,
+          item: getEntityNameGerman(entityType),
+          message: `Sichere ${getEntityNameGerman(entityType)}...`
+        });
+
+        try {
+          const data = await storageLayer.load(entityType as any);
+          if (Array.isArray(data) && data.length > 0) {
+            backup.entities[entityType] = data;
+            console.log(`✅ ${data.length} ${entityType} gesichert`);
+          } else {
+            backup.entities[entityType] = [];
+            console.log(`✅ ${entityType} gesichert (leer)`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Fehler beim Laden von ${entityType}:`, error);
+          backup.entities[entityType] = [];
+        }
+      }
+
+      // 3. Sichere LocalStorage-Schlüssel
+      currentStep++;
       setBackupProgress({
-        current: 4,
-        total: 6,
+        current: currentStep,
+        total: totalSteps,
         item: 'LocalStorage',
         message: 'Sichere LocalStorage-Einstellungen...'
       });
@@ -2882,15 +2927,14 @@ const StorageManagement: React.FC = () => {
         }
       }
 
-      // 3. Sichere Bilder
+      // 4. Sichere Bilder
+      currentStep++;
       setBackupProgress({
-        current: 5,
-        total: 6,
+        current: currentStep,
+        total: totalSteps,
         item: 'Bilder',
         message: 'Sichere Bilder...'
       });
-
-      const { storageLayer } = await import('../services/storageLayer');
       
       // Sichere Artikel-Bilder
       if (backup.entities.articles) {
@@ -2899,7 +2943,7 @@ const StorageManagement: React.FC = () => {
             const imagePath = `pictures/articles/${article.id}`;
             const imageData = await storageLayer.loadImage(imagePath);
             if (imageData) {
-              backup.images[imagePath] = imageData;
+              backup.images[imagePath] = imageData.url;
               console.log(`📷 Artikelbild gesichert: ${article.name}`);
             }
           } catch (error) {
@@ -2915,7 +2959,7 @@ const StorageManagement: React.FC = () => {
             const imagePath = `pictures/recipes/${recipe.id}`;
             const imageData = await storageLayer.loadImage(imagePath);
             if (imageData) {
-              backup.images[imagePath] = imageData;
+              backup.images[imagePath] = imageData.url;
               console.log(`📷 Rezeptbild gesichert: ${recipe.name}`);
             }
           } catch (error) {
@@ -2924,9 +2968,28 @@ const StorageManagement: React.FC = () => {
         }
       }
 
+      // Sichere Beleg-Bilder
+      if (backup.entities.receipts) {
+        for (const receipt of backup.entities.receipts) {
+          if (receipt.receiptImagePath) {
+            try {
+              const imageData = await storageLayer.loadImage(receipt.receiptImagePath);
+              if (imageData) {
+                backup.images[receipt.receiptImagePath] = imageData.url;
+                console.log(`📷 Belegbild gesichert: ${receipt.receiptNumber || receipt.id}`);
+              }
+            } catch (error) {
+              console.warn(`⚠️ Fehler beim Sichern des Belegbildes ${receipt.receiptNumber || receipt.id}:`, error);
+            }
+          }
+        }
+      }
+
+      // 5. Abschluss
+      currentStep++;
       setBackupProgress({
-        current: 6,
-        total: 6,
+        current: currentStep,
+        total: totalSteps,
         item: 'Abschluss',
         message: 'Backup wird finalisiert...'
       });
@@ -2964,13 +3027,22 @@ const StorageManagement: React.FC = () => {
 
       const { storageLayer } = await import('../services/storageLayer');
 
-      // 1. Stelle Entitäts-Daten wieder her
-      const entityTypes = ['suppliers', 'articles', 'recipes'];
-      for (let i = 0; i < entityTypes.length; i++) {
-        const entityType = entityTypes[i];
+      // Berechne Gesamtanzahl der Schritte
+      // State-Entities: suppliers, articles, recipes, receipts (4)
+      // StorageLayer-Entities: accountingAccounts, accountingSettings, units (3)
+      // LocalStorage: 1 Schritt
+      // Bilder: 1 Schritt
+      const totalSteps = 4 + 3 + 1 + 1; // 9 Schritte
+      let currentStep = 0;
+
+      // 1. Stelle Entitäts-Daten wieder her (aus State)
+      const stateEntityTypes = ['suppliers', 'articles', 'recipes', 'receipts'];
+      for (let i = 0; i < stateEntityTypes.length; i++) {
+        const entityType = stateEntityTypes[i];
+        currentStep++;
         setBackupProgress({
-          current: i + 1,
-          total: 5,
+          current: currentStep,
+          total: totalSteps,
           item: getEntityNameGerman(entityType),
           message: `Stelle ${getEntityNameGerman(entityType)} wieder her...`
         });
@@ -2988,16 +3060,41 @@ const StorageManagement: React.FC = () => {
             appContext.dispatch({ type: 'SET_ARTICLES', payload: data });
           } else if (entityType === 'recipes') {
             appContext.dispatch({ type: 'SET_RECIPES', payload: data });
+          } else if (entityType === 'receipts') {
+            appContext.dispatch({ type: 'SET_RECEIPTS', payload: data });
           }
           
           console.log(`✅ ${data.length} ${entityType} wiederhergestellt`);
         }
       }
 
-      // 2. Stelle LocalStorage-Schlüssel wieder her (außer currentStorage)
+      // 2. Stelle Entitäts-Daten wieder her (aus StorageLayer)
+      const storageLayerEntityTypes = ['accountingAccounts', 'accountingSettings', 'units'];
+      for (let i = 0; i < storageLayerEntityTypes.length; i++) {
+        const entityType = storageLayerEntityTypes[i];
+        currentStep++;
+        setBackupProgress({
+          current: currentStep,
+          total: totalSteps,
+          item: getEntityNameGerman(entityType),
+          message: `Stelle ${getEntityNameGerman(entityType)} wieder her...`
+        });
+
+        if (backupData.entities[entityType]) {
+          const data = backupData.entities[entityType];
+          
+          // Speichere über StorageLayer
+          await storageLayer.save(entityType as any, data);
+          
+          console.log(`✅ ${data.length} ${entityType} wiederhergestellt`);
+        }
+      }
+
+      // 3. Stelle LocalStorage-Schlüssel wieder her (außer currentStorage)
+      currentStep++;
       setBackupProgress({
-        current: 4,
-        total: 5,
+        current: currentStep,
+        total: totalSteps,
         item: 'LocalStorage',
         message: 'Stelle LocalStorage-Einstellungen wieder her...'
       });
@@ -3039,10 +3136,11 @@ const StorageManagement: React.FC = () => {
         }
       }
 
-      // 3. Stelle Bilder wieder her
+      // 4. Stelle Bilder wieder her
+      currentStep++;
       setBackupProgress({
-        current: 5,
-        total: 5,
+        current: currentStep,
+        total: totalSteps,
         item: 'Bilder',
         message: 'Stelle Bilder wieder her...'
       });
@@ -5089,7 +5187,7 @@ const StorageManagement: React.FC = () => {
           name: bucketName,
           public: true,  // Öffentlicher Zugriff für Bilder
           file_size_limit: 5242880,  // 5 MB
-          allowed_mime_types: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+          allowed_mime_types: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
         })
       });
 
@@ -5109,6 +5207,46 @@ const StorageManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Fehler beim Erstellen des Buckets:', error);
+      return {
+        success: false,
+        message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      };
+    }
+  };
+
+  // Aktualisiere Supabase Storage Bucket-Konfiguration
+  const updateSupabaseBucketConfig = async (): Promise<{ success: boolean; message: string }> => {
+    const url = storageManagement.connections.supabase.url;
+    const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    try {
+      console.log('🔄 Aktualisiere Supabase Storage Bucket-Konfiguration...');
+
+      // Verwende globalen Supabase-Client-Singleton (verhindert "Multiple GoTrueClient instances" Warnung)
+      const { getGlobalSupabaseClient } = await import('../services/storageLayer');
+      const supabase = await getGlobalSupabaseClient(url, serviceRoleKey);
+
+      const bucketName = 'chef-numbers-images';
+      const { data, error } = await supabase.storage.updateBucket(bucketName, {
+        public: true, // Bucket bleibt öffentlich
+        allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+      });
+
+      if (error) {
+        console.error('❌ Bucket-Update fehlgeschlagen:', error);
+        return {
+          success: false,
+          message: `Bucket-Update fehlgeschlagen: ${error.message}`
+        };
+      }
+
+      console.log('✅ Bucket-Konfiguration erfolgreich aktualisiert');
+      return {
+        success: true,
+        message: `Bucket-Konfiguration wurde erfolgreich aktualisiert (PDFs jetzt erlaubt)`
+      };
+    } catch (error) {
+      console.error('❌ Fehler beim Aktualisieren des Buckets:', error);
       return {
         success: false,
         message: `Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
@@ -5137,6 +5275,19 @@ const StorageManagement: React.FC = () => {
       });
     } else {
       setSupabaseBucketStatus({ exists: false, checking: false, message: `⚠️ Bucket-Erstellung fehlgeschlagen: ${result.message}` });
+    }
+  };
+
+  // Handler für Bucket-Konfiguration-Update
+  const handleUpdateBucketConfig = async () => {
+    setSupabaseBucketStatus({ exists: true, checking: true, message: 'Aktualisiere Bucket-Konfiguration...' });
+    
+    const result = await updateSupabaseBucketConfig();
+    
+    if (result.success) {
+      setSupabaseBucketStatus({ exists: true, checking: false, message: '✅ Bucket-Konfiguration erfolgreich aktualisiert' });
+    } else {
+      setSupabaseBucketStatus({ exists: true, checking: false, message: `⚠️ ${result.message}` });
     }
   };
 

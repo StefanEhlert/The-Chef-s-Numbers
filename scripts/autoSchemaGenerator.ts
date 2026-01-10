@@ -479,7 +479,9 @@ function generateColumnName(propertyName: string): string {
 
 // Generiere Tabellennamen aus Interface-Namen
 function generateTableName(interfaceName: string): string {
-  return interfaceName.toLowerCase() + 's';
+  const lowerCase = interfaceName.toLowerCase();
+  // Füge 's' nur hinzu, wenn der Name nicht bereits auf 's' endet
+  return lowerCase.endsWith('s') ? lowerCase : lowerCase + 's';
 }
 
 // Extrahiere JSDoc-Kommentare für Beschreibungen

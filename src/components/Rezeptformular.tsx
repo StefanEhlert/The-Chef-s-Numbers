@@ -228,7 +228,7 @@ const Rezeptformular: React.FC<RezeptformularProps> = ({
           const imagePath = `pictures/recipes/${editingRecipe.id}`;
           const imageData = await storageLayer.loadImage(imagePath);
           if (imageData) {
-            setSavedImageUrl(imageData);
+            setSavedImageUrl(imageData.url);
             console.log('📷 Gespeichertes Rezeptbild geladen');
           } else {
             setSavedImageUrl(null);

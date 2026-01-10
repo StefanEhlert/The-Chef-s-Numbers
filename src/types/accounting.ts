@@ -50,7 +50,7 @@ export interface AccountingSettings extends BaseEntity {
   updatedAt: Date;
 }
 
-export type OCRApiProvider = 'azure' | 'taggun';
+export type OCRApiProvider = 'azure' | 'taggun' | 'gemini';
 
 // OCRApiConfig wird nicht mehr als separate Datenbanktabelle verwendet (wird in AccountingSettings gespeichert)
 export interface OCRApiConfig {

@@ -215,7 +215,7 @@
     ]
   },
   "AccountingSettings": {
-    "tableName": "accountingsettingss",
+    "tableName": "accountingsettings",
     "interfaceName": "AccountingSettings",
     "columns": [
       {
@@ -258,6 +258,14 @@
         "primary": false,
         "description": "ocrApiConfigs property",
         "tsType": "OCRApiConfig[]"
+      },
+      {
+        "name": "vat_rates",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "vatRates property",
+        "tsType": "VatRate[]"
       },
       {
         "name": "is_dirty",
@@ -408,6 +416,244 @@
         "nullable": true,
         "primary": false,
         "description": "notes property",
+        "tsType": "string"
+      },
+      {
+        "name": "netto_prices",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "description": "nettoPrices property",
+        "tsType": "boolean"
+      },
+      {
+        "name": "recognized_names",
+        "type": "JSONB",
+        "nullable": true,
+        "primary": false,
+        "description": "recognizedNames property",
+        "tsType": "string[]"
+      },
+      {
+        "name": "is_dirty",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Wurde geändert?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "is_new",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Neuer Datensatz?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "sync_status",
+        "type": "sync_status_enum",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": "pending",
+        "description": "Sync-Status",
+        "tsType": "SyncStatus"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Erstellungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Aktualisierungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der erstellt hat",
+        "tsType": "string"
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt geändert hat",
+        "tsType": "string"
+      },
+      {
+        "name": "last_modified_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt modifiziert hat",
+        "tsType": "string"
+      }
+    ],
+    "baseInterfaces": [
+      "BaseEntity"
+    ]
+  },
+  "UnitEntity": {
+    "tableName": "unitentitys",
+    "interfaceName": "UnitEntity",
+    "columns": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": false,
+        "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
+        "tsType": "string"
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "nullable": false,
+        "primary": false,
+        "description": "name property",
+        "tsType": "string"
+      },
+      {
+        "name": "description",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "description property",
+        "tsType": "string"
+      },
+      {
+        "name": "is_dirty",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Wurde geändert?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "is_new",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Neuer Datensatz?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "sync_status",
+        "type": "sync_status_enum",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": "pending",
+        "description": "Sync-Status",
+        "tsType": "SyncStatus"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Erstellungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Aktualisierungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der erstellt hat",
+        "tsType": "string"
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt geändert hat",
+        "tsType": "string"
+      },
+      {
+        "name": "last_modified_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt modifiziert hat",
+        "tsType": "string"
+      }
+    ],
+    "baseInterfaces": [
+      "BaseEntity"
+    ]
+  },
+  "CategoryEntity": {
+    "tableName": "categoryentitys",
+    "interfaceName": "CategoryEntity",
+    "columns": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": false,
+        "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
+        "tsType": "string"
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "nullable": false,
+        "primary": false,
+        "description": "name property",
+        "tsType": "string"
+      },
+      {
+        "name": "description",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "description property",
         "tsType": "string"
       },
       {
@@ -1113,6 +1359,38 @@
         "primary": false,
         "description": "notes property",
         "tsType": "string"
+      },
+      {
+        "name": "ocr_result",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "ocrResult property",
+        "tsType": "any"
+      },
+      {
+        "name": "ocr_provider",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "ocrProvider property",
+        "tsType": "'azure' | 'taggun'"
+      },
+      {
+        "name": "receipt_image_path",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "receiptImagePath property",
+        "tsType": "string"
+      },
+      {
+        "name": "processed_ocr_data",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "processedOcrData property",
+        "tsType": "any"
       },
       {
         "name": "is_dirty",

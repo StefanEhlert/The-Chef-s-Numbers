@@ -63,7 +63,7 @@ export class LocalStorageAdapter implements StorageAdapter {
       const mergedData = [...existingData];
       
       for (let i = 0; i < data.length; i++) {
-        const newItem = data[i];
+        let newItem = data[i];
         
         // Rufe Progress-Callback VOR der Verarbeitung auf
         if (onProgress) {
@@ -71,7 +71,15 @@ export class LocalStorageAdapter implements StorageAdapter {
         }
         
         const existingIndex = mergedData.findIndex(item => item.id === newItem.id);
-        if (existingIndex >= 0) {
+        const isUpdate = existingIndex >= 0;
+        const existingItem = isUpdate ? mergedData[existingIndex] : null;
+        
+        // Preisänderungsverfolgung für Artikel
+        if (key === 'articles') {
+          newItem = updatePriceHistory(existingItem, newItem, isUpdate);
+        }
+        
+        if (isUpdate) {
           // Ersetze bestehenden Eintrag
           mergedData[existingIndex] = newItem;
           console.log(`💾 LocalStorage: Artikel ${newItem.id} aktualisiert`);
@@ -260,15 +268,15 @@ export class LocalStorageAdapter implements StorageAdapter {
       
       // Lade bestehende Bilder-Struktur
       const existingImages = this.loadImageStructure();
-      
-      // Erstelle verschachtelte Struktur falls nicht vorhanden
-      if (!existingImages.pictures) existingImages.pictures = {};
-      if (!existingImages.pictures[entityType]) existingImages.pictures[entityType] = {};
-      
-      // Speichere das Bild unter der Entity-ID
-      existingImages.pictures[entityType][entityId] = base64;
-      
-      // Speichere die gesamte Struktur zurück
+        
+        // Erstelle verschachtelte Struktur falls nicht vorhanden
+        if (!existingImages.pictures) existingImages.pictures = {};
+        if (!existingImages.pictures[entityType]) existingImages.pictures[entityType] = {};
+        
+        // Speichere das Bild unter der Entity-ID
+        existingImages.pictures[entityType][entityId] = base64;
+        
+        // Speichere die gesamte Struktur zurück
       try {
         localStorage.setItem('chef_images', JSON.stringify(existingImages));
         console.log(`✅ LocalStorage: Bild erfolgreich gespeichert unter chef_images.pictures.${entityType}.${entityId}`);
@@ -383,8 +391,8 @@ export class LocalStorageAdapter implements StorageAdapter {
           return indexedDBImage;
         }
         
-        console.log(`📷 LocalStorage: Kein Bild gefunden unter chef_images.pictures.${entityType}.${entityId}`);
-        return null;
+          console.log(`📷 LocalStorage: Kein Bild gefunden unter chef_images.pictures.${entityType}.${entityId}`);
+          return null;
       } else {
         throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
@@ -431,7 +439,7 @@ export class LocalStorageAdapter implements StorageAdapter {
                 console.error(`❌ IndexedDB Fehler beim Erstellen der Blob URL:`, blobError);
                 resolve(null);
               }
-            } else {
+      } else {
               // Für Bilder: Konvertiere Blob zu Data URL
               const reader = new FileReader();
               reader.onload = () => {
@@ -726,7 +734,7 @@ class PostgreSQLAdapter implements StorageAdapter {
       let allSuccess = true;
       
       for (let i = 0; i < transformedData.length; i++) {
-        const item = transformedData[i];
+        let item = transformedData[i];
         
         // Rufe Progress-Callback auf
         if (onProgress) {
@@ -737,6 +745,30 @@ class PostgreSQLAdapter implements StorageAdapter {
         // - Wenn db_id vorhanden: Update (PUT)
         // - Wenn db_id fehlt: Neuer Datensatz (POST), PostgreSQL generiert db_id automatisch
         const isUpdate = !!item.db_id;
+        
+        // Preisänderungsverfolgung für Artikel
+        if (key === 'articles' && isUpdate) {
+          try {
+            // Lade bestehenden Artikel für Preisvergleich
+            const existingResponse = await fetch(`${this.getBaseUrl()}/${key}?db_id=eq.${item.db_id}`, {
+              method: 'GET',
+              headers: this.getAuthHeaders()
+            });
+            
+            if (existingResponse.ok) {
+              const existingData = await existingResponse.json();
+              if (existingData && existingData.length > 0) {
+                item = updatePriceHistory(existingData[0], item, true);
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Fehler beim Laden des bestehenden Artikels für Preisverfolgung:', error);
+            // Fehler sollte das Speichern nicht verhindern
+          }
+        } else if (key === 'articles' && !isUpdate) {
+          // INSERT: Initialisiere Historie
+          item = updatePriceHistory(null, item, false);
+        }
         
         const method = isUpdate ? 'PUT' : 'POST';
         const url = isUpdate 
@@ -1982,7 +2014,7 @@ class PrismaAdapter implements StorageAdapter {
       // Speichere jedes Item einzeln (für db_id-Handling)
       let allSuccess = true;
       for (let i = 0; i < transformedData.length; i++) {
-        const item = transformedData[i];
+        let item = transformedData[i];
         
         if (onProgress) {
           onProgress(i, transformedData.length);
@@ -1990,6 +2022,31 @@ class PrismaAdapter implements StorageAdapter {
         
         // Bestimme ob Update oder Insert (Prisma verwendet db_id direkt)
         const isUpdate = !!item.db_id;
+        
+        // Preisänderungsverfolgung für Artikel
+        if (key === 'articles' && isUpdate) {
+          try {
+            // Lade bestehenden Artikel für Preisvergleich
+            const existingResponse = await fetch(`${this.getBaseUrl()}/api/${tableName}/${item.db_id}`, {
+              method: 'GET',
+              headers: this.getAuthHeaders()
+            });
+            
+            if (existingResponse.ok) {
+              const existingData = await existingResponse.json();
+              if (existingData) {
+                item = updatePriceHistory(existingData, item, true);
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Fehler beim Laden des bestehenden Artikels für Preisverfolgung:', error);
+            // Fehler sollte das Speichern nicht verhindern
+          }
+        } else if (key === 'articles' && !isUpdate) {
+          // INSERT: Initialisiere Historie
+          item = updatePriceHistory(null, item, false);
+        }
+        
         const method = isUpdate ? 'PUT' : 'POST';
         const url = isUpdate
           ? `${this.getBaseUrl()}/api/${tableName}/${item.db_id}`
@@ -2117,6 +2174,80 @@ class PrismaAdapter implements StorageAdapter {
   }
 }
 
+// Globaler Supabase-Client-Singleton (wird von allen SupabaseAdapter-Instanzen geteilt)
+// Verhindert "Multiple GoTrueClient instances" Warnung
+const globalSupabaseClients: Map<string, any> = new Map();
+const clientCreationPromises: Map<string, Promise<any>> = new Map(); // Verhindert Race Conditions
+const clientCreationLocks: Set<string> = new Set(); // Synchroner Lock für atomare Prüfung
+
+// Erstelle einen eindeutigen Key für den Supabase-Client basierend auf URL und ServiceRoleKey
+function getSupabaseClientKey(url: string, serviceRoleKey: string): string {
+  return `${url}:${serviceRoleKey}`;
+}
+
+// Globale Funktion zum Erstellen/Abrufen eines Supabase-Clients (kann von überall verwendet werden)
+// Thread-safe Singleton mit Race-Condition-Schutz
+export async function getGlobalSupabaseClient(url: string, serviceRoleKey: string): Promise<any> {
+  if (!url || !serviceRoleKey) {
+    throw new Error('Supabase URL oder ServiceRoleKey fehlt');
+  }
+
+  const clientKey = getSupabaseClientKey(url, serviceRoleKey);
+  
+  // Prüfe ob bereits ein Client existiert (schnellster Pfad)
+  if (globalSupabaseClients.has(clientKey)) {
+    return globalSupabaseClients.get(clientKey);
+  }
+
+  // Prüfe ob bereits eine Erstellung läuft (verhindert Race Conditions)
+  // WICHTIG: Diese Prüfung muss VOR dem Erstellen eines neuen Promises erfolgen
+  let existingPromise = clientCreationPromises.get(clientKey);
+  if (existingPromise) {
+    return await existingPromise;
+  }
+
+  // Erstelle Promise für Client-Erstellung
+  // WICHTIG: Promise wird SOFORT erstellt und in Map gespeichert, BEVOR async Operation startet
+  // Dies verhindert, dass gleichzeitige Aufrufe alle versuchen, einen Client zu erstellen
+  // Da JavaScript single-threaded ist, wird das Promise in die Map gesetzt, bevor ein zweiter Aufruf
+  // die Prüfung durchführen kann
+  const creationPromise = (async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      
+      const client = createClient(
+        url,
+        serviceRoleKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+            // KEIN storageKey nötig, da persistSession: false
+            // storageKey würde nur benötigt, wenn persistSession: true wäre
+          }
+        }
+      );
+      
+      // Speichere Client global für Wiederverwendung
+      globalSupabaseClients.set(clientKey, client);
+      clientCreationPromises.delete(clientKey); // Entferne Promise nach erfolgreicher Erstellung
+      
+      return client;
+    } catch (error) {
+      clientCreationPromises.delete(clientKey); // Entferne Promise auch bei Fehler
+      throw error;
+    }
+  })();
+
+  // WICHTIG: Speichere Promise SOFORT in Map (bevor await)
+  // Dies stellt sicher, dass gleichzeitige Aufrufe dasselbe Promise verwenden
+  // Da JavaScript single-threaded ist, wird das Promise in die Map gesetzt, bevor ein zweiter Aufruf
+  // die Prüfung durchführen kann
+  clientCreationPromises.set(clientKey, creationPromise);
+  
+  return await creationPromise;
+}
+
 // Supabase Adapter (für Daten UND Bilder)
 class SupabaseAdapter implements StorageAdapter {
   name = 'SupabaseAdapter';
@@ -2130,6 +2261,14 @@ class SupabaseAdapter implements StorageAdapter {
     });
     
     // Schema-Initialisierung erfolgt jetzt nur noch bei Konfigurationsübernahme in StorageManagement.tsx
+  }
+
+  // Erstelle oder hole wiederverwendbaren Supabase-Client (globaler Singleton)
+  private async getSupabaseClient(): Promise<any> {
+    return await getGlobalSupabaseClient(
+      this.connectionData.url,
+      this.connectionData.serviceRoleKey
+    );
   }
 
   // NEU: Schema-Initialisierung (Phase 2)
@@ -2356,12 +2495,34 @@ class SupabaseAdapter implements StorageAdapter {
     };
   }
 
-  // Konvertiere camelCase zu snake_case für Supabase
-  private camelToSnake(str: string): string {
-    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+  // Konvertiere camelCase zu Tabellennamen (alles kleingeschrieben + 's' am Ende)
+  // Tabellennamen werden generiert mit: interfaceName.toLowerCase() + 's' (nur wenn nicht bereits auf 's' endend)
+  // z.B. "accountingAccounts" -> "accountingaccounts", "accountingSettings" -> "accountingsettings"
+  private camelToTableName(str: string): string {
+    // Spezielle Mapping-Fälle für entityType → Tabellenname
+    const tableNameMapping: { [key: string]: string } = {
+      'units': 'unitentitys', // 'units' wird zu 'unitentitys' (Interface: UnitEntity)
+      'categories': 'categoryentitys', // 'categories' wird zu 'categoryentitys' (Interface: CategoryEntity)
+    };
+    
+    // Prüfe zuerst, ob es ein spezielles Mapping gibt
+    if (tableNameMapping[str]) {
+      return tableNameMapping[str];
+    }
+    
+    // Konvertiere camelCase zu alles-kleingeschrieben
+    const lowerCase = str.replace(/[A-Z]/g, letter => letter.toLowerCase());
+    // Füge 's' nur hinzu, wenn der Name nicht bereits auf 's' endet
+    return lowerCase.endsWith('s') ? lowerCase : lowerCase + 's';
   }
 
-  // Transformiere Objekt von camelCase zu snake_case
+  // Konvertiere camelCase zu snake_case für Spaltennamen
+  // Spaltennamen sind snake_case mit Unterstrich (z.B. "chart_id", "created_at")
+  private camelToSnakeCase(str: string): string {
+    return str.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
+  }
+
+  // Transformiere Objekt von camelCase zu snake_case (für Spaltennamen)
   private transformToSnakeCase(obj: any): any {
     const transformed: any = {};
     
@@ -2374,7 +2535,7 @@ class SupabaseAdapter implements StorageAdapter {
         console.log('🗑️ Ignoriere veraltetes dbId-Feld (verwende db_id stattdessen)');
         continue;
       } else {
-        const snakeKey = this.camelToSnake(key);
+        const snakeKey = this.camelToSnakeCase(key);
         transformed[snakeKey] = value;
       }
     }
@@ -2386,13 +2547,36 @@ class SupabaseAdapter implements StorageAdapter {
   private transformToCamelCase(obj: any): any {
     const transformed: any = {};
     
+    // Felder, die als JSON-Strings gespeichert werden und geparst werden müssen
+    const jsonFields = ['ocr_api_configs', 'vat_rates', 'receipt_details', 'accounting', 'processed_ocr_data', 'ocr_result', 'recognized_names'];
+    
     for (const [key, value] of Object.entries(obj)) {
       // WICHTIG: db_id bleibt als db_id (wird nicht zu dbId konvertiert)
       if (key === 'db_id') {
         transformed.db_id = value;
       } else {
         const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-        transformed[camelKey] = value;
+        let transformedValue = value;
+        
+        // Parse JSON-Strings für bestimmte Felder
+        // Supabase gibt JSONB-Felder manchmal als String, manchmal bereits als Array/Objekt zurück
+        if (jsonFields.includes(key) && value !== null && value !== undefined) {
+          if (typeof value === 'string' && value.trim() !== '' && (value.trim().startsWith('[') || value.trim().startsWith('{'))) {
+            // Wert ist ein JSON-String - parse ihn
+            try {
+              transformedValue = JSON.parse(value);
+            } catch (e) {
+              console.warn(`⚠️ Konnte ${key} nicht als JSON parsen:`, value);
+              // Behalte den ursprünglichen Wert oder setze auf leeres Array/Objekt
+              transformedValue = key.includes('configs') || key.includes('rates') || key.includes('names') ? [] : (key.includes('details') || key.includes('data') || key.includes('result') ? {} : value);
+            }
+          } else if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+            // Wert ist bereits ein Array oder Objekt (Supabase JSONB gibt es direkt zurück)
+            transformedValue = value;
+          }
+        }
+        
+        transformed[camelKey] = transformedValue;
       }
     }
     
@@ -2405,7 +2589,9 @@ class SupabaseAdapter implements StorageAdapter {
   ): Promise<boolean> {
     try {
       const items = Array.isArray(data) ? data : [data];
-      console.log(`☁️ SUPABASE: Speichere ${items.length} ${entityType}`);
+      // Konvertiere Tabellennamen: camelCase zu alles-kleingeschrieben + 's'
+      const tableName = this.camelToTableName(entityType);
+      console.log(`☁️ SUPABASE: Speichere ${items.length} ${entityType} in Tabelle ${tableName}`);
 
       const baseUrl = this.getBaseUrl();
       
@@ -2497,15 +2683,36 @@ class SupabaseAdapter implements StorageAdapter {
         }
         
         // Setze Timestamps für INSERT (wenn nicht vorhanden)
+        // Konvertiere Date-Objekte zu ISO-Strings falls nötig
         if (!(itemData as any).createdAt) {
           (itemData as any).createdAt = new Date().toISOString();
+        } else if ((itemData as any).createdAt instanceof Date) {
+          (itemData as any).createdAt = (itemData as any).createdAt.toISOString();
         }
         if (!(itemData as any).updatedAt) {
           (itemData as any).updatedAt = new Date().toISOString();
+        } else if ((itemData as any).updatedAt instanceof Date) {
+          (itemData as any).updatedAt = (itemData as any).updatedAt.toISOString();
         }
         
         // Transformiere camelCase → snake_case für Supabase
         itemData = this.transformToSnakeCase(itemData) as any;
+        
+        // Serialisiere JSON-Felder zu Strings (für TEXT-Spalten in Supabase)
+        const jsonFields = ['ocr_api_configs', 'vat_rates', 'receipt_details', 'accounting', 'processed_ocr_data', 'ocr_result'];
+        for (const field of jsonFields) {
+          if ((itemData as any)[field] !== undefined && (itemData as any)[field] !== null) {
+            const value = (itemData as any)[field];
+            // Wenn es bereits ein String ist, lasse es unverändert
+            if (typeof value !== 'string') {
+              try {
+                (itemData as any)[field] = JSON.stringify(value);
+              } catch (e) {
+                console.warn(`⚠️ Konnte ${field} nicht zu JSON stringify:`, value);
+              }
+            }
+          }
+        }
         
         // ZUSÄTZLICHE Prüfung nach Transformation: Bereinige UUID-Felder erneut
         // (da transformToSnakeCase camelCase → snake_case konvertiert hat)
@@ -2532,7 +2739,7 @@ class SupabaseAdapter implements StorageAdapter {
         }
 
         // Prüfe ob UPDATE oder INSERT (basierend auf id)
-        const existingCheck = await fetch(`${baseUrl}/${entityType}?id=eq.${item.id}`, {
+        const existingCheck = await fetch(`${baseUrl}/${tableName}?id=eq.${item.id}`, {
           method: 'GET',
           headers: this.getAuthHeaders()
         });
@@ -2542,8 +2749,67 @@ class SupabaseAdapter implements StorageAdapter {
           
           if (existing && existing.length > 0) {
             // UPDATE
-            console.log(`☁️ UPDATE: ${entityType} mit id=${item.id}`);
-            const response = await fetch(`${baseUrl}/${entityType}?id=eq.${item.id}`, {
+            console.log(`☁️ UPDATE: ${entityType} (${tableName}) mit id=${item.id}`);
+            
+            // Preisänderungsverfolgung für Artikel
+            if (entityType === 'articles' && (itemData as any).price_per_unit !== undefined && (itemData as any).price_per_unit !== null) {
+              try {
+                const existingArticle = existing[0];
+                const existingPricePerUnit = existingArticle.price_per_unit;
+                const newPricePerUnit = (itemData as any).price_per_unit;
+                
+                // Prüfe ob sich der Preis geändert hat (mit Toleranz für Rundungsfehler)
+                const priceChanged = existingPricePerUnit !== null && 
+                                    existingPricePerUnit !== undefined &&
+                                    Math.abs(Number(existingPricePerUnit) - Number(newPricePerUnit)) > 0.0001;
+                
+                if (priceChanged) {
+                  console.log(`💰 Preisänderung erkannt: ${existingPricePerUnit} → ${newPricePerUnit}`);
+                  
+                  // Lade bestehende Preis-Historie
+                  let priceHistory: Array<{ date: string; pricePerUnit: number }> = [];
+                  
+                  if (existingArticle.price_per_unit_history) {
+                    try {
+                      // Parse JSONB-Feld (kann String oder bereits Objekt sein)
+                      const historyData = typeof existingArticle.price_per_unit_history === 'string'
+                        ? JSON.parse(existingArticle.price_per_unit_history)
+                        : existingArticle.price_per_unit_history;
+                      
+                      if (Array.isArray(historyData)) {
+                        priceHistory = historyData;
+                      }
+                    } catch (parseError) {
+                      console.warn('⚠️ Konnte price_per_unit_history nicht parsen:', parseError);
+                      priceHistory = [];
+                    }
+                  }
+                  
+                  // Füge neuen Eintrag hinzu
+                  const newHistoryEntry = {
+                    date: new Date().toISOString(),
+                    pricePerUnit: Number(newPricePerUnit)
+                  };
+                  
+                  priceHistory.push(newHistoryEntry);
+                  
+                  // Aktualisiere itemData mit neuer Historie
+                  (itemData as any).price_per_unit_history = priceHistory;
+                  
+                  console.log(`✅ Preisänderung in Historie gespeichert (${priceHistory.length} Einträge)`);
+                } else {
+                  // Preis unverändert - behalte bestehende Historie
+                  if (existingArticle.price_per_unit_history) {
+                    (itemData as any).price_per_unit_history = existingArticle.price_per_unit_history;
+                  }
+                }
+              } catch (priceHistoryError) {
+                console.error('❌ Fehler bei Preisänderungsverfolgung:', priceHistoryError);
+                // Fehler sollte das Speichern nicht verhindern - fahre fort
+              }
+            }
+            
+            const response = await fetch(`${baseUrl}/${tableName}?id=eq.${item.id}`, {
               method: 'PATCH',
               headers: this.getAuthHeaders(),
               body: JSON.stringify(itemData)
@@ -2573,8 +2839,29 @@ class SupabaseAdapter implements StorageAdapter {
             }
           } else {
             // INSERT
-            console.log(`☁️ INSERT: ${entityType} mit id=${item.id}`);
-            const response = await fetch(`${baseUrl}/${entityType}`, {
+            console.log(`☁️ INSERT: ${entityType} (${tableName}) mit id=${item.id}`);
+            
+            // Preisänderungsverfolgung für neue Artikel - initialisiere Historie mit erstem Preis
+            if (entityType === 'articles' && (itemData as any).price_per_unit !== undefined && (itemData as any).price_per_unit !== null) {
+              try {
+                const initialPricePerUnit = Number((itemData as any).price_per_unit);
+                
+                // Erstelle ersten Eintrag in der Preis-Historie
+                const initialHistoryEntry = {
+                  date: new Date().toISOString(),
+                  pricePerUnit: initialPricePerUnit
+                };
+                
+                (itemData as any).price_per_unit_history = [initialHistoryEntry];
+                
+                console.log(`✅ Preis-Historie für neuen Artikel initialisiert: ${initialPricePerUnit}`);
+              } catch (priceHistoryError) {
+                console.error('❌ Fehler bei Initialisierung der Preis-Historie:', priceHistoryError);
+                // Fehler sollte das Speichern nicht verhindern - fahre fort
+              }
+            }
+            
+            const response = await fetch(`${baseUrl}/${tableName}`, {
               method: 'POST',
               headers: this.getAuthHeaders(),
               body: JSON.stringify(itemData)
@@ -2604,7 +2891,65 @@ class SupabaseAdapter implements StorageAdapter {
             }
           }
         } else {
-          console.warn(`⚠️ Konnte Existenz-Prüfung für ${entityType} mit id=${item.id} nicht durchführen`);
+          // Existenz-Prüfung fehlgeschlagen - versuche trotzdem INSERT
+          console.warn(`⚠️ Existenz-Prüfung für ${entityType} (${tableName}) mit id=${item.id} fehlgeschlagen (Status: ${existingCheck.status}), versuche INSERT...`);
+          
+          // Preisänderungsverfolgung für neue Artikel - initialisiere Historie mit erstem Preis
+          if (entityType === 'articles' && (itemData as any).price_per_unit !== undefined && (itemData as any).price_per_unit !== null) {
+            try {
+              const initialPricePerUnit = Number((itemData as any).price_per_unit);
+              
+              // Erstelle ersten Eintrag in der Preis-Historie
+              const initialHistoryEntry = {
+                date: new Date().toISOString(),
+                pricePerUnit: initialPricePerUnit
+              };
+              
+              (itemData as any).price_per_unit_history = [initialHistoryEntry];
+              
+              console.log(`✅ Preis-Historie für neuen Artikel initialisiert (Fallback): ${initialPricePerUnit}`);
+            } catch (priceHistoryError) {
+              console.error('❌ Fehler bei Initialisierung der Preis-Historie (Fallback):', priceHistoryError);
+              // Fehler sollte das Speichern nicht verhindern - fahre fort
+            }
+          }
+          
+          try {
+            const response = await fetch(`${baseUrl}/${tableName}`, {
+              method: 'POST',
+              headers: this.getAuthHeaders(),
+              body: JSON.stringify(itemData)
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              let errorJson: any = null;
+              try {
+                errorJson = JSON.parse(errorText);
+              } catch {
+                // Fehler ist kein JSON
+              }
+              
+              const errorMessage = errorJson?.message || errorText;
+              const errorCode = errorJson?.code || '';
+              
+              // Prüfe auf UUID-Fehler (22P02 = invalid input syntax for type)
+              if (errorCode === '22P02' && errorMessage?.includes('uuid')) {
+                console.error(`❌ INSERT fehlgeschlagen: Ungültige UUID in Daten`, errorMessage);
+                console.warn(`⚠️ Überspringe Datensatz mit id=${item.id} aufgrund ungültiger UUID`);
+                continue; // Überspringe diesen Datensatz
+              } else {
+                console.error(`❌ INSERT fehlgeschlagen:`, errorMessage);
+                throw new Error(`INSERT fehlgeschlagen: ${response.status} - ${errorMessage}`);
+              }
+            } else {
+              console.log(`✅ INSERT erfolgreich trotz fehlgeschlagener Existenz-Prüfung: ${entityType} (${tableName}) mit id=${item.id}`);
+            }
+          } catch (insertError) {
+            console.error(`❌ Fehler beim INSERT nach fehlgeschlagener Existenz-Prüfung:`, insertError);
+            // Überspringe diesen Datensatz, aber fahre mit den anderen fort
+            continue;
+          }
         }
       }
 
@@ -2618,17 +2963,19 @@ class SupabaseAdapter implements StorageAdapter {
 
   async load<T extends StorageEntity>(entityType: string): Promise<T[]> {
     try {
-      console.log(`☁️ SUPABASE: Lade ${entityType}`);
+      // Konvertiere Tabellennamen: camelCase zu alles-kleingeschrieben + 's'
+      const tableName = this.camelToTableName(entityType);
+      console.log(`☁️ SUPABASE: Lade ${entityType} aus Tabelle ${tableName}`);
       const baseUrl = this.getBaseUrl();
       
-      const response = await fetch(`${baseUrl}/${entityType}`, {
+      const response = await fetch(`${baseUrl}/${tableName}`, {
         method: 'GET',
         headers: this.getAuthHeaders()
       });
 
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`⚠️ Tabelle ${entityType} existiert nicht - returniere leeres Array`);
+          console.log(`⚠️ Tabelle ${tableName} existiert nicht - returniere leeres Array`);
           return [];
         }
         throw new Error(`Fehler beim Laden: ${response.status}`);
@@ -2636,9 +2983,52 @@ class SupabaseAdapter implements StorageAdapter {
 
       const data = await response.json();
       
+      // Debug: Logge rohe Daten für Suppliers (nur für ersten Eintrag)
+      if (entityType === 'suppliers' && data.length > 0) {
+        console.log('🔍 [SupabaseAdapter] Rohe Daten vom Server (erster Supplier):', {
+          id: data[0].id,
+          name: data[0].name,
+          recognized_names: data[0].recognized_names,
+          recognized_namesType: typeof data[0].recognized_names,
+          recognized_namesIsArray: Array.isArray(data[0].recognized_names),
+          allKeys: Object.keys(data[0]),
+          hasRecognizedNames: 'recognized_names' in data[0]
+        });
+      }
+      
       // Transformiere snake_case → camelCase für Frontend
-      const transformedData = data.map((item: any) => {
+      const transformedData = data.map((item: any, index: number) => {
+        // Debug: Logge recognized_names für Suppliers (nur für ersten Supplier, um Logs zu reduzieren)
+        if (entityType === 'suppliers' && index === 0) {
+          console.log('🔍 [SupabaseAdapter] Erster Supplier vor Transformation:', {
+            id: item.id,
+            name: item.name,
+            recognized_names: item.recognized_names,
+            recognized_namesType: typeof item.recognized_names,
+            recognized_namesIsArray: Array.isArray(item.recognized_names),
+            recognized_namesIsNull: item.recognized_names === null,
+            recognized_namesIsUndefined: item.recognized_names === undefined,
+            allKeys: Object.keys(item),
+            hasRecognizedNames: 'recognized_names' in item
+          });
+        }
+        
         const camel = this.transformToCamelCase(item);
+        
+        // Debug: Logge recognizedNames nach Transformation (nur für ersten Supplier)
+        if (entityType === 'suppliers' && index === 0) {
+          console.log('🔍 [SupabaseAdapter] Erster Supplier nach Transformation:', {
+            id: (camel as any).id,
+            name: (camel as any).name,
+            recognizedNames: (camel as any).recognizedNames,
+            recognizedNamesType: typeof (camel as any).recognizedNames,
+            recognizedNamesIsArray: Array.isArray((camel as any).recognizedNames),
+            recognizedNamesIsNull: (camel as any).recognizedNames === null,
+            recognizedNamesIsUndefined: (camel as any).recognizedNames === undefined,
+            allKeys: Object.keys(camel as any)
+          });
+        }
+        
         // Entferne dbId (veraltetes Feld) falls vorhanden, behalte db_id
         if ((camel as any).dbId) {
           delete (camel as any).dbId;
@@ -2656,10 +3046,12 @@ class SupabaseAdapter implements StorageAdapter {
 
   async delete(entityType: string, id: string): Promise<boolean> {
     try {
-      console.log(`☁️ SUPABASE: Lösche ${entityType} mit id=${id}`);
+      // Konvertiere Tabellennamen: camelCase zu alles-kleingeschrieben + 's'
+      const tableName = this.camelToTableName(entityType);
+      console.log(`☁️ SUPABASE: Lösche ${entityType} (${tableName}) mit id=${id}`);
       const baseUrl = this.getBaseUrl();
       
-      const response = await fetch(`${baseUrl}/${entityType}?id=eq.${id}`, {
+      const response = await fetch(`${baseUrl}/${tableName}?id=eq.${id}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders()
       });
@@ -2695,88 +3087,397 @@ class SupabaseAdapter implements StorageAdapter {
     }
   }
 
+  // Aktualisiere Supabase Storage Bucket-Konfiguration
+  private async updateBucketConfig(): Promise<boolean> {
+    try {
+      console.log('🔄 Aktualisiere Supabase Storage Bucket-Konfiguration für PDFs...');
+
+      // Verwende wiederverwendbaren Supabase-Client
+      const supabase = await this.getSupabaseClient();
+
+      const bucketName = 'chef-numbers-images';
+      const { data, error } = await supabase.storage.updateBucket(bucketName, {
+        public: true, // Bucket bleibt öffentlich
+        allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+      });
+
+      if (error) {
+        console.error('❌ Bucket-Update fehlgeschlagen:', error);
+        return false;
+      }
+
+      console.log('✅ Bucket-Konfiguration erfolgreich aktualisiert (PDFs jetzt erlaubt)');
+      return true;
+    } catch (error) {
+      console.error('❌ Fehler beim Aktualisieren des Buckets:', error);
+      return false;
+    }
+  }
+
+  // Prüfe ob Fehler ein "invalid_mime_type" Fehler für PDF ist
+  private isPdfMimeTypeError(errorText: string, fileType: string): boolean {
+    if (fileType !== 'application/pdf') {
+      return false;
+    }
+    try {
+      const error = JSON.parse(errorText);
+      return error.error === 'invalid_mime_type' && error.message?.includes('application/pdf');
+    } catch {
+      return errorText.includes('invalid_mime_type') && errorText.includes('application/pdf');
+    }
+  }
+
   // Bild-Methoden für Supabase Storage
   async saveImage(path: string, file: File): Promise<boolean> {
     try {
-      console.log(`📷 SUPABASE Storage: Speichere Bild: ${path}`);
+      console.log(`📷 SUPABASE Storage: Speichere Bild: ${path}`, {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size
+      });
       
-      const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${path}`;
+      // Stelle sicher, dass der Pfad keine führenden Schrägstriche hat
+      let cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      
+      // Füge Dateiendung hinzu, falls nicht vorhanden
+      if (!cleanPath.includes('.')) {
+        // Extrahiere Dateiendung aus MIME-Type oder Dateinamen
+        const mimeTypeMap: { [key: string]: string } = {
+          'image/jpeg': 'jpg',
+          'image/jpg': 'jpg',
+          'image/png': 'png',
+          'image/gif': 'gif',
+          'image/webp': 'webp',
+          'application/pdf': 'pdf'
+        };
+        const fileExtension = mimeTypeMap[file.type] || 
+                             file.name.split('.').pop()?.toLowerCase() || 
+                             'jpg';
+        cleanPath = `${cleanPath}.${fileExtension}`;
+        console.log(`📷 SUPABASE Storage: Dateiendung hinzugefügt: ${cleanPath}`);
+      }
+      
+      const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${cleanPath}`;
+      const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/${cleanPath}`;
+      
+      console.log(`📷 SUPABASE Storage URL: ${storageUrl}`);
+      
+      // Prüfe zuerst, ob die Datei bereits existiert (HEAD-Request auf Public URL)
+      let fileExists = false;
+      try {
+        const headResponse = await fetch(publicUrl, { method: 'HEAD' });
+        fileExists = headResponse.ok;
+        if (fileExists) {
+          console.log(`📷 SUPABASE Storage: Datei existiert bereits, verwende PUT für Update`);
+        } else {
+          console.log(`📷 SUPABASE Storage: Neue Datei, verwende POST`);
+        }
+      } catch (error) {
+        // Fehler beim HEAD-Request - nehme an, dass Datei nicht existiert
+        console.log(`📷 SUPABASE Storage: Konnte Existenz nicht prüfen, verwende POST`);
+        fileExists = false;
+      }
+      
+      // Verwende PUT wenn Datei existiert, sonst POST
+      const method = fileExists ? 'PUT' : 'POST';
       
       const response = await fetch(storageUrl, {
-        method: 'POST',
+        method: method,
         headers: {
           'apikey': this.connectionData.serviceRoleKey,
-          'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+          'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`,
+          'Content-Type': file.type || 'application/octet-stream'
         },
         body: file
       });
 
       if (!response.ok) {
-        // Falls Bild existiert, versuche UPDATE
-        const updateResponse = await fetch(storageUrl, {
-          method: 'PUT',
-          headers: {
-            'apikey': this.connectionData.serviceRoleKey,
-            'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
-          },
-          body: file
-        });
+        const errorText = await response.text();
+        console.warn(`⚠️ ${method} fehlgeschlagen (${response.status}): ${errorText}`);
+        
+        // Prüfe ob es ein PDF MIME-Type Fehler ist
+        if (this.isPdfMimeTypeError(errorText, file.type)) {
+          console.log('🔄 PDF MIME-Type Fehler erkannt - aktualisiere Bucket-Konfiguration...');
+          const configUpdated = await this.updateBucketConfig();
+          
+          if (configUpdated) {
+            console.log(`🔄 Wiederhole ${method}-Versuch nach Bucket-Update...`);
+            // Wiederhole den Speicherversuch
+            const retryResponse = await fetch(storageUrl, {
+              method: method,
+              headers: {
+                'apikey': this.connectionData.serviceRoleKey,
+                'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`,
+                'Content-Type': file.type || 'application/octet-stream'
+              },
+              body: file
+            });
 
-        if (!updateResponse.ok) {
-          throw new Error(`Fehler beim Speichern: ${updateResponse.status}`);
+            if (retryResponse.ok) {
+              console.log(`✅ SUPABASE Storage: Bild gespeichert nach Bucket-Update (${method})`);
+              return true;
+            } else {
+              const retryErrorText = await retryResponse.text();
+              console.error(`❌ Wiederholter ${method} fehlgeschlagen (${retryResponse.status}): ${retryErrorText}`);
+              throw new Error(`Fehler beim Speichern: ${retryResponse.status} - ${retryErrorText}`);
+            }
+          }
         }
-      }
+        
+        // Wenn POST fehlgeschlagen ist und es ein Duplicate-Fehler ist, versuche PUT
+        if (method === 'POST' && response.status === 400) {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error === 'Duplicate' || errorJson.statusCode === '409') {
+            console.log(`🔄 Duplicate-Fehler erkannt, versuche PUT statt POST...`);
+            const updateResponse = await fetch(storageUrl, {
+              method: 'PUT',
+              headers: {
+                'apikey': this.connectionData.serviceRoleKey,
+                'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`,
+                'Content-Type': file.type || 'application/octet-stream'
+              },
+              body: file
+            });
 
-      console.log(`✅ SUPABASE Storage: Bild gespeichert`);
-      return true;
+            if (!updateResponse.ok) {
+              const updateErrorText = await updateResponse.text();
+              console.error(`❌ PUT fehlgeschlagen (${updateResponse.status}): ${updateErrorText}`);
+              throw new Error(`Fehler beim Speichern: ${updateResponse.status} - ${updateErrorText}`);
+            } else {
+              console.log(`✅ SUPABASE Storage: Bild aktualisiert (PUT)`);
+              return true;
+            }
+          }
+        }
+        
+        console.error(`❌ ${method} fehlgeschlagen (${response.status}): ${errorText}`);
+        throw new Error(`Fehler beim Speichern: ${response.status} - ${errorText}`);
+      } else {
+        console.log(`✅ SUPABASE Storage: Bild ${fileExists ? 'aktualisiert' : 'gespeichert'} (${method})`);
+        return true;
+      }
     } catch (error) {
       console.error(`❌ SUPABASE Storage Fehler beim Speichern:`, error);
       return false;
     }
   }
 
-  async loadImage(path: string): Promise<string | null> {
+  async loadImage(path: string): Promise<{ url: string; extension: string } | null> {
     try {
-      console.log(`📷 SUPABASE Storage: Lade Bild: ${path}`);
+      // Stelle sicher, dass der Pfad keine führenden Schrägstriche hat
+      let cleanPath = path.startsWith('/') ? path.slice(1) : path;
       
-      const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/${path}`;
+      // Prüfe ob Pfad bereits eine Dateiendung hat
+      // Eine Endung ist vorhanden, wenn nach dem letzten Punkt 1-5 Zeichen folgen (z.B. .pdf, .jpg, .jpeg)
+      const lastDotIndex = cleanPath.lastIndexOf('.');
+      const hasExtension = lastDotIndex > 0 && 
+                          lastDotIndex < cleanPath.length - 1 && 
+                          cleanPath.substring(lastDotIndex + 1).length <= 5 &&
+                          cleanPath.substring(lastDotIndex + 1).length > 0;
       
-      // Teste ob Bild existiert
-      const response = await fetch(publicUrl, { method: 'HEAD' });
+      if (hasExtension) {
+        // Pfad hat bereits eine Endung, versuche direkt zu laden (kein Ausprobieren nötig)
+        const extension = cleanPath.substring(lastDotIndex + 1);
+        const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/${cleanPath}`;
+        try {
+          const response = await fetch(publicUrl, { method: 'HEAD' });
+          
+          if (response.ok) {
+            return { url: publicUrl, extension };
+          } else {
+            // Datei existiert nicht mit dieser Endung
+            return null;
+          }
+        } catch (error) {
+          // Fehler beim HEAD-Request
+          return null;
+        }
+      }
       
-      if (!response.ok) {
-        console.log(`⚠️ Bild nicht gefunden: ${path}`);
+      // Pfad hat keine Endung - verwende effiziente List-API statt mehrerer HEAD-Requests
+      // Parse Pfad: "pictures/articles/{id}" oder "pictures/recipes/{id}" oder "pictures/receipts/{id}"
+      const pathParts = cleanPath.split('/');
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+        const folder = pathParts[1]; // 'articles', 'recipes' oder 'receipts'
+        const entityId = pathParts[2]; // ID ohne Endung
+        
+        // Verwende wiederverwendbaren Supabase-Client für effiziente Dateiliste
+        try {
+          const supabase = await this.getSupabaseClient();
+          
+          // Liste alle Dateien im Ordner auf (z.B. "pictures/articles/" oder "pictures/recipes/")
+          // WICHTIG: Der vollständige Pfad muss verwendet werden, nicht nur der Unterordner
+          const folderPath = `pictures/${folder}/`;
+          const { data: files, error: listError } = await supabase.storage
+            .from('chef-numbers-images')
+            .list(folderPath, {
+              limit: 1000, // Ausreichend für einen Ordner
+              sortBy: { column: 'name', order: 'asc' }
+            });
+          
+          if (listError) {
+            // Falls List-API nicht verfügbar ist, fallback auf altes Verhalten
+            console.warn(`⚠️ Supabase List-API Fehler, verwende Fallback:`, listError);
+            return await this.loadImageWithFallback(cleanPath, entityId);
+          }
+          
+          if (!files || files.length === 0) {
+            // Keine Dateien im Ordner gefunden
+            console.log(`📷 SUPABASE Storage: Keine Dateien im Ordner ${folderPath} gefunden`);
+            return null;
+          }
+          
+          // Suche nach Datei, die mit der entityId beginnt
+          // Dateiname Format: "{entityId}.{extension}"
+          const matchingFile = files.find((file: any) => {
+            const fileName = file.name;
+            // Prüfe ob Dateiname mit entityId beginnt, gefolgt von einem Punkt und einer Endung
+            return fileName.startsWith(`${entityId}.`) && fileName.length > entityId.length + 1;
+          });
+          
+          if (matchingFile) {
+            // Extrahiere Endung aus Dateinamen
+            const fileName = matchingFile.name;
+            const extension = fileName.substring(entityId.length + 1); // +1 für den Punkt
+            
+            // Validiere Endung (sollte eine bekannte Bild/PDF-Endung sein)
+            const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+            if (validExtensions.includes(extension.toLowerCase())) {
+              // Verwende den vollständigen Pfad: pictures/articles/{fileName}
+              const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/pictures/${folder}/${fileName}`;
+              console.log(`✅ SUPABASE Storage: Bild gefunden: ${publicUrl}`);
+              return { url: publicUrl, extension: extension.toLowerCase() };
+            } else {
+              // Unbekannte Endung, aber Datei existiert - verwende sie trotzdem
+              const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/pictures/${folder}/${fileName}`;
+              console.log(`✅ SUPABASE Storage: Bild gefunden (unbekannte Endung): ${publicUrl}`);
+              return { url: publicUrl, extension: extension.toLowerCase() };
+            }
+          } else {
+            // Keine passende Datei gefunden
+            console.log(`📷 SUPABASE Storage: Keine passende Datei für ${entityId} in ${folderPath} gefunden`);
+            return null;
+          }
+        } catch (error) {
+          // Fehler bei Supabase Client - fallback auf altes Verhalten
+          console.warn(`⚠️ Fehler bei Supabase Client, verwende Fallback:`, error);
+          return await this.loadImageWithFallback(cleanPath, entityId);
+        }
+      } else {
+        // Ungültiger Pfad-Format
+        console.log(`📷 SUPABASE Storage: Ungültiger Pfad-Format: ${cleanPath}`);
         return null;
       }
-
-      console.log(`✅ SUPABASE Storage: Bild-URL: ${publicUrl}`);
-      return publicUrl;
     } catch (error) {
       console.error(`❌ SUPABASE Storage Fehler beim Laden:`, error);
       return null;
     }
   }
 
+  // Fallback-Methode: Probiere verschiedene Endungen (für Kompatibilität)
+  private async loadImageWithFallback(cleanPath: string, entityId: string): Promise<{ url: string; extension: string } | null> {
+    // Reihenfolge: Häufigste zuerst (JPG vor PDF, da Bilder häufiger sind)
+    const possibleExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'gif', 'webp'];
+    
+    for (const ext of possibleExtensions) {
+      // cleanPath ist bereits "pictures/articles/{id}" oder "pictures/recipes/{id}"
+      const pathWithExtension = `${cleanPath}.${ext}`;
+      const publicUrl = `${this.connectionData.url}/storage/v1/object/public/chef-numbers-images/${pathWithExtension}`;
+      
+      try {
+        const response = await fetch(publicUrl, { method: 'HEAD' });
+        
+        if (response.ok) {
+          console.log(`✅ SUPABASE Storage: Bild gefunden via Fallback: ${publicUrl}`);
+          return { url: publicUrl, extension: ext };
+        } else if (response.status === 404) {
+          // Datei existiert nicht mit dieser Endung, probiere nächste
+          continue;
+        } else {
+          // Anderer Fehler (z.B. 400), probiere weiter
+          continue;
+        }
+      } catch (error) {
+        // Netzwerkfehler, probiere nächste Endung
+        continue;
+      }
+    }
+    
+    console.log(`📷 SUPABASE Storage: Kein Bild via Fallback gefunden für ${cleanPath}`);
+    return null;
+  }
+
   async deleteImage(path: string): Promise<boolean> {
     try {
       console.log(`📷 SUPABASE Storage: Lösche Bild: ${path}`);
       
-      const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${path}`;
+      // Stelle sicher, dass der Pfad keine führenden Schrägstriche hat
+      let cleanPath = path.startsWith('/') ? path.slice(1) : path;
       
-      const response = await fetch(storageUrl, {
-        method: 'DELETE',
-        headers: {
-          'apikey': this.connectionData.serviceRoleKey,
-          'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+      // Prüfe ob Pfad bereits eine Dateiendung hat
+      const hasExtension = cleanPath.includes('.') && cleanPath.split('.').pop()?.length && cleanPath.split('.').pop()!.length <= 5;
+      
+      if (hasExtension) {
+        // Pfad hat bereits eine Endung, versuche direkt zu löschen
+        const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${cleanPath}`;
+        const response = await fetch(storageUrl, {
+          method: 'DELETE',
+          headers: {
+            'apikey': this.connectionData.serviceRoleKey,
+            'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+          }
+        });
+
+        if (response.ok || response.status === 404) {
+          console.log(`✅ SUPABASE Storage: Bild gelöscht (${response.status === 404 ? 'nicht gefunden' : 'erfolgreich'})`);
+          return true;
+        } else if (response.status !== 404) {
+          // Bei anderen Fehlern: probiere verschiedene Endungen
+          console.warn(`⚠️ Direkter Löschversuch fehlgeschlagen (${response.status}), probiere verschiedene Endungen...`);
         }
-      });
-
-      if (!response.ok && response.status !== 404) {
-        throw new Error(`Fehler beim Löschen: ${response.status}`);
       }
+      
+      // Pfad hat keine Endung oder direkter Versuch fehlgeschlagen - probiere verschiedene Endungen
+      const possibleExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
+      let deleted = false;
+      
+      for (const ext of possibleExtensions) {
+        const pathWithExtension = `${cleanPath}.${ext}`;
+        const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${pathWithExtension}`;
+        
+        try {
+          const response = await fetch(storageUrl, {
+            method: 'DELETE',
+            headers: {
+              'apikey': this.connectionData.serviceRoleKey,
+              'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
+            }
+          });
 
-      console.log(`✅ SUPABASE Storage: Bild gelöscht`);
-      return true;
+          if (response.ok) {
+            console.log(`✅ SUPABASE Storage: Bild gelöscht mit Endung .${ext}`);
+            deleted = true;
+            break; // Datei gefunden und gelöscht, keine weiteren Versuche nötig
+          } else if (response.status === 404) {
+            // Datei mit dieser Endung existiert nicht, probiere nächste
+            continue;
+          } else {
+            // Anderer Fehler, logge aber probiere weiter
+            console.warn(`⚠️ Fehler beim Löschen mit Endung .${ext}: ${response.status}`);
+          }
+        } catch (error) {
+          // Weiter mit nächster Endung
+          continue;
+        }
+      }
+      
+      if (deleted) {
+        return true;
+      } else {
+        console.log(`⚠️ Bild nicht gefunden zum Löschen: ${path} (mit allen probierten Endungen)`);
+        // Gebe true zurück, da die Datei möglicherweise bereits gelöscht war
+        return true;
+      }
     } catch (error) {
       console.error(`❌ SUPABASE Storage Fehler beim Löschen:`, error);
       return false;
@@ -3255,13 +3956,43 @@ class CouchDBAdapter implements StorageAdapter {
         onProgress(0, data.length);
       }
 
+      // Lade bestehende Daten für Preisänderungsverfolgung (nur für Artikel)
+      let existingData: any[] = [];
+      if (key === 'articles') {
+        try {
+          const existingResponse = await fetch(`${this.getBaseUrl()}/${database}/_all_docs?include_docs=true`, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+          });
+          
+          if (existingResponse.ok) {
+            const result = await existingResponse.json();
+            existingData = result.rows
+              .filter((row: any) => row.doc && !row.id.startsWith('_design/'))
+              .map((row: any) => row.doc);
+          }
+        } catch (error) {
+          console.warn('⚠️ Fehler beim Laden bestehender Daten für Preisverfolgung:', error);
+        }
+      }
+
       // CouchDB Bulk API für bessere Performance
       const bulkDocs = transformedData.map(doc => {
         // Füge _rev hinzu falls vorhanden (für Updates)
         const originalItem = data.find(orig => orig.id === doc._id);
-        if (originalItem && (originalItem as any).dbRev) {
+        const isUpdate = originalItem && (originalItem as any).dbRev;
+        
+        if (isUpdate && (originalItem as any).dbRev) {
           doc._rev = (originalItem as any).dbRev;
         }
+        
+        // Preisänderungsverfolgung für Artikel
+        if (key === 'articles') {
+          // Für CouchDB müssen wir den bestehenden Artikel aus existingData finden
+          const existingDoc = existingData.find((e: any) => (e._id || e.id) === doc._id);
+          doc = updatePriceHistory(existingDoc, doc, !!isUpdate);
+        }
+        
         return doc;
       });
 
@@ -3877,6 +4608,111 @@ class MinIOAdapter implements StorageAdapter {
   }
 }
 
+// Hilfsfunktion für Preisänderungsverfolgung (wird von allen Adaptern verwendet)
+function updatePriceHistory(
+  existingArticle: any,
+  newArticle: any,
+  isUpdate: boolean
+): any {
+  // Nur für Artikel anwenden
+  if (!newArticle || (!newArticle.price_per_unit && !newArticle.pricePerUnit)) {
+    return newArticle;
+  }
+  
+  try {
+    const newPricePerUnit = Number(newArticle.price_per_unit || newArticle.pricePerUnit);
+    
+    if (isNaN(newPricePerUnit) || newPricePerUnit === null || newPricePerUnit === undefined) {
+      return newArticle;
+    }
+    
+    if (isUpdate && existingArticle) {
+      // UPDATE: Prüfe ob Preis geändert hat
+      const existingPricePerUnit = Number(
+        existingArticle.price_per_unit || 
+        existingArticle.pricePerUnit || 
+        null
+      );
+      
+      // Prüfe ob sich der Preis geändert hat (mit Toleranz für Rundungsfehler)
+      const priceChanged = existingPricePerUnit !== null && 
+                          existingPricePerUnit !== undefined &&
+                          !isNaN(existingPricePerUnit) &&
+                          Math.abs(existingPricePerUnit - newPricePerUnit) > 0.0001;
+      
+      if (priceChanged) {
+        console.log(`💰 Preisänderung erkannt: ${existingPricePerUnit} → ${newPricePerUnit}`);
+        
+        // Lade bestehende Preis-Historie
+        let priceHistory: Array<{ date: string; pricePerUnit: number }> = [];
+        
+        const historyField = existingArticle.price_per_unit_history || existingArticle.pricePerUnitHistory;
+        if (historyField) {
+          try {
+            // Parse JSON-Feld (kann String oder bereits Objekt sein)
+            const historyData = typeof historyField === 'string'
+              ? JSON.parse(historyField)
+              : historyField;
+            
+            if (Array.isArray(historyData)) {
+              priceHistory = historyData;
+            }
+          } catch (parseError) {
+            console.warn('⚠️ Konnte price_per_unit_history nicht parsen:', parseError);
+            priceHistory = [];
+          }
+        }
+        
+        // Füge neuen Eintrag hinzu
+        const newHistoryEntry = {
+          date: new Date().toISOString(),
+          pricePerUnit: newPricePerUnit
+        };
+        
+        priceHistory.push(newHistoryEntry);
+        
+        // Aktualisiere Artikel mit neuer Historie
+        if (newArticle.price_per_unit !== undefined) {
+          newArticle.price_per_unit_history = priceHistory;
+        } else {
+          newArticle.pricePerUnitHistory = priceHistory;
+        }
+        
+        console.log(`✅ Preisänderung in Historie gespeichert (${priceHistory.length} Einträge)`);
+      } else {
+        // Preis unverändert - behalte bestehende Historie
+        const existingHistoryField = existingArticle.price_per_unit_history || existingArticle.pricePerUnitHistory;
+        if (existingHistoryField !== undefined && existingHistoryField !== null) {
+          if (newArticle.price_per_unit !== undefined) {
+            newArticle.price_per_unit_history = existingHistoryField;
+          } else {
+            newArticle.pricePerUnitHistory = existingHistoryField;
+          }
+        }
+      }
+    } else {
+      // INSERT: Initialisiere Historie mit erstem Preis
+      const initialHistoryEntry = {
+        date: new Date().toISOString(),
+        pricePerUnit: newPricePerUnit
+      };
+      
+      if (newArticle.price_per_unit !== undefined) {
+        newArticle.price_per_unit_history = [initialHistoryEntry];
+      } else {
+        newArticle.pricePerUnitHistory = [initialHistoryEntry];
+      }
+      
+      console.log(`✅ Preis-Historie für neuen Artikel initialisiert: ${newPricePerUnit}`);
+    }
+  } catch (error) {
+    console.error('❌ Fehler bei Preisänderungsverfolgung:', error);
+    // Fehler sollte das Speichern nicht verhindern
+  }
+  
+  return newArticle;
+}
+
 // StorageLayer Singleton
 export class StorageLayer {
   private static instance: StorageLayer | null = null;
@@ -4227,7 +5063,7 @@ export class StorageLayer {
   }
 
   // Load image
-  public async loadImage(imagePath: string): Promise<string | null> {
+  public async loadImage(imagePath: string): Promise<{ url: string; extension: string } | null> {
     // Automatische Initialisierung falls noch nicht geschehen
     const initialized = await this.ensureInitialized();
     if (!initialized) {
@@ -4235,15 +5071,36 @@ export class StorageLayer {
     }
 
     try {
+      let result: any = null;
+      
       if (this.pictureAdapter && 'loadImage' in this.pictureAdapter) {
         // Verwende den Picture-Adapter falls verfügbar
-        return await (this.pictureAdapter as any).loadImage(imagePath);
+        result = await (this.pictureAdapter as any).loadImage(imagePath);
       } else if (this.dataAdapter && 'loadImage' in this.dataAdapter) {
         // Fallback auf den Data-Adapter
-        return await (this.dataAdapter as any).loadImage(imagePath);
+        result = await (this.dataAdapter as any).loadImage(imagePath);
       } else {
         throw new Error('Kein Bild-Adapter verfügbar');
       }
+      
+      // Normalisiere Rückgabewert: Manche Adapter geben String zurück, andere Objekte
+      if (!result) {
+        return null;
+      }
+      
+      // Wenn String (Base64), konvertiere zu Objekt
+      if (typeof result === 'string') {
+        // Versuche Extension aus dem Pfad oder MIME-Type zu extrahieren
+        const extension = imagePath.split('.').pop()?.toLowerCase() || 'jpg';
+        return { url: result, extension };
+      }
+      
+      // Wenn bereits Objekt, verwende es direkt
+      if (result.url) {
+        return result;
+      }
+      
+      return null;
     } catch (error) {
       console.error(`❌ StorageLayer Fehler beim Laden des Bildes ${imagePath}:`, error);
       throw error;

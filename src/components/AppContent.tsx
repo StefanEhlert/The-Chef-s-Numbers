@@ -484,7 +484,9 @@ function AppContent() {
   // Initialisiere den CategoryManager beim Laden der App
   useEffect(() => {
     if (state.articles) {
-      categoryManager.updateCategories(state.articles);
+      categoryManager.updateCategories(state.articles).catch(err => 
+        console.error('Fehler beim Aktualisieren der Kategorien:', err)
+      );
     }
   }, [state.articles]);
 
@@ -504,15 +506,19 @@ function AppContent() {
 
   // Artikelverwaltung Hilfsfunktionen
   const getUniqueCategories = () => {
-    // Aktualisiere den CategoryManager mit den aktuellen Artikeldaten
-    categoryManager.updateCategories(state.articles || []);
+    // Aktualisiere den CategoryManager mit den aktuellen Artikeldaten (async, aber nicht blockierend)
+    categoryManager.updateCategories(state.articles || []).catch(err => 
+      console.error('Fehler beim Aktualisieren der Kategorien:', err)
+    );
     return categoryManager.getAllCategories();
   };
 
   // Nur Kategorien anzeigen, die tatsächlich in Artikeln verwendet werden
   const getUsedCategories = () => {
-    // Aktualisiere den CategoryManager mit den aktuellen Artikeldaten
-    categoryManager.updateCategories(state.articles || []);
+    // Aktualisiere den CategoryManager mit den aktuellen Artikeldaten (async, aber nicht blockierend)
+    categoryManager.updateCategories(state.articles || []).catch(err => 
+      console.error('Fehler beim Aktualisieren der Kategorien:', err)
+    );
     return categoryManager.getUsedCategories();
   };
 
@@ -789,10 +795,10 @@ function AppContent() {
         const existingReceipt = state.receipts.find(r => r.id === receiptWithMeta.id);
         if (existingReceipt) {
           // Update bestehenden Receipt
-          dispatch({
-            type: 'UPDATE_RECEIPT',
-            payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
-          });
+        dispatch({
+          type: 'UPDATE_RECEIPT',
+          payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
+        });
         } else {
           // Füge neuen Receipt hinzu
           dispatch({

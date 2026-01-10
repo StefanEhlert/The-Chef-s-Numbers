@@ -48,6 +48,7 @@ export interface Supplier extends BaseEntity {
   phoneNumbers: PhoneNumber[];
   notes?: string;
   nettoPrices?: boolean; // true = Netto-Preise, false/undefined = Brutto-Preise
+  recognizedNames?: string[]; // Array von OCR-Namen für verschiedene Erkennungen
 }
 
 // Artikel-Kategorien
@@ -66,6 +67,17 @@ export type ArticleCategory =
 
 // Einheiten
 export type Unit = 'kg' | 'g' | 'l' | 'ml' | 'Stück' | 'Packung' | 'Dose' | 'Glas' | 'Bund' | 'Portion';
+
+// Einheiten-Tabelle
+export interface UnitEntity extends BaseEntity {
+  name: string; // Name der Einheit (z.B. 'kg', 'Stück', etc.)
+  description?: string; // Optionale Beschreibung
+}
+
+export interface CategoryEntity extends BaseEntity {
+  name: string; // Name der Kategorie (eindeutig)
+  description?: string; // Optionale Beschreibung
+}
 
 // Preis-Historie-Eintrag
 export interface PriceHistoryEntry {
@@ -278,7 +290,7 @@ export interface Receipt extends BaseEntity {
   notes?: string;
   // OCR-Felder
   ocrResult?: any; // OCR-Result als JSON (Original, bleibt unverändert)
-  ocrProvider?: 'azure' | 'taggun'; // Verwendeter KI-Provider für OCR
+  ocrProvider?: 'azure' | 'taggun' | 'gemini'; // Verwendeter KI-Provider für OCR
   receiptImagePath?: string; // Pfad zum gespeicherten Belegbild (z.B. "pictures/receipts/{receiptId}")
   processedOcrData?: any; // Verarbeitete OCR-Daten für ReceiptReviewModal (ExtendedReceiptData)
 }

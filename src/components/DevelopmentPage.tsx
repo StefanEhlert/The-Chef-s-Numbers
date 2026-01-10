@@ -4,6 +4,9 @@ import { analyzeDocumentWithAzureFormRecognizer, validateDocumentFile } from '..
 import { analyzeDocumentWithTaggun } from '../services/taggunOCRService';
 import { OCRResult, enrichReceiptData, ExtendedReceiptData } from '../services/ocrTypes';
 import { useAppContext } from '../contexts/AppContext';
+import { storageLayer } from '../services/storageLayer';
+import { AccountingSettings } from '../types/accounting';
+import type { AccountingChartId } from '../constants/accountingTemplates';
 import ReceiptReviewModal from './ReceiptReviewModal';
 
 const DevelopmentPage: React.FC = () => {
@@ -352,8 +355,26 @@ const DevelopmentPage: React.FC = () => {
           console.warn('⚠️ Keine Artikel im OCR-Result gefunden!');
         }
         
+        // Lade selectedChartId aus accountingSettings
+        let selectedChartId: AccountingChartId = 'skr03';
+        try {
+          const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+          if (settings && settings.length > 0 && settings[0].selectedChartId) {
+            selectedChartId = settings[0].selectedChartId;
+          }
+        } catch (e) {
+          // Fallback zu 'skr03' bei Fehler
+        }
+        
         // Reichere Daten mit allen Artikelformular-Feldern an
-        const enriched = enrichReceiptData(result, state.suppliers || []);
+        const enriched = enrichReceiptData(
+          result, 
+          (state.suppliers || []).map(s => ({ id: s.id, name: s.name, recognizedNames: s.recognizedNames })),
+          state.articles || [],
+          ocrProvider,
+          undefined, // accountingAccounts - wird optional verwendet
+          selectedChartId
+        );
         setEnrichedReceiptData(enriched);
         console.log('✅ Beleg-Daten angereichert:', enriched);
         console.log('📋 Enriched Artikel:', enriched.articles?.length || 0, 'Artikel');
@@ -611,29 +632,29 @@ const DevelopmentPage: React.FC = () => {
                         ['AccountingAccount', 'AccountingSettings'].includes(interfaceName);
                       
                       return (
-                        <div key={interfaceName} className="col-md-6 mb-3">
+                      <div key={interfaceName} className="col-md-6 mb-3">
                           <div className="card" style={{ 
                             backgroundColor: colors.light, 
                             border: `1px solid ${isPlaceholder ? colors.warning : colors.cardBorder}`,
                             opacity: isPlaceholder ? 0.8 : 1
                           }}>
-                            <div className="card-body">
-                              <h6 className="mb-2" style={{ color: colors.text }}>
-                                <FaDatabase className="me-2" style={{ color: colors.primary }} />
-                                {interfaceName} → {definition.tableName}
+                          <div className="card-body">
+                            <h6 className="mb-2" style={{ color: colors.text }}>
+                              <FaDatabase className="me-2" style={{ color: colors.primary }} />
+                              {interfaceName} → {definition.tableName}
                                 {isPlaceholder && (
                                   <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.7rem' }}>
                                     Platzhalter
                                   </span>
                                 )}
-                              </h6>
-                              <div className="d-flex justify-content-between align-items-center mb-2">
-                                <span className="badge bg-primary">{definition.columns.length} Spalten</span>
-                                <span className="badge bg-success">
-                                  {definition.columns.filter((col: any) => col.primary).length} PK
-                                </span>
-                              </div>
-                              
+                            </h6>
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <span className="badge bg-primary">{definition.columns.length} Spalten</span>
+                              <span className="badge bg-success">
+                                {definition.columns.filter((col: any) => col.primary).length} PK
+                              </span>
+                            </div>
+                            
                               {isPlaceholder ? (
                                 <div className="alert alert-warning mb-0" style={{ fontSize: '0.85rem', padding: '0.5rem' }}>
                                   <small>
@@ -643,48 +664,48 @@ const DevelopmentPage: React.FC = () => {
                                 </div>
                               ) : (
                                 /* Detaillierte Spaltenliste */
-                                <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                  <table className="table table-sm table-striped table-bordered mb-0">
-                                    <thead className="table-primary">
-                                      <tr>
-                                        <th style={{ fontSize: '0.75rem', color: 'white' }}>Spalte</th>
-                                        <th style={{ fontSize: '0.75rem', color: 'white' }}>Typ</th>
-                                        <th style={{ fontSize: '0.75rem', color: 'white' }}>Nullable</th>
-                                        <th style={{ fontSize: '0.75rem', color: 'white' }}>PK</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {definition.columns.map((col: any, idx: number) => (
-                                        <tr key={idx}>
-                                          <td style={{ fontSize: '0.75rem' }}>
-                                            <code>{col.name}</code>
-                                          </td>
-                                          <td style={{ fontSize: '0.75rem' }}>
-                                            <span className="badge bg-info" style={{ fontSize: '0.65rem' }}>{col.type}</span>
-                                          </td>
-                                          <td style={{ fontSize: '0.75rem' }}>
-                                            {col.nullable ? (
-                                              <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>NULL</span>
-                                            ) : (
-                                              <span className="badge bg-danger" style={{ fontSize: '0.65rem' }}>NOT NULL</span>
-                                            )}
-                                          </td>
-                                          <td style={{ fontSize: '0.75rem' }}>
-                                            {col.primary ? (
-                                              <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>PK</span>
-                                            ) : (
-                                              <span>-</span>
-                                            )}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
+                            <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                              <table className="table table-sm table-striped table-bordered mb-0">
+                                <thead className="table-primary">
+                                  <tr>
+                                    <th style={{ fontSize: '0.75rem', color: 'white' }}>Spalte</th>
+                                    <th style={{ fontSize: '0.75rem', color: 'white' }}>Typ</th>
+                                    <th style={{ fontSize: '0.75rem', color: 'white' }}>Nullable</th>
+                                    <th style={{ fontSize: '0.75rem', color: 'white' }}>PK</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {definition.columns.map((col: any, idx: number) => (
+                                    <tr key={idx}>
+                                      <td style={{ fontSize: '0.75rem' }}>
+                                        <code>{col.name}</code>
+                                      </td>
+                                      <td style={{ fontSize: '0.75rem' }}>
+                                        <span className="badge bg-info" style={{ fontSize: '0.65rem' }}>{col.type}</span>
+                                      </td>
+                                      <td style={{ fontSize: '0.75rem' }}>
+                                        {col.nullable ? (
+                                          <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>NULL</span>
+                                        ) : (
+                                          <span className="badge bg-danger" style={{ fontSize: '0.65rem' }}>NOT NULL</span>
+                                        )}
+                                      </td>
+                                      <td style={{ fontSize: '0.75rem' }}>
+                                        {col.primary ? (
+                                          <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>PK</span>
+                                        ) : (
+                                          <span>-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
                             </div>
+                              )}
                           </div>
                         </div>
+                      </div>
                       );
                     })}
                   </div>

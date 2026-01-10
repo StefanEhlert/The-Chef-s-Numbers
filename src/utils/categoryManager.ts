@@ -1,4 +1,7 @@
 import { CATEGORIES } from '../constants/articleConstants';
+import { CategoryEntity } from '../types';
+import { storageLayer } from '../services/storageLayer';
+import { generateId } from '../utils/storageUtils';
 
 export interface CategoryData {
   name: string;
@@ -7,15 +10,17 @@ export interface CategoryData {
 }
 
 /**
- * Kategorie-Manager: Verwaltet eine kombinierte Datenquelle aus statischen und benutzerdefinierten Kategorien
+ * Kategorie-Manager: Verwaltet Kategorien aus der Datenbank
  */
 export class CategoryManager {
   private static instance: CategoryManager;
   private categories: CategoryData[] = [];
   private articles: any[] = [];
+  private isInitialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   private constructor() {
-    this.initializeStaticCategories();
+    // Initialisierung wird asynchron durchgeführt
   }
 
   public static getInstance(): CategoryManager {
@@ -26,35 +31,78 @@ export class CategoryManager {
   }
 
   /**
-   * Initialisiert die statischen Kategorien aus der CATEGORIES-Konstante
+   * Initialisiert die Kategorien aus der Datenbank (asynchron)
    */
-  private initializeStaticCategories(): void {
-    this.categories = CATEGORIES.map(category => ({
-      name: category,
-      isCustom: false,
-      usageCount: 0
-    }));
+  public async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this.loadCategoriesFromDatabase();
+    await this.initializationPromise;
+    this.isInitialized = true;
+  }
+
+  /**
+   * Lädt Kategorien aus der Datenbank
+   */
+  private async loadCategoriesFromDatabase(): Promise<void> {
+    try {
+      const categoryEntities = await storageLayer.load<CategoryEntity>('categories');
+      
+      if (categoryEntities && categoryEntities.length > 0) {
+        // Konvertiere CategoryEntity zu CategoryData
+        this.categories = categoryEntities.map(entity => ({
+          name: entity.name,
+          isCustom: false, // Alle aus DB sind gleichwertig
+          usageCount: 0 // Wird durch updateCategories aktualisiert
+        }));
+        
+        // Sortiere alphabetisch
+        this.categories.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+        
+        console.log(`📁 Kategorien aus Datenbank geladen: ${this.categories.length} Kategorien`);
+      } else {
+        // Keine Kategorien in DB - sollte durch App-Initialisierung erstellt werden
+        this.categories = [];
+        console.log('📁 Keine Kategorien in Datenbank gefunden');
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Laden der Kategorien aus Datenbank:', error);
+      this.categories = [];
+    }
   }
 
   /**
    * Aktualisiert die Kategorien basierend auf den aktuellen Artikeldaten
    */
-  public updateCategories(articles: any[]): void {
+  public async updateCategories(articles: any[]): Promise<void> {
+    // Stelle sicher, dass Kategorien initialisiert sind
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+    
     this.articles = articles;
-    this.refreshCategories();
+    await this.refreshCategories();
   }
 
   /**
    * Aktualisiert die Kategorienliste und Nutzungszähler
+   * Fügt neue Kategorien aus Artikeln zur Datenbank hinzu
    */
-  private refreshCategories(): void {
+  private async refreshCategories(): Promise<void> {
     // Zähle die Nutzung jeder Kategorie
     const categoryUsage = new Map<string, number>();
     
     this.articles.forEach(article => {
-      if (article.category) {
-        const count = categoryUsage.get(article.category) || 0;
-        categoryUsage.set(article.category, count + 1);
+      if (article.category && article.category.trim() !== '') {
+        const categoryName = article.category.trim();
+        const count = categoryUsage.get(categoryName) || 0;
+        categoryUsage.set(categoryName, count + 1);
       }
     });
 
@@ -63,33 +111,88 @@ export class CategoryManager {
       category.usageCount = categoryUsage.get(category.name) || 0;
     });
 
-    // Füge neue benutzerdefinierte Kategorien hinzu
+    // WICHTIG: Lade aktuelle Kategorien aus DB, um Duplikate zu vermeiden
+    // Dies stellt sicher, dass wir gegen die tatsächliche DB prüfen, nicht nur gegen Memory
+    let dbCategories: CategoryEntity[] = [];
+    try {
+      dbCategories = await storageLayer.load<CategoryEntity>('categories') || [];
+    } catch (error) {
+      console.error('❌ Fehler beim Laden der Kategorien aus DB:', error);
+      // Bei Fehler verwende Memory-Cache als Fallback
+      dbCategories = [];
+    }
+    
+    // Erstelle Set mit allen existierenden Kategorien aus DB (case-insensitive)
+    const existingCategoryNames = new Set<string>();
+    dbCategories.forEach(cat => {
+      if (cat.name && cat.name.trim() !== '') {
+        existingCategoryNames.add(cat.name.trim().toLowerCase());
+      }
+    });
+    
+    // Füge auch Memory-Kategorien hinzu (falls DB noch nicht synchronisiert)
+    this.categories.forEach(cat => {
+      if (cat.name && cat.name.trim() !== '') {
+        existingCategoryNames.add(cat.name.trim().toLowerCase());
+      }
+    });
+    
+    const newCategories: CategoryEntity[] = [];
+
     categoryUsage.forEach((count, categoryName) => {
-      const existingCategory = this.categories.find(cat => cat.name === categoryName);
-      if (!existingCategory) {
+      const trimmedName = categoryName.trim();
+      if (!trimmedName) return;
+      
+      // Prüfe auf Eindeutigkeit (case-insensitive) gegen DB UND Memory
+      if (!existingCategoryNames.has(trimmedName.toLowerCase())) {
+        existingCategoryNames.add(trimmedName.toLowerCase());
+        
+        // Erstelle neue Kategorie für DB
+        newCategories.push({
+          id: generateId(),
+          name: trimmedName,
+          description: undefined,
+          isNew: true,
+          isDirty: true,
+          syncStatus: 'pending' as const,
+          updatedAt: new Date()
+        });
+        
+        // Füge auch zum Memory-Cache hinzu
         this.categories.push({
-          name: categoryName,
-          isCustom: true,
+          name: trimmedName,
+          isCustom: false, // Alle aus DB sind gleichwertig
           usageCount: count
         });
       }
     });
 
-    // Sortiere Kategorien: Statische zuerst, dann benutzerdefinierte (beide alphabetisch)
-    this.categories.sort((a, b) => {
-      // Statische Kategorien zuerst
-      if (!a.isCustom && b.isCustom) return -1;
-      if (a.isCustom && !b.isCustom) return 1;
-      
-      // Dann alphabetisch
-      return a.name.localeCompare(b.name, 'de');
-    });
+    // Speichere neue Kategorien in DB (nur wenn wirklich neue vorhanden)
+    if (newCategories.length > 0) {
+      try {
+        const success = await storageLayer.save('categories', newCategories);
+        if (success) {
+          console.log(`📁 ${newCategories.length} neue Kategorien zur Datenbank hinzugefügt`);
+        } else {
+          console.error('❌ Fehler beim Speichern neuer Kategorien');
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Speichern neuer Kategorien:', error);
+      }
+    }
+
+    // Sortiere Kategorien alphabetisch
+    this.categories.sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }
 
   /**
    * Gibt alle Kategorien zurück (statische + benutzerdefinierte)
    */
   public getAllCategories(): string[] {
+    // Stelle sicher, dass initialisiert wurde (synchron für Rückwärtskompatibilität)
+    if (!this.isInitialized && !this.initializationPromise) {
+      this.initialize().catch(err => console.error('Fehler bei Kategorien-Initialisierung:', err));
+    }
     return this.categories.map(cat => cat.name);
   }
 
@@ -151,22 +254,52 @@ export class CategoryManager {
   }
 
   /**
-   * Fügt eine neue benutzerdefinierte Kategorie hinzu
+   * Fügt eine neue benutzerdefinierte Kategorie hinzu (speichert in DB)
    */
-  public addCustomCategory(categoryName: string): void {
-    if (!this.categoryExists(categoryName)) {
-      this.categories.push({
-        name: categoryName,
-        isCustom: true,
-        usageCount: 0
-      });
-      
-      // Sortiere neu
-      this.categories.sort((a, b) => {
-        if (!a.isCustom && b.isCustom) return -1;
-        if (a.isCustom && !b.isCustom) return 1;
-        return a.name.localeCompare(b.name, 'de');
-      });
+  public async addCustomCategory(categoryName: string): Promise<void> {
+    // Stelle sicher, dass initialisiert wurde
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+    
+    const trimmedName = categoryName.trim();
+    if (!trimmedName) return;
+    
+    // Prüfe auf Eindeutigkeit (case-insensitive)
+    const exists = this.categories.some(cat => cat.name.toLowerCase() === trimmedName.toLowerCase());
+    if (exists) {
+      return;
+    }
+    
+    // Erstelle neue Kategorie für DB
+    const newCategory: CategoryEntity = {
+      id: generateId(),
+      name: trimmedName,
+      description: undefined,
+      isNew: true,
+      isDirty: true,
+      syncStatus: 'pending' as const,
+      updatedAt: new Date()
+    };
+    
+    try {
+      const success = await storageLayer.save('categories', [newCategory]);
+      if (success) {
+        // Füge zum Memory-Cache hinzu
+        this.categories.push({
+          name: trimmedName,
+          isCustom: false,
+          usageCount: 0
+        });
+        
+        // Sortiere neu
+        this.categories.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+        console.log(`📁 Neue Kategorie zur Datenbank hinzugefügt: ${trimmedName}`);
+      } else {
+        console.error('❌ Fehler beim Speichern der neuen Kategorie');
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern der neuen Kategorie:', error);
     }
   }
 

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
-import { Receipt, ReceiptPaymentStatus } from '../types';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState, useRef } from 'react';
+import { Receipt, ReceiptPaymentStatus, UnitEntity, CategoryEntity } from '../types';
 import type { AccountingSettings } from '../types/accounting';
 
 // App State Interface
@@ -376,11 +376,19 @@ interface AppProviderProps {
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [isInitialized, setIsInitialized] = useState(false);
+  const initializationLockRef = useRef(false); // Lock um doppelte Initialisierung zu verhindern
 
   // Einfache App-Initialisierung (ohne Auto-Migration)
   useEffect(() => {
     const initializeApp = async () => {
-      console.log('🚀 App wird initialisiert...');
+    // Prüfe Lock - verhindere doppelte Ausführung
+    if (initializationLockRef.current) {
+      console.log('⚠️ Initialisierung bereits läuft - überspringe');
+      return;
+    }
+    
+    initializationLockRef.current = true;
+    console.log('🚀 App wird initialisiert...');
       
       // Initialisiere vatRates in accountingSettings falls nicht vorhanden
       try {
@@ -425,8 +433,247 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         console.error('❌ Fehler beim Initialisieren von vatRates:', error);
       }
       
-      setIsInitialized(true);
-      console.log('✅ App-Initialisierung abgeschlossen');
+      // Initialisiere Einheiten-Tabelle falls nicht vorhanden
+      try {
+        const { storageLayer } = await import('../services/storageLayer');
+        const { UNITS } = await import('../constants/articleConstants');
+        const { generateId } = await import('../utils/storageUtils');
+        
+        // Prüfe ob Einheiten bereits vorhanden sind (mehrfach prüfen für Race-Condition-Schutz)
+        let existingUnits = await storageLayer.load<UnitEntity>('units');
+        
+        // WICHTIG: Prüfe nochmal nach kurzer Pause (Race-Condition-Schutz)
+        if (!existingUnits || existingUnits.length === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // Kurze Pause
+          existingUnits = await storageLayer.load<UnitEntity>('units');
+        }
+        
+        if (!existingUnits || existingUnits.length === 0) {
+          console.log('📦 Initialisiere Einheiten-Tabelle...');
+          
+          // Sammle alle Einheiten aus Konstanten (eindeutig, case-insensitive)
+          const unitsFromConstants = new Map<string, string>(); // Map: lowercase -> original
+          UNITS.forEach(unit => {
+            const trimmed = unit.trim();
+            if (trimmed) {
+              unitsFromConstants.set(trimmed.toLowerCase(), trimmed);
+            }
+          });
+          
+          // Sammle alle Einheiten aus Artikeln (bundleUnit und contentUnit)
+          const articles = await storageLayer.load<any>('articles');
+          if (articles && articles.length > 0) {
+            articles.forEach((article: any) => {
+              if (article.bundleUnit && article.bundleUnit.trim() !== '') {
+                const trimmed = article.bundleUnit.trim();
+                if (!unitsFromConstants.has(trimmed.toLowerCase())) {
+                  unitsFromConstants.set(trimmed.toLowerCase(), trimmed);
+                }
+              }
+              if (article.contentUnit && article.contentUnit.trim() !== '') {
+                const trimmed = article.contentUnit.trim();
+                if (!unitsFromConstants.has(trimmed.toLowerCase())) {
+                  unitsFromConstants.set(trimmed.toLowerCase(), trimmed);
+                }
+              }
+            });
+          }
+          
+          // Erstelle UnitEntity-Objekte (verwende original case)
+          const unitsToSave: UnitEntity[] = Array.from(unitsFromConstants.values()).map(unitName => ({
+            id: generateId(),
+            name: unitName,
+            description: undefined,
+            isNew: true,
+            isDirty: true,
+            syncStatus: 'pending' as const,
+            updatedAt: new Date()
+          }));
+          
+          // Prüfe nochmal VOR dem Speichern (Race-Condition-Schutz)
+          const finalCheck = await storageLayer.load<UnitEntity>('units');
+          if (finalCheck && finalCheck.length > 0) {
+            console.log(`ℹ️ Einheiten wurden zwischenzeitlich hinzugefügt - überspringe Initialisierung`);
+          } else {
+            // Speichere Einheiten
+            const success = await storageLayer.save('units', unitsToSave);
+            if (success) {
+              console.log(`✅ Einheiten-Tabelle initialisiert mit ${unitsToSave.length} Einheiten`);
+            } else {
+              console.error('❌ Fehler beim Speichern der Einheiten');
+            }
+          }
+        } else {
+          console.log(`ℹ️ Einheiten-Tabelle bereits vorhanden (${existingUnits.length} Einheiten)`);
+          
+          // Prüfe ob neue Einheiten aus Artikeln hinzugefügt werden müssen
+          const articles = await storageLayer.load<any>('articles');
+          if (articles && articles.length > 0) {
+            const existingUnitNames = new Set(existingUnits.map(unit => unit.name.toLowerCase()));
+            const newUnits: UnitEntity[] = [];
+            
+            articles.forEach((article: any) => {
+              // Prüfe bundleUnit
+              if (article.bundleUnit && article.bundleUnit.trim() !== '') {
+                const unitName = article.bundleUnit.trim();
+                // Prüfe auf Eindeutigkeit (case-insensitive)
+                if (!existingUnitNames.has(unitName.toLowerCase())) {
+                  existingUnitNames.add(unitName.toLowerCase());
+                  newUnits.push({
+                    id: generateId(),
+                    name: unitName,
+                    description: undefined,
+                    isNew: true,
+                    isDirty: true,
+                    syncStatus: 'pending' as const,
+                    updatedAt: new Date()
+                  });
+                }
+              }
+              // Prüfe contentUnit
+              if (article.contentUnit && article.contentUnit.trim() !== '') {
+                const unitName = article.contentUnit.trim();
+                // Prüfe auf Eindeutigkeit (case-insensitive)
+                if (!existingUnitNames.has(unitName.toLowerCase())) {
+                  existingUnitNames.add(unitName.toLowerCase());
+                  newUnits.push({
+                    id: generateId(),
+                    name: unitName,
+                    description: undefined,
+                    isNew: true,
+                    isDirty: true,
+                    syncStatus: 'pending' as const,
+                    updatedAt: new Date()
+                  });
+                }
+              }
+            });
+            
+            if (newUnits.length > 0) {
+              console.log(`📦 Füge ${newUnits.length} neue Einheiten aus Artikeln hinzu...`);
+              const success = await storageLayer.save('units', newUnits);
+              if (success) {
+                console.log(`✅ ${newUnits.length} neue Einheiten hinzugefügt`);
+              } else {
+                console.error('❌ Fehler beim Hinzufügen neuer Einheiten');
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Initialisieren der Einheiten:', error);
+      }
+      
+      // Initialisiere Kategorien-Tabelle falls nicht vorhanden
+      try {
+        const { storageLayer } = await import('../services/storageLayer');
+        const { CATEGORIES } = await import('../constants/articleConstants');
+        const { generateId } = await import('../utils/storageUtils');
+        
+        // Prüfe ob Kategorien bereits vorhanden sind (mehrfach prüfen für Race-Condition-Schutz)
+        let existingCategories = await storageLayer.load<CategoryEntity>('categories');
+        
+        // WICHTIG: Prüfe nochmal nach kurzer Pause (Race-Condition-Schutz)
+        if (!existingCategories || existingCategories.length === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // Kurze Pause
+          existingCategories = await storageLayer.load<CategoryEntity>('categories');
+        }
+        
+        if (!existingCategories || existingCategories.length === 0) {
+          console.log('📁 Initialisiere Kategorien-Tabelle...');
+          
+          // Sammle alle Kategorien aus Konstanten (eindeutig, case-insensitive)
+          const categoriesFromConstants = new Map<string, string>(); // Map: lowercase -> original
+          CATEGORIES.forEach(cat => {
+            const trimmed = cat.trim();
+            if (trimmed) {
+              categoriesFromConstants.set(trimmed.toLowerCase(), trimmed);
+            }
+          });
+          
+          // Sammle alle Kategorien aus Artikeln (falls bereits Artikel vorhanden)
+          const articles = await storageLayer.load<any>('articles');
+          if (articles && articles.length > 0) {
+            articles.forEach((article: any) => {
+              if (article.category && article.category.trim() !== '') {
+                const trimmed = article.category.trim();
+                // Nur hinzufügen, wenn noch nicht vorhanden (case-insensitive)
+                if (!categoriesFromConstants.has(trimmed.toLowerCase())) {
+                  categoriesFromConstants.set(trimmed.toLowerCase(), trimmed);
+                }
+              }
+            });
+          }
+          
+          // Erstelle CategoryEntity-Objekte (eindeutig, verwende original case)
+          const categoriesToSave: CategoryEntity[] = Array.from(categoriesFromConstants.values()).map(categoryName => ({
+            id: generateId(),
+            name: categoryName,
+            description: undefined,
+            isNew: true,
+            isDirty: true,
+            syncStatus: 'pending' as const,
+            updatedAt: new Date()
+          }));
+          
+          // Prüfe nochmal VOR dem Speichern (Race-Condition-Schutz)
+          const finalCheck = await storageLayer.load<CategoryEntity>('categories');
+          if (finalCheck && finalCheck.length > 0) {
+            console.log(`ℹ️ Kategorien wurden zwischenzeitlich hinzugefügt - überspringe Initialisierung`);
+          } else {
+            // Speichere Kategorien
+            const success = await storageLayer.save('categories', categoriesToSave);
+            if (success) {
+              console.log(`✅ Kategorien-Tabelle initialisiert mit ${categoriesToSave.length} Kategorien`);
+            } else {
+              console.error('❌ Fehler beim Speichern der Kategorien');
+            }
+          }
+        } else {
+          console.log(`ℹ️ Kategorien-Tabelle bereits vorhanden (${existingCategories.length} Kategorien)`);
+          
+          // Prüfe ob neue Kategorien aus Artikeln hinzugefügt werden müssen
+          const articles = await storageLayer.load<any>('articles');
+          if (articles && articles.length > 0) {
+            const existingCategoryNames = new Set(existingCategories.map(cat => cat.name.toLowerCase()));
+            const newCategories: CategoryEntity[] = [];
+            
+            articles.forEach((article: any) => {
+              if (article.category && article.category.trim() !== '') {
+                const categoryName = article.category.trim();
+                // Prüfe auf Eindeutigkeit (case-insensitive)
+                if (!existingCategoryNames.has(categoryName.toLowerCase())) {
+                  existingCategoryNames.add(categoryName.toLowerCase());
+                  newCategories.push({
+                    id: generateId(),
+                    name: categoryName,
+                    description: undefined,
+                    isNew: true,
+                    isDirty: true,
+                    syncStatus: 'pending' as const,
+                    updatedAt: new Date()
+                  });
+                }
+              }
+            });
+            
+            if (newCategories.length > 0) {
+              console.log(`📁 Füge ${newCategories.length} neue Kategorien aus Artikeln hinzu...`);
+              const success = await storageLayer.save('categories', newCategories);
+              if (success) {
+                console.log(`✅ ${newCategories.length} neue Kategorien hinzugefügt`);
+              } else {
+                console.error('❌ Fehler beim Hinzufügen neuer Kategorien');
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Initialisieren der Kategorien:', error);
+      }
+      
+    setIsInitialized(true);
+    console.log('✅ App-Initialisierung abgeschlossen');
     };
     
     initializeApp();

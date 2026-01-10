@@ -323,7 +323,7 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
         };
       } else {
         settings = {
-          id: 'accounting-settings',
+          id: generateId(),
           selectedChartId: chartId,
           updatedAt: new Date()
         };
@@ -644,7 +644,7 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
         };
       } else {
         settings = {
-          id: 'accounting-settings',
+          id: generateId(),
           ocrApiConfigs: configs,
           updatedAt: new Date()
         };
@@ -709,6 +709,11 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
       } else if (provider === 'taggun') {
         setOcrApiFormState({
           apiEndpoint: 'https://api.taggun.io/api/receipt/v1/verbose/file',
+          apiKey: ''
+        });
+      } else if (provider === 'gemini') {
+        setOcrApiFormState({
+          apiEndpoint: 'https://generativelanguage.googleapis.com/v1beta',
           apiKey: ''
         });
       } else {
@@ -1089,7 +1094,7 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
           <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
             <FaBrain className="me-2" style={{ color: colors.text }} />
             <h5 className="mb-0" style={{ color: colors.text }}>
-              API-Keys für Beleg-OCR mit KI
+              API-Keys für Beleg-OCR & KI-Provider
             </h5>
           </div>
           <div className="card-body" style={{ padding: '20px' }}>
@@ -1160,6 +1165,22 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
                           Taggun.io - Beste Ergebnisse für Belege
                         </button>
                       </li>
+                      <li style={{ marginBottom: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleOcrProviderSelect('gemini')}
+                          className="btn btn-link"
+                          style={{
+                            textDecoration: selectedOcrProvider === 'gemini' ? 'underline' : 'none',
+                            color: selectedOcrProvider === 'gemini' ? colors.accent : colors.text,
+                            padding: 0,
+                            textAlign: 'left',
+                            width: '100%'
+                          }}
+                        >
+                          Google Gemini - Automatische Lieferantendaten-Erfassung
+                        </button>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -1196,7 +1217,11 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
                             placeholder={
                               selectedOcrProvider === 'azure'
                                 ? 'https://your-resource.cognitiveservices.azure.com/'
-                                : 'https://api.taggun.io/api/receipt/v1/verbose/file'
+                                : selectedOcrProvider === 'taggun'
+                                ? 'https://api.taggun.io/api/receipt/v1/verbose/file'
+                                : selectedOcrProvider === 'gemini'
+                                ? 'https://generativelanguage.googleapis.com/v1beta'
+                                : ''
                             }
                           />
                         </div>

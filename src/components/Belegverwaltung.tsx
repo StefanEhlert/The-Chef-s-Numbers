@@ -15,17 +15,21 @@ import {
   FaPrint,
   FaBrain,
   FaSpinner,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaEye
 } from 'react-icons/fa';
 import { Receipt, ReceiptPaymentStatus, Supplier as SupplierType } from '../types';
 import BelegModal from './BelegModal';
 import ReceiptReviewModal from './ReceiptReviewModal';
+import SupplierSelectionModal from './SupplierSelectionModal';
 import { storageLayer } from '../services/storageLayer';
 import { AccountingSettings, OCRApiConfig, OCRApiProvider } from '../types/accounting';
+import type { AccountingChartId } from '../constants/accountingTemplates';
 import { analyzeDocumentWithAzureFormRecognizer } from '../services/azureFormRecognizerService';
 import { analyzeDocumentWithTaggun } from '../services/taggunOCRService';
-import { OCRResult, enrichReceiptData } from '../services/ocrTypes';
+import { OCRResult, enrichReceiptData, addOcrNameToSupplier } from '../services/ocrTypes';
 import { generateId } from '../utils/storageUtils';
+import { useAppContext } from '../contexts/AppContext';
 
 interface BelegverwaltungProps {
   receipts: Receipt[];
@@ -73,8 +77,10 @@ const ReceiptReviewModalWithImage: React.FC<{
   originalOcrResult?: any;
   onUpdateReceiptData?: (updatedData: any) => void | Promise<void>;
   onSaveReceipt?: (receiptUpdate: any) => Promise<void>;
-}> = ({ receiptImagePath, ...props }) => {
+  onUpdateReceiptImagePath?: (newPath: string) => Promise<void>; // Callback zum Aktualisieren des receiptImagePath
+}> = ({ receiptImagePath, onUpdateReceiptImagePath, ...props }) => {
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [imageExtension, setImageExtension] = useState<string | undefined>(undefined);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
 
   useEffect(() => {
@@ -85,14 +91,26 @@ const ReceiptReviewModalWithImage: React.FC<{
         return;
       }
 
-      console.log('📄 [ReceiptReviewModalWithImage] Starte Bild-Laden für:', receiptImagePath);
+      // console.log('📄 [ReceiptReviewModalWithImage] Starte Bild-Laden für:', receiptImagePath);
       setIsLoadingImage(true);
       try {
-        const url = await storageLayer.loadImage(receiptImagePath);
-        console.log('📄 [ReceiptReviewModalWithImage] loadImage Ergebnis:', url ? 'URL erhalten' : 'null');
-        if (url) {
-          setImageUrl(url);
-          console.log('✅ [ReceiptReviewModalWithImage] Belegbild geladen:', receiptImagePath, 'URL-Typ:', url.substring(0, 20));
+        const result = await storageLayer.loadImage(receiptImagePath);
+        // console.log('📄 [ReceiptReviewModalWithImage] loadImage Ergebnis:', result ? 'URL erhalten' : 'null');
+        if (result) {
+          setImageUrl(result.url);
+          setImageExtension(result.extension);
+          // console.log('✅ [ReceiptReviewModalWithImage] Belegbild geladen:', receiptImagePath, 'Endung:', result.extension);
+          // console.log('📷 [ReceiptReviewModalWithImage] Vollständige URL:', result.url);
+          
+          // Aktualisiere receiptImagePath im Receipt mit der gefundenen Endung, falls noch nicht vorhanden
+          if (result.extension && !receiptImagePath.endsWith(`.${result.extension}`) && onUpdateReceiptImagePath) {
+            const updatedPath = `${receiptImagePath}.${result.extension}`;
+            console.log('💾 [ReceiptReviewModalWithImage] Aktualisiere receiptImagePath mit Endung:', updatedPath);
+            // Aktualisiere Receipt im Hintergrund (nicht-blockierend)
+            onUpdateReceiptImagePath(updatedPath).catch(err => {
+              console.warn('⚠️ [ReceiptReviewModalWithImage] Fehler beim Aktualisieren des receiptImagePath:', err);
+            });
+          }
         } else {
           console.warn('⚠️ [ReceiptReviewModalWithImage] Belegbild konnte nicht geladen werden:', receiptImagePath);
           setImageUrl(undefined);
@@ -106,7 +124,7 @@ const ReceiptReviewModalWithImage: React.FC<{
     };
 
     if (props.show && receiptImagePath) {
-      console.log('📄 [ReceiptReviewModalWithImage] Modal geöffnet, lade Bild...');
+      // console.log('📄 [ReceiptReviewModalWithImage] Modal geöffnet, lade Bild...');
       loadImage();
     } else {
       console.log('📄 [ReceiptReviewModalWithImage] Modal geschlossen oder kein receiptImagePath');
@@ -118,7 +136,7 @@ const ReceiptReviewModalWithImage: React.FC<{
     <ReceiptReviewModal
       {...props}
       receiptImage={imageUrl}
-      receiptImagePath={receiptImagePath}
+      receiptImagePath={imageExtension ? `${receiptImagePath}.${imageExtension}` : receiptImagePath}
     />
   );
 };
@@ -165,6 +183,13 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedProviderRef = useRef<OCRApiProvider | null>(null);
   
+  // Supplier-Auswahl Modal States
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [pendingOcrResult, setPendingOcrResult] = useState<{ ocrResult: OCRResult; provider: OCRApiProvider; file: File } | null>(null);
+  
+  // App Context für articles
+  const { state } = useAppContext();
+  
 
   const filteredReceipts = useMemo(
     () => filteredAndSortedReceipts(),
@@ -200,8 +225,18 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
     });
   };
 
+  const truncateText = (text: string | undefined, maxLength: number = 50): string => {
+    if (!text || text.trim() === '') {
+      return '—';
+    }
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength) + '...';
+  };
+
   const openModalForReceipt = async (receipt: Receipt) => {
-    // Wenn Beleg nicht abgeschlossen ist, prüfe ob processedOcrData vorhanden ist
+    // Wenn Beleg nicht abgeschlossen ist (isCompleted === false), öffne ReceiptReviewModal
     if (!receipt.isCompleted) {
       let processedData = receipt.processedOcrData;
       
@@ -209,7 +244,25 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
       if (!processedData && receipt.ocrResult) {
         console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id);
         try {
-          processedData = enrichReceiptData(receipt.ocrResult, suppliers.map(s => ({ id: s.id, name: s.name })));
+          // Lade selectedChartId aus accountingSettings
+          let selectedChartId: AccountingChartId = 'skr03';
+          try {
+            const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+            if (settings && settings.length > 0 && settings[0].selectedChartId) {
+              selectedChartId = settings[0].selectedChartId;
+            }
+          } catch (e) {
+            // Fallback zu 'skr03' bei Fehler
+          }
+          
+          processedData = enrichReceiptData(
+            receipt.ocrResult, 
+            suppliers.map(s => ({ id: s.id, name: s.name, recognizedNames: s.recognizedNames })),
+            state.articles || [],
+            receipt.ocrProvider,
+            undefined, // accountingAccounts - wird optional verwendet
+            selectedChartId
+          );
           
           // Aktualisiere den Beleg mit processedOcrData
           const updatedReceipt: Receipt = {
@@ -226,20 +279,18 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         }
       }
       
-      // Wenn processedOcrData vorhanden ist, öffne ReceiptReviewModal
-      if (processedData) {
-        console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id, 'processedOcrData vorhanden:', !!processedData);
-        setReviewReceipt(receipt);
-        setShowReceiptReview(true);
-        // Stelle sicher, dass BelegModal geschlossen ist
-        setIsModalOpen(false);
-        setModalReceipt(null);
-        return;
-      }
+      // Öffne ReceiptReviewModal für nicht abgeschlossene Belege
+      console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id, 'isCompleted:', receipt.isCompleted);
+      setReviewReceipt(receipt);
+      setShowReceiptReview(true);
+      // Stelle sicher, dass BelegModal geschlossen ist
+      setIsModalOpen(false);
+      setModalReceipt(null);
+      return;
     }
     
-    // Sonst öffne normales BelegModal
-    console.log('📝 Öffne BelegModal für Beleg:', receipt.id, 'isCompleted:', receipt.isCompleted, 'processedOcrData:', !!receipt.processedOcrData);
+    // Wenn Beleg abgeschlossen ist (isCompleted === true), öffne BelegModal
+    console.log('📝 Öffne BelegModal für Beleg:', receipt.id, 'isCompleted:', receipt.isCompleted);
     setModalReceipt({
       ...receipt,
       receiptDetails: {
@@ -272,6 +323,127 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
       lineItemCount: updatedReceipt.receiptDetails?.lineItems?.length ?? updatedReceipt.lineItemCount
     });
     handleModalClose();
+  };
+
+  const handleEditReceipt = async (receipt: Receipt) => {
+    let processedData = receipt.processedOcrData;
+    
+    // Wenn processedOcrData fehlt, aber ocrResult vorhanden ist, erstelle processedOcrData
+    if (!processedData && receipt.ocrResult) {
+      console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id);
+      try {
+        // Lade selectedChartId aus accountingSettings
+        let selectedChartId: AccountingChartId = 'skr03';
+        try {
+          const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+          if (settings && settings.length > 0 && settings[0].selectedChartId) {
+            selectedChartId = settings[0].selectedChartId;
+          }
+        } catch (e) {
+          // Fallback zu 'skr03' bei Fehler
+        }
+        
+        processedData = enrichReceiptData(
+          receipt.ocrResult, 
+          suppliers.map(s => ({ id: s.id, name: s.name, recognizedNames: s.recognizedNames })),
+          state.articles || [],
+          receipt.ocrProvider,
+          undefined, // accountingAccounts - wird optional verwendet
+          selectedChartId
+        );
+        
+        // Aktualisiere den Beleg mit processedOcrData
+        const updatedReceipt: Receipt = {
+          ...receipt,
+          processedOcrData: processedData,
+          isDirty: true
+        };
+        await onUpdateReceipt(updatedReceipt);
+        
+        // Verwende den aktualisierten Beleg
+        receipt = updatedReceipt;
+      } catch (error) {
+        console.error('❌ Fehler beim Erstellen von processedOcrData:', error);
+      }
+    }
+    
+    // Öffne ReceiptReviewModal
+    console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id);
+    setReviewReceipt(receipt);
+    setShowReceiptReview(true);
+    // Stelle sicher, dass BelegModal geschlossen ist
+    setIsModalOpen(false);
+    setModalReceipt(null);
+  };
+
+  const handleOpenReceiptReview = async (receipt: Receipt) => {
+    let processedData = receipt.processedOcrData;
+    
+    // Wenn processedOcrData fehlt, aber ocrResult vorhanden ist, erstelle processedOcrData
+    if (!processedData && receipt.ocrResult) {
+      console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id);
+      try {
+        // Lade selectedChartId aus accountingSettings
+        let selectedChartId: AccountingChartId = 'skr03';
+        try {
+          const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+          if (settings && settings.length > 0 && settings[0].selectedChartId) {
+            selectedChartId = settings[0].selectedChartId;
+          }
+        } catch (e) {
+          // Fallback zu 'skr03' bei Fehler
+        }
+        
+        processedData = enrichReceiptData(
+          receipt.ocrResult, 
+          suppliers.map(s => ({ id: s.id, name: s.name, recognizedNames: s.recognizedNames })),
+          state.articles || [],
+          receipt.ocrProvider,
+          undefined, // accountingAccounts - wird optional verwendet
+          selectedChartId
+        );
+        
+        // Aktualisiere den Beleg mit processedOcrData
+        const updatedReceipt: Receipt = {
+          ...receipt,
+          processedOcrData: processedData,
+          isDirty: true
+        };
+        await onUpdateReceipt(updatedReceipt);
+        
+        // Verwende den aktualisierten Beleg
+        receipt = updatedReceipt;
+      } catch (error) {
+        console.error('❌ Fehler beim Erstellen von processedOcrData:', error);
+      }
+    }
+    
+    // Öffne ReceiptReviewModal direkt
+    console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id);
+    setReviewReceipt(receipt);
+    setShowReceiptReview(true);
+    // Stelle sicher, dass BelegModal geschlossen ist
+    setIsModalOpen(false);
+    setModalReceipt(null);
+  };
+
+  const handleOpenReceiptViewer = (receipt: Receipt) => {
+    // Öffne BelegModal für Anzeige
+    console.log('📝 Öffne BelegModal für Beleg:', receipt.id);
+    setModalReceipt({
+      ...receipt,
+      receiptDetails: {
+        totalGross: receipt.receiptDetails?.totalGross ?? 0,
+        totalNet: receipt.receiptDetails?.totalNet ?? 0,
+        totalVat: receipt.receiptDetails?.totalVat ?? 0,
+        currency: receipt.receiptDetails?.currency ?? 'EUR',
+        lineItems: receipt.receiptDetails?.lineItems ?? []
+      }
+    });
+    setIsModalOpen(true);
+    // Stelle sicher, dass ReceiptReviewModal geschlossen ist
+    setShowReceiptReview(false);
+    setReviewReceipt(null);
   };
 
   const paymentStatusLabel = (status: ReceiptPaymentStatus) => {
@@ -384,87 +556,47 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         return;
       }
 
-      // Konvertiere zu ExtendedReceiptData für Feldzuordnung
-      const enriched = enrichReceiptData(ocrResult, suppliers.map(s => ({ id: s.id, name: s.name })));
-      
-      // Erstelle neuen Beleg mit OCR-Daten
-      const today = new Date();
-      const dateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-        today.getDate()
-      ).padStart(2, '0')}`;
-
-      // Berechne Netto- und MwSt-Beträge
-      const totalGross = enriched.totalAmount || 0;
-      const totalVat = (enriched.vat7 || 0) + (enriched.vat19 || 0);
-      const totalNet = totalGross - totalVat;
-
-      // Erstelle neuen Receipt
-      const receiptId = generateId();
-      const newReceipt: Receipt = {
-        id: receiptId,
-        supplierId: enriched.supplierId || '',
-        bookingNumber: '',
-        receiptDate: enriched.date || dateString,
-        receiptNumber: enriched.receiptNumber || '',
-        receiptDetails: {
-          lineItems: [],
-          currency: 'EUR',
-          totalNet: totalNet,
-          totalVat: totalVat,
-          totalGross: totalGross
-        },
-        dueDate: '',
-        paymentStatus: 'offen',
-        lineItemCount: enriched.articles.length,
-        accounting: [],
-        isCompleted: false,
-        notes: '',
-        ocrResult: ocrResult, // Speichere OCR-Ergebnis als JSON (Original, bleibt unverändert)
-        ocrProvider: provider, // Speichere verwendeten Provider
-        processedOcrData: enriched, // Verarbeitete OCR-Daten für ReceiptReviewModal
-        isDirty: true,
-        isNew: true,
-        syncStatus: 'pending',
-        createdAt: today,
-        updatedAt: today
-      };
-
-      // Speichere Belegbild
+      // Lade selectedChartId aus accountingSettings
+      let selectedChartId: AccountingChartId = 'skr03';
       try {
-        const imagePath = `pictures/receipts/${receiptId}`;
-        console.log('📷 [OCR] Speichere Belegbild:', {
-          path: imagePath,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size
-        });
-        const imageSaved = await storageLayer.saveImage(imagePath, file);
-        if (imageSaved) {
-          newReceipt.receiptImagePath = imagePath;
-          console.log('✅ [OCR] Belegbild erfolgreich gespeichert:', imagePath);
-        } else {
-          console.warn('⚠️ [OCR] Belegbild konnte nicht gespeichert werden (saveImage returned false)');
+        const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+        if (settings && settings.length > 0 && settings[0].selectedChartId) {
+          selectedChartId = settings[0].selectedChartId;
         }
-      } catch (imageError) {
-        console.error('❌ [OCR] Fehler beim Speichern des Belegbildes:', imageError);
-        // Bildfehler soll das Beleg-Speichern nicht verhindern
+      } catch (e) {
+        // Fallback zu 'skr03' bei Fehler
+      }
+
+      // Konvertiere zu ExtendedReceiptData für Feldzuordnung (mit articles und ocrProvider)
+      const enriched = enrichReceiptData(
+        ocrResult, 
+        suppliers.map(s => ({ id: s.id, name: s.name, recognizedNames: s.recognizedNames })),
+        state.articles || [],
+        provider,
+        undefined, // accountingAccounts - wird optional verwendet
+        selectedChartId
+      );
+      
+      // Wenn kein Supplier gefunden wurde, öffne Modal
+      if (!enriched.supplierId) {
+        setPendingOcrResult({ ocrResult, provider, file });
+        setShowSupplierModal(true);
+        setIsProcessingOCR(false);
+        return;
       }
       
-      console.log('📋 [OCR] Receipt vor dem Speichern:', {
-        id: newReceipt.id,
-        receiptImagePath: newReceipt.receiptImagePath,
-        hasOcrResult: !!newReceipt.ocrResult,
-        hasProcessedOcrData: !!newReceipt.processedOcrData
-      });
-
-      // Speichere Beleg direkt
-      await onUpdateReceipt(newReceipt);
-
-      console.log('✅ Beleg mit OCR-Daten erstellt und gespeichert:', newReceipt.id);
+      // Supplier gefunden - Update Supplier mit recognizedNames falls nötig
+      const foundSupplier = suppliers.find(s => s.id === enriched.supplierId);
+      if (foundSupplier && ocrResult.supplier) {
+        const updatedSupplier = addOcrNameToSupplier(foundSupplier, ocrResult.supplier);
+        if (updatedSupplier.recognizedNames !== foundSupplier.recognizedNames) {
+          // TODO: Supplier aktualisieren in DB
+          console.log('📝 Supplier recognizedNames aktualisiert:', updatedSupplier.recognizedNames);
+        }
+      }
       
-      // Öffne automatisch ReceiptReviewModal für Bearbeitung
-      setReviewReceipt(newReceipt);
-      setShowReceiptReview(true);
+      // Erstelle neuen Beleg mit OCR-Daten
+      await createReceiptFromEnriched(enriched, ocrResult, provider, file);
     } catch (error: any) {
       console.error('Fehler bei OCR-Analyse:', error);
       setOcrError(error.message || 'Fehler bei der OCR-Analyse');
@@ -484,8 +616,413 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         return 'Gut für Rechnungen';
       case 'taggun':
         return 'Beste Ergebnisse für Belege';
+      case 'gemini':
+        return 'Automatische Lieferantendaten-Erfassung';
       default:
         return '';
+    }
+  };
+
+  // Handler für Supplier-Auswahl im Modal
+  const handleSupplierSelect = async (supplier: SupplierType) => {
+    if (!pendingOcrResult) return;
+    
+    const { ocrResult, provider, file } = pendingOcrResult;
+    
+    // Update Supplier mit recognizedNames falls nötig
+    const updatedSupplier = addOcrNameToSupplier(supplier, ocrResult.supplier || '');
+    if (updatedSupplier.recognizedNames !== supplier.recognizedNames) {
+      // Speichere Supplier mit aktualisierten recognizedNames in DB
+      try {
+        const supplierToSave = {
+          ...updatedSupplier,
+          updatedAt: new Date()
+        };
+        await storageLayer.save('suppliers', [supplierToSave]);
+        console.log('✅ Supplier recognizedNames gespeichert:', updatedSupplier.recognizedNames);
+      } catch (error) {
+        console.error('❌ Fehler beim Speichern des Suppliers:', error);
+      }
+    }
+    
+    // enrichReceiptData erneut aufrufen (jetzt sollte Supplier gefunden werden)
+    // Füge Supplier temporär zur Liste hinzu, falls noch nicht vorhanden
+    const suppliersWithSelected = suppliers.find(s => s.id === supplier.id)
+      ? suppliers.map(s => s.id === supplier.id ? updatedSupplier : s)
+      : [...suppliers, updatedSupplier];
+    
+    // Lade selectedChartId aus accountingSettings
+    let selectedChartId: AccountingChartId = 'skr03';
+    try {
+      const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+      if (settings && settings.length > 0 && settings[0].selectedChartId) {
+        selectedChartId = settings[0].selectedChartId;
+      }
+    } catch (e) {
+      // Fallback zu 'skr03' bei Fehler
+    }
+    
+    const enriched = enrichReceiptData(
+      ocrResult,
+      suppliersWithSelected.map(s => ({ id: s.id, name: s.name, recognizedNames: s.recognizedNames })),
+      state.articles || [],
+      provider,
+      undefined, // accountingAccounts - wird optional verwendet
+      selectedChartId
+    );
+    
+    // Stelle sicher, dass supplierId gesetzt ist (falls enrichReceiptData ihn nicht gefunden hat)
+    if (!enriched.supplierId && supplier.id) {
+      enriched.supplierId = supplier.id;
+    }
+    
+    // Erstelle neuen Beleg mit OCR-Daten
+    await createReceiptFromEnriched(enriched, ocrResult, provider, file, supplier.id);
+    
+    // Modal schließen
+    setShowSupplierModal(false);
+    setPendingOcrResult(null);
+  };
+
+  // Handler für Supplier-Erstellung im Modal
+  const handleCreateSupplier = async (supplierName: string) => {
+    if (!pendingOcrResult) return;
+    
+    // Erstelle neuen Supplier
+    const newSupplier: SupplierType = {
+      id: generateId(),
+      name: supplierName,
+      address: {
+        street: '',
+        zipCode: '',
+        city: '',
+        country: 'Deutschland'
+      },
+      phoneNumbers: [],
+      recognizedNames: pendingOcrResult.ocrResult.supplier && pendingOcrResult.ocrResult.supplier.toLowerCase().trim() !== supplierName.toLowerCase().trim()
+        ? [pendingOcrResult.ocrResult.supplier]
+        : undefined,
+      isDirty: true,
+      isNew: true,
+      syncStatus: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    // Speichere neuen Supplier in DB
+    try {
+      await storageLayer.save('suppliers', [newSupplier]);
+      console.log('✅ Neuer Supplier gespeichert:', newSupplier.name);
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern des neuen Suppliers:', error);
+    }
+    
+    // Verwende neuen Supplier
+    await handleSupplierSelect(newSupplier);
+  };
+
+  // Hilfsfunktion: Erstelle Beleg aus enriched data
+  const createReceiptFromEnriched = async (
+    enriched: any,
+    ocrResult: OCRResult,
+    provider: OCRApiProvider,
+    file: File,
+    selectedSupplierId?: string
+  ) => {
+    const today = new Date();
+    const dateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+      today.getDate()
+    ).padStart(2, '0')}`;
+
+    // Berechne Netto- und MwSt-Beträge
+    const totalGross = enriched.totalAmount || 0;
+    const totalVat = (enriched.vat7 || 0) + (enriched.vat19 || 0);
+    const totalNet = totalGross - totalVat;
+
+    // Erstelle neuen Receipt
+    const receiptId = generateId();
+    // Verwende selectedSupplierId falls vorhanden, sonst enriched.supplierId
+    const finalSupplierId = selectedSupplierId || enriched.supplierId || '';
+    const newReceipt: Receipt = {
+      id: receiptId,
+      supplierId: finalSupplierId,
+      bookingNumber: '',
+      receiptDate: enriched.date || dateString,
+      receiptNumber: enriched.receiptNumber || '',
+      receiptDetails: {
+        lineItems: [],
+        currency: 'EUR',
+        totalNet: totalNet,
+        totalVat: totalVat,
+        totalGross: totalGross
+      },
+      dueDate: '',
+      paymentStatus: 'offen',
+      lineItemCount: enriched.articles.length,
+      accounting: [],
+      isCompleted: false,
+      notes: '',
+      ocrResult: ocrResult,
+      ocrProvider: provider,
+      processedOcrData: enriched,
+      isDirty: true,
+      isNew: true,
+      syncStatus: 'pending',
+      createdAt: today,
+      updatedAt: today
+    };
+
+    // Speichere Belegbild
+    try {
+      const imagePath = `pictures/receipts/${receiptId}`;
+      const imageSaved = await storageLayer.saveImage(imagePath, file);
+      if (imageSaved) {
+        newReceipt.receiptImagePath = imagePath;
+      }
+    } catch (imageError) {
+      console.error('❌ [OCR] Fehler beim Speichern des Belegbildes:', imageError);
+    }
+
+    // Speichere Beleg
+    await onUpdateReceipt(newReceipt);
+    
+    // Öffne automatisch ReceiptReviewModal für Bearbeitung
+    setReviewReceipt(newReceipt);
+    setShowReceiptReview(true);
+  };
+
+  // Druck-Funktion für Beleg mit Kontierungstabelle
+  const handlePrintReceipt = async (receipt: Receipt) => {
+    try {
+      // Lade Belegbild
+      let imageUrl: string | undefined | null;
+      if (receipt.receiptImagePath) {
+        try {
+          const imageResult = await storageLayer.loadImage(receipt.receiptImagePath);
+          if (imageResult) {
+            imageUrl = imageResult.url;
+          }
+        } catch (error) {
+          console.error('Fehler beim Laden des Belegbildes:', error);
+          alert('Fehler beim Laden des Belegbildes. Bitte versuchen Sie es erneut.');
+          return;
+        }
+      }
+
+      if (!imageUrl) {
+        alert('Kein Belegbild gefunden. Bitte stellen Sie sicher, dass ein Bild vorhanden ist.');
+        return;
+      }
+
+      // Erstelle Kontierungstabelle aus accounting
+      const taxAccountTotals = receipt.accounting && receipt.accounting.length > 0
+        ? receipt.accounting.map(entry => ({
+            accountNumber: entry.accountNumber || '',
+            accountName: entry.accountName || '',
+            total: entry.amount || 0
+          }))
+        : [];
+
+      if (taxAccountTotals.length === 0) {
+        alert('Keine Kontierungseinträge vorhanden. Bitte fügen Sie zuerst Kontierungseinträge hinzu.');
+        return;
+      }
+
+      // Lade Position aus processedOcrData oder verwende Standard-Wert
+      const printListPosition = receipt.processedOcrData?.printListPosition || { x: 50, y: 50 };
+
+      // Lade Bildgröße für Position-Berechnung
+      const img = new Image();
+      img.src = imageUrl;
+      
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Fehler beim Laden des Bildes'));
+      });
+
+      const imageWidth = img.naturalWidth;
+      const imageHeight = img.naturalHeight;
+
+      // Berechne Position in Prozent
+      const positionPercentX = (printListPosition.x / imageWidth) * 100;
+      const positionPercentY = (printListPosition.y / imageHeight) * 100;
+
+      // Öffne Druckvorschau
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Pop-up-Blocker verhindert das Öffnen der Druckvorschau. Bitte erlauben Sie Pop-ups für diese Seite.');
+        return;
+      }
+
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Beleg mit Steuerkonten-Summen</title>
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              @page {
+                margin: 0;
+                size: auto;
+                orphans: 0;
+                widows: 0;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                min-height: 100%;
+              }
+              @media print {
+                html, body {
+                  margin: 0; 
+                  padding: 0;
+                  width: 100%;
+                  height: auto;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                .print-container {
+                  position: relative;
+                  width: 100%;
+                  margin: 0;
+                  padding: 0;
+                }
+                .receipt-image { 
+                  width: 100%; 
+                  height: auto;
+                  display: block;
+                  max-width: 100%;
+                }
+                .tax-account-list {
+                  position: absolute;
+                  left: ${positionPercentX}%;
+                  top: ${positionPercentY}%;
+                  transform: translate(0, 0);
+                  background: white !important;
+                  padding: 6px;
+                  border: 1px solid #000;
+                  font-family: Arial, sans-serif;
+                  font-size: 7px;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                  min-width: 120px;
+                  z-index: 1000;
+                }
+                .tax-account-title {
+                  font-weight: bold;
+                  margin-bottom: 5px;
+                  font-size: 8px;
+                }
+                .tax-account-item {
+                  margin: 3px 0;
+                  padding: 2px 0;
+                  border-bottom: 1px solid #ccc;
+                }
+                .tax-account-item:last-child {
+                  border-bottom: none;
+                }
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                min-height: 100%;
+              }
+              .print-container {
+                position: relative;
+                display: block;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                min-height: 100%;
+              }
+              .receipt-image {
+                width: 100%;
+                height: auto;
+                display: block;
+                max-width: 100%;
+              }
+              .tax-account-list {
+                position: absolute;
+                left: ${positionPercentX}%;
+                top: ${positionPercentY}%;
+                transform: translate(0, 0);
+                background: rgba(255, 255, 255, 0.95);
+                padding: 6px;
+                border: 1px solid #000;
+                font-family: Arial, sans-serif;
+                font-size: 7px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                min-width: 120px;
+                z-index: 1000;
+              }
+              .tax-account-title {
+                font-weight: bold;
+                margin-bottom: 5px;
+                font-size: 8px;
+              }
+              .tax-account-item {
+                margin: 3px 0;
+                padding: 2px 0;
+                border-bottom: 1px solid #ccc;
+              }
+              .tax-account-item:last-child {
+                border-bottom: none;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="print-container">
+              <img src="${imageUrl}" alt="Beleg" class="receipt-image" />
+              <div class="tax-account-list">
+                <div class="tax-account-title">Artikelsummen nach Steuerkonten:</div>
+                ${taxAccountTotals.map(item => `
+                  <div class="tax-account-item">
+                    ${item.total.toFixed(2).replace('.', ',')} € - ${item.accountNumber} - ${item.accountName}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <script>
+              // Warte bis Bild geladen ist, dann drucken
+              (function() {
+                let printCalled = false;
+                
+                function callPrintOnce() {
+                  if (!printCalled) {
+                    printCalled = true;
+                    setTimeout(function() {
+                      window.print();
+                    }, 300);
+                  }
+                }
+                
+                const img = document.querySelector('.receipt-image');
+                if (img) {
+                  if (img.complete) {
+                    callPrintOnce();
+                  } else {
+                    img.onload = callPrintOnce;
+                    img.onerror = callPrintOnce;
+                  }
+                } else {
+                  callPrintOnce();
+                }
+              })();
+            </script>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    } catch (error) {
+      console.error('Fehler beim Drucken des Beleges:', error);
+      alert('Fehler beim Drucken des Beleges. Bitte versuchen Sie es erneut.');
     }
   };
 
@@ -701,26 +1238,7 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
                       )}
                     </span>
                   </th>
-                  <th>
-                    <span className="table-header-label">
-                      Zahlung
-                      {sortField === 'paymentStatus' && (
-                        <span className="sort-indicator">
-                          {sortDirection === 'asc' ? <FaSortUp /> : <FaSortDown />}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                  <th>
-                    <span className="table-header-label">
-                      Fälligkeit
-                      {sortField === 'dueDate' && (
-                        <span className="sort-indicator">
-                          {sortDirection === 'asc' ? <FaSortUp /> : <FaSortDown />}
-                        </span>
-                      )}
-                    </span>
-                  </th>
+                  <th>Notizen</th>
                   <th>
                     <span className="table-header-label">
                       Pos.
@@ -748,7 +1266,7 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
               <tbody>
                 {filteredReceipts.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="text-center py-4" style={{ color: colors.textSecondary }}>
+                    <td colSpan={10} className="text-center py-4" style={{ color: colors.textSecondary }}>
                       Keine Belege gefunden. Nutzen Sie den Button &quot;Neuer Beleg&quot;, um einen Beleg anzulegen.
                     </td>
                   </tr>
@@ -777,24 +1295,9 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
                       <td>{formatDate(receipt.receiptDate)}</td>
                       <td>{receipt.receiptNumber || '—'}</td>
                       <td>{supplierName}</td>
-                      <td>
-                        <span
-                          className="badge badge-status"
-                          style={{
-                            backgroundColor:
-                              receipt.paymentStatus === 'bezahlt'
-                                ? '#28a745'
-                                : receipt.paymentStatus === 'überfällig'
-                                ? '#dc3545'
-                                : receipt.paymentStatus === 'teilweise'
-                                ? '#fd7e14'
-                                : colors.accent
-                          }}
-                        >
-                          {paymentStatusLabel(receipt.paymentStatus || 'offen')}
-                        </span>
+                      <td style={{ maxWidth: '200px' }} title={receipt.notes || ''}>
+                        {truncateText(receipt.notes, 50)}
                       </td>
-                      <td>{formatDate(receipt.dueDate)}</td>
                       <td>{receipt.lineItemCount ?? receipt.receiptDetails?.lineItems?.length ?? 0}</td>
                       <td>{formatPrice(totalGross)}</td>
                       <td className="text-center">
@@ -803,8 +1306,8 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
                             <FaCheckCircle color="#28a745" />
                           </span>
                         ) : (
-                          <span className="status-icon text-warning" title="In Arbeit">
-                            <FaClock />
+                          <span className="status-icon text-warning" title="Unvollständige Artikel">
+                            <FaExclamationTriangle color={colors.accent || '#ffc107'} />
                           </span>
                         )}
                       </td>
@@ -813,16 +1316,21 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
                           <button
                             className="btn btn-link btn-action"
                             title="Bearbeiten"
-                            onClick={() => openModalForReceipt(receipt)}
+                            onClick={() => handleOpenReceiptReview(receipt)}
                           >
                             <FaPencilAlt />
                           </button>
                           <button
                             className="btn btn-link btn-action"
+                            title="Anzeigen"
+                            onClick={() => handleOpenReceiptViewer(receipt)}
+                          >
+                            <FaEye />
+                          </button>
+                          <button
+                            className="btn btn-link btn-action"
                             title="Drucken"
-                            onClick={() => {
-                              console.log('Drucken für Beleg:', receipt.receiptNumber || receipt.id);
-                            }}
+                            onClick={() => handlePrintReceipt(receipt)}
                           >
                             <FaPrint />
                           </button>
@@ -854,6 +1362,7 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         onClose={handleModalClose}
         onChange={setModalReceipt}
         onSave={handleModalSave}
+        onEdit={handleEditReceipt}
       />
 
       {/* ReceiptReviewModal für Belege in Bearbeitung */}
@@ -873,7 +1382,8 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
             phoneNumbers: s.phoneNumbers.map(p => ({ type: p.type, number: p.number })),
             address: s.address,
             website: s.website || '',
-            notes: s.notes || ''
+            notes: s.notes || '',
+            recognizedNames: s.recognizedNames || [] // WICHTIG: recognizedNames muss mit übergeben werden!
           }))}
           colors={colors}
           onSave={async (articles) => {
@@ -887,6 +1397,17 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
           receiptImagePath={reviewReceipt.receiptImagePath}
           receiptId={reviewReceipt.id}
           originalOcrResult={reviewReceipt.ocrResult}
+          onUpdateReceiptImagePath={async (newPath: string) => {
+            // Aktualisiere receiptImagePath im Receipt
+            const updatedReceipt: Receipt = {
+              ...reviewReceipt,
+              receiptImagePath: newPath,
+              isDirty: true,
+              updatedAt: new Date()
+            };
+            await onUpdateReceipt(updatedReceipt);
+            setReviewReceipt(updatedReceipt);
+          }}
           onUpdateReceiptData={async (updatedData) => {
             // Aktualisiere processedOcrData im Receipt
             const updatedReceipt: Receipt = {
@@ -906,6 +1427,7 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
                 receiptDetails: receiptUpdate.receiptDetails,
                 lineItemCount: receiptUpdate.receiptDetails.lineItems.length
               }),
+              ...(receiptUpdate.accounting && { accounting: receiptUpdate.accounting }),
               ...(receiptUpdate.isCompleted !== undefined && { isCompleted: receiptUpdate.isCompleted }),
               // Aktualisiere auch Belegfelder aus processedOcrData
               ...(receiptUpdate.processedOcrData && {
@@ -1014,7 +1536,7 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
                             <FaBrain className="me-3" style={{ fontSize: '1.5rem', color: colors.primary }} />
                             <div className="flex-grow-1">
                               <h6 className="mb-1" style={{ color: colors.text }}>
-                                {config.provider === 'azure' ? 'Azure Form Recognizer' : 'Taggun.io'}
+                                {config.provider === 'azure' ? 'Azure Form Recognizer' : config.provider === 'taggun' ? 'Taggun.io' : 'Google Gemini'}
                               </h6>
                               <p className="mb-0 text-muted" style={{ fontSize: '0.9rem' }}>
                                 {getProviderDescription(config.provider)}
@@ -1055,6 +1577,19 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         </div>
       )}
 
+      {/* Supplier-Auswahl Modal */}
+      <SupplierSelectionModal
+        show={showSupplierModal}
+        onClose={() => {
+          setShowSupplierModal(false);
+          setPendingOcrResult(null);
+        }}
+        suppliers={suppliers}
+        initialSearchTerm={pendingOcrResult?.ocrResult.supplier || ''}
+        colors={colors}
+        onSelectSupplier={handleSupplierSelect}
+        onCreateSupplier={handleCreateSupplier}
+      />
     </div>
   );
 };

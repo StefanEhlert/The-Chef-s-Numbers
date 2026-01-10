@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { suggestCategory } from '../utils/helpers';
 import { categoryManager } from '../utils/categoryManager';
 import { ExtendedProductData } from '../services/nutritionAPI';
 import { storageLayer } from '../services/storageLayer';
-import { AccountingAccount } from '../types';
+import { AccountingAccount, UnitEntity } from '../types';
+import { generateId } from '../utils/storageUtils';
 
 // Interfaces
 export interface ArticleForm {
@@ -52,6 +53,7 @@ export interface Supplier {
   };
   website: string;
   notes: string;
+  recognizedNames?: string[]; // Array von OCR-Namen für verschiedene Erkennungen
 }
 
 // Konstanten
@@ -270,6 +272,9 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   const [selectedAccountingAccountIndex, setSelectedAccountingAccountIndex] = useState(-1);
   const [accountingAccounts, setAccountingAccounts] = useState<AccountingAccount[]>([]);
   
+  // Einheiten-State
+  const [units, setUnits] = useState<UnitEntity[]>([]);
+  
   // Taschenrechner-State
   const [showCalculator, setShowCalculator] = useState(false);
   
@@ -346,7 +351,9 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   const getFilteredCategories = useCallback(() => {
     if (!categorySearchTerm) {
       // Aktualisiere den CategoryManager mit den aktuellen Artikeldaten
-      categoryManager.updateCategories([]); // Leeres Array, da wir hier keine Artikeldaten haben
+      categoryManager.updateCategories([]).catch(err => 
+        console.error('Fehler beim Aktualisieren der Kategorien:', err)
+      ); // Leeres Array, da wir hier keine Artikeldaten haben
       return categoryManager.getAllCategories().slice(0, 10);
     }
     
@@ -363,35 +370,70 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
   }, [supplierSearchTerm, suppliers]);
 
   const getFilteredBundleUnits = useCallback(() => {
-    if (!bundleUnitSearchTerm) return UNITS.slice(0, 10);
+    // Extrahiere Einheitennamen aus UnitEntity-Array
+    const unitNames = units.map(unit => unit.name);
     
-    return UNITS.filter(unit =>
+    if (!bundleUnitSearchTerm) return unitNames.slice(0, 10);
+    
+    return unitNames.filter(unit =>
       unit.toLowerCase().includes(bundleUnitSearchTerm.toLowerCase())
     ).slice(0, 10);
-  }, [bundleUnitSearchTerm]);
+  }, [bundleUnitSearchTerm, units]);
 
   const getFilteredContentUnits = useCallback(() => {
-    if (!contentUnitSearchTerm) return UNITS.slice(0, 10);
+    // Extrahiere Einheitennamen aus UnitEntity-Array
+    const unitNames = units.map(unit => unit.name);
     
-    return UNITS.filter(unit =>
+    if (!contentUnitSearchTerm) return unitNames.slice(0, 10);
+    
+    return unitNames.filter(unit =>
       unit.toLowerCase().includes(contentUnitSearchTerm.toLowerCase())
     ).slice(0, 10);
-  }, [contentUnitSearchTerm]);
+  }, [contentUnitSearchTerm, units]);
 
   // Lade AccountingAccounts beim ersten Aufruf
   const loadAccountingAccounts = useCallback(async () => {
     try {
       const accounts = await storageLayer.load<AccountingAccount>('accountingAccounts');
       if (accounts) {
-        // Filtere nur aktive Konten
-        const activeAccounts = accounts.filter(acc => acc.status === 'active');
-        setAccountingAccounts(activeAccounts);
+        // Filtere nur aktive Konten für Wareneingang
+        const wareneingangAccounts = accounts.filter(acc => 
+          acc.status === 'active' && 
+          (acc.category === 'Wareneingang' || 
+           acc.category === 'Wareneingang und Material' ||
+           acc.name.toLowerCase().includes('wareneingang'))
+        );
+        setAccountingAccounts(wareneingangAccounts);
       }
     } catch (error) {
       console.error('Fehler beim Laden der AccountingAccounts:', error);
       setAccountingAccounts([]);
     }
   }, []);
+
+  // Lade Einheiten beim ersten Aufruf
+  const loadUnits = useCallback(async () => {
+    try {
+      const loadedUnits = await storageLayer.load<UnitEntity>('units');
+      if (loadedUnits) {
+        // Sortiere alphabetisch nach name
+        const sortedUnits = [...loadedUnits].sort((a, b) => 
+          a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
+        );
+        setUnits(sortedUnits);
+      } else {
+        setUnits([]);
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Einheiten:', error);
+      setUnits([]);
+    }
+  }, []);
+
+  // Lade Einheiten beim ersten Aufruf
+  useEffect(() => {
+    loadUnits();
+  }, [loadUnits]);
 
   // Filterfunktion für AccountingAccounts
   const getFilteredAccountingAccounts = useCallback(() => {
@@ -412,6 +454,13 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     setArticleForm(prev => ({ ...prev, category }));
     setCategorySearchTerm('');
     setShowCategoryDropdown(false);
+
+    // Wenn es eine neue Kategorie ist (nicht in DB), speichere sie
+    if (!categoryManager.categoryExists(category)) {
+      categoryManager.addCustomCategory(category).catch(err => 
+        console.error('Fehler beim Speichern der neuen Kategorie:', err)
+      );
+    }
 
     // Suche nach Artikeln mit der gleichen Kategorie und übernehme Nährwerte und SKR-Konto
     if (articles && articles.length > 0) {
@@ -629,11 +678,37 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     }
   }, [supplierSearchTerm, selectedSupplierIndex, getFilteredSuppliers, handleSupplierSelect, suppliers]);
 
-  const handleBundleUnitSelect = useCallback((unit: string) => {
+  const handleBundleUnitSelect = useCallback(async (unit: string) => {
     setArticleForm(prev => ({ ...prev, bundleUnit: unit }));
     setBundleUnitSearchTerm('');
     setShowBundleUnitDropdown(false);
-  }, []);
+    
+    // Prüfe ob Einheit bereits in der Liste vorhanden ist
+    const unitExists = units.some(u => u.name.toLowerCase() === unit.toLowerCase());
+    
+    if (!unitExists && unit.trim() !== '') {
+      // Neue Einheit zur Tabelle hinzufügen
+      const newUnit: UnitEntity = {
+        id: generateId(),
+        name: unit.trim(),
+        description: undefined,
+        isNew: true,
+        isDirty: true,
+        syncStatus: 'pending',
+        updatedAt: new Date()
+      };
+      
+      try {
+        const success = await storageLayer.save('units', [newUnit]);
+        if (success) {
+          // Lade Einheiten neu, um die neue Einheit zu erhalten (sortiert)
+          await loadUnits();
+        }
+      } catch (error) {
+        console.error('Fehler beim Speichern der neuen Einheit:', error);
+      }
+    }
+  }, [units, loadUnits]);
 
   const handleBundleUnitInputChange = useCallback((value: string) => {
     setBundleUnitSearchTerm(value);
@@ -695,11 +770,37 @@ export const useArticleForm = (suppliers: Supplier[], onNewSupplier?: (supplierN
     }
   }, [bundleUnitSearchTerm, selectedBundleUnitIndex, getFilteredBundleUnits, handleBundleUnitSelect]);
 
-  const handleContentUnitSelect = useCallback((unit: string) => {
+  const handleContentUnitSelect = useCallback(async (unit: string) => {
     setArticleForm(prev => ({ ...prev, contentUnit: unit }));
     setContentUnitSearchTerm('');
     setShowContentUnitDropdown(false);
-  }, []);
+    
+    // Prüfe ob Einheit bereits in der Liste vorhanden ist
+    const unitExists = units.some(u => u.name.toLowerCase() === unit.toLowerCase());
+    
+    if (!unitExists && unit.trim() !== '') {
+      // Neue Einheit zur Tabelle hinzufügen
+      const newUnit: UnitEntity = {
+        id: generateId(),
+        name: unit.trim(),
+        description: undefined,
+        isNew: true,
+        isDirty: true,
+        syncStatus: 'pending',
+        updatedAt: new Date()
+      };
+      
+      try {
+        const success = await storageLayer.save('units', [newUnit]);
+        if (success) {
+          // Lade Einheiten neu, um die neue Einheit zu erhalten (sortiert)
+          await loadUnits();
+        }
+      } catch (error) {
+        console.error('Fehler beim Speichern der neuen Einheit:', error);
+      }
+    }
+  }, [units, loadUnits]);
 
   const handleContentUnitInputChange = useCallback((value: string) => {
     setContentUnitSearchTerm(value);

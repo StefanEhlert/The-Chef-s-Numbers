@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { FaTimes, FaSave, FaEdit, FaPlus, FaImage, FaEuroSign, FaSearch, FaCheck, FaCalculator, FaCoins, FaExclamationTriangle, FaCopy, FaPrint, FaCheckCircle, FaClock, FaPercent, FaCode, FaMinus, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaTimes, FaSave, FaEdit, FaPlus, FaImage, FaEuroSign, FaSearch, FaCheck, FaCalculator, FaCoins, FaExclamationTriangle, FaCopy, FaPrint, FaPercent, FaCode, FaMinus, FaChevronLeft, FaChevronRight, FaBan } from 'react-icons/fa';
 import { ExtendedReceiptData, ReceiptArticle } from '../services/ocrTypes';
 import { useArticleForm, Supplier } from '../hooks/useArticleForm';
-import { Supplier as SupplierType, PhoneType, ReceiptLineItem } from '../types';
+import { Supplier as SupplierType, PhoneType, ReceiptLineItem, ReceiptAccountingEntry } from '../types';
 import { ArticleCategory, Unit, Article } from '../types';
 import { categoryManager } from '../utils/categoryManager';
 import { VAT_RATES, SKR3_TAX_ACCOUNTS } from '../constants/articleConstants';
@@ -13,6 +13,7 @@ import { AccountingAccount, AccountingSettings, VatRate } from '../types/account
 import { AccountingChartId } from '../constants/accountingTemplates';
 import CalculatorModal from './ui/CalculatorModal';
 import PriceConverterModal from './ui/PriceConverterModal';
+import ReceiptImageViewer from './ReceiptImageViewer';
 
 interface ReceiptReviewModalProps {
   show: boolean;
@@ -27,7 +28,7 @@ interface ReceiptReviewModalProps {
   onUpdateReceiptData?: (updatedData: ExtendedReceiptData) => void; // Callback zum Aktualisieren der Receipt-Daten
   receiptId?: string; // ID des Receipts für Updates
   originalOcrResult?: any; // Originales OCR-Ergebnis vom Provider
-  onSaveReceipt?: (receiptUpdate: { processedOcrData?: ExtendedReceiptData; receiptDetails?: any; isCompleted?: boolean }) => Promise<void>; // Callback zum Speichern des Receipts
+  onSaveReceipt?: (receiptUpdate: { processedOcrData?: ExtendedReceiptData; receiptDetails?: any; accounting?: ReceiptAccountingEntry[]; isCompleted?: boolean }) => Promise<void>; // Callback zum Speichern des Receipts
 }
 
 const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
@@ -49,10 +50,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   const [editedArticles, setEditedArticles] = useState<ReceiptArticle[]>(receiptData.articles);
   const [receiptSupplierId, setReceiptSupplierId] = useState<string>(receiptData.supplierId || '');
   const [receiptSupplierSearchTerm, setReceiptSupplierSearchTerm] = useState<string>('');
-  const [scannedSupplierName, setScannedSupplierName] = useState<string>(receiptData.supplier || '');
-  const [hideScannedSupplierName, setHideScannedSupplierName] = useState<boolean>(false);
   const [showArticleSearchModal, setShowArticleSearchModal] = useState<boolean>(false);
   const [articleSearchTerm, setArticleSearchTerm] = useState<string>('');
+  const [currentArticles, setCurrentArticles] = useState<Article[]>([]); // Aktuelle Artikel aus storageLayer
   const [showJsonDialog, setShowJsonDialog] = useState<boolean>(false);
   const [receiptDate, setReceiptDate] = useState<string>(receiptData.date || '');
   const [receiptNumber, setReceiptNumber] = useState<string>(receiptData.receiptNumber || '');
@@ -75,7 +75,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(receiptData.leftPanelWidth || 300);
   const [rightPanelWidth, setRightPanelWidth] = useState<number>(receiptData.rightPanelWidth || 400);
   const [isResizingLeft, setIsResizingLeft] = useState<boolean>(false);
-  const [isResizingRight, setIsResizingRight] = useState<boolean>(false);
   const resizeStartXRef = useRef<number>(0);
   const resizeStartLeftWidthRef = useRef<number>(0);
   const resizeStartRightWidthRef = useRef<number>(0);
@@ -90,17 +89,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     document.body.style.userSelect = 'none';
   }, [leftPanelWidth]);
   
-  // Resize-Handler für rechtes Panel (Original-Beleg)
-  const handleRightResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizingRight(true);
-    resizeStartXRef.current = e.clientX;
-    resizeStartRightWidthRef.current = rightPanelWidth;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [rightPanelWidth]);
-  
-  // Mouse-Move Handler für Resize
+  // Mouse-Move Handler für Resize (nur noch für linkes Panel)
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingLeft) {
@@ -109,34 +98,20 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         const deltaX = e.clientX - resizeStartXRef.current;
         const newWidth = Math.max(200, Math.min(600, resizeStartLeftWidthRef.current + deltaX));
         setLeftPanelWidth(newWidth);
-      } else if (isResizingRight) {
-        e.preventDefault();
-        e.stopPropagation();
-        const deltaX = resizeStartXRef.current - e.clientX; // Umgekehrt, da wir von rechts nach links ziehen
-        const newWidth = Math.max(200, Math.min(800, resizeStartRightWidthRef.current + deltaX));
-        setRightPanelWidth(newWidth);
       }
     };
     
     const handleMouseUp = () => {
-      if (isResizingLeft || isResizingRight) {
+      if (isResizingLeft) {
         setIsResizingLeft(false);
-        setIsResizingRight(false);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         
-        // Speichere Breiten in processedOcrData
-        if (onUpdateReceiptDataRef.current) {
-          onUpdateReceiptDataRef.current({
-            ...receiptDataRef.current,
-            leftPanelWidth: leftPanelWidth,
-            rightPanelWidth: rightPanelWidth
-          });
-        }
+        // Speichere Breiten NICHT automatisch - nur beim Speichern des Beleges
       }
     };
     
-    if (isResizingLeft || isResizingRight) {
+    if (isResizingLeft) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       
@@ -145,34 +120,10 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isResizingLeft, isResizingRight, leftPanelWidth, rightPanelWidth, onUpdateReceiptData]);
+  }, [isResizingLeft, leftPanelWidth, rightPanelWidth, onUpdateReceiptData]);
   
-  // Speichere Breiten beim Ändern (debounced)
-  useEffect(() => {
-    // Prüfe ob Breiten sich geändert haben (nicht beim ersten Laden)
-    if (prevLeftPanelWidthRef.current !== null && 
-        prevRightPanelWidthRef.current !== null &&
-        !isResizingLeft && 
-        !isResizingRight && 
-        onUpdateReceiptDataRef.current &&
-        (prevLeftPanelWidthRef.current !== leftPanelWidth || 
-         prevRightPanelWidthRef.current !== rightPanelWidth)) {
-      const timeoutId = setTimeout(() => {
-        if (onUpdateReceiptDataRef.current) {
-          onUpdateReceiptDataRef.current({
-            ...receiptDataRef.current,
-            leftPanelWidth: leftPanelWidth,
-            rightPanelWidth: rightPanelWidth
-          });
-        }
-      }, 500); // Debounce: Speichere nach 500ms Inaktivität
-      
-      return () => clearTimeout(timeoutId);
-    }
-    // Aktualisiere Refs
-    prevLeftPanelWidthRef.current = leftPanelWidth;
-    prevRightPanelWidthRef.current = rightPanelWidth;
-  }, [leftPanelWidth, rightPanelWidth, isResizingLeft, isResizingRight]);
+  // Speichere Breiten NICHT automatisch - nur beim Speichern des Beleges
+  // useEffect entfernt, um Datenlast zu reduzieren
   
   // Funktion: Ermittle vatRate aus Kontonamen
   const extractVatRateFromAccountName = useCallback((accountName: string): number | null => {
@@ -279,10 +230,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     return totals;
   }, [editedArticles, accountingAccounts]);
   
-  // Bildansicht States
-  const [imageZoom, setImageZoom] = useState<number>(1);
-  const [imagePosition, setImagePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState<boolean>(false);
+  // Bildansicht State (für Druck-Preview benötigt)
   const [imageUrl, setImageUrl] = useState<string>('');
   
   // Druck-Preview States
@@ -297,12 +245,10 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   const printPdfRef = useRef<HTMLIFrameElement | null>(null);
   const printPdfCanvasRef = useRef<HTMLImageElement | null>(null);
   const [pdfCanvasUrls, setPdfCanvasUrls] = useState<string[]>([]); // Array von Canvas-URLs, eine pro Seite (für Druck)
-  const [displayPdfCanvasUrls, setDisplayPdfCanvasUrls] = useState<string[]>([]); // Array von Canvas-URLs für Anzeige im Original-Beleg
-  const [currentPdfPage, setCurrentPdfPage] = useState<number>(0); // Aktuelle PDF-Seite für Anzeige
   const prevPositionRef = useRef<{ x: number; y: number } | null>(null); // Referenz für vorherige Position zum Vermeiden von Endlosschleifen
   const prevCompletedRef = useRef<boolean | null>(null); // Referenz für vorherigen Fertig-Status zum Vermeiden von Endlosschleifen
-  const prevImageZoomRef = useRef<number | null>(null); // Referenz für vorherigen Zoom zum Vermeiden von Endlosschleifen
-  const prevImagePositionRef = useRef<{ x: number; y: number } | null>(null); // Referenz für vorherige Bildposition zum Vermeiden von Endlosschleifen
+  const prevImageZoomRef = useRef<number>(receiptData.imageZoom ?? 1); // Aktueller Zoom-Wert (wird beim Speichern verwendet)
+  const prevImagePositionRef = useRef<{ x: number; y: number }>(receiptData.imagePosition ?? { x: 0, y: 0 }); // Aktuelle Bildposition (wird beim Speichern verwendet)
   const receiptDataRef = useRef<ExtendedReceiptData>(receiptData); // Ref für receiptData, um Endlosschleifen zu vermeiden
   const onUpdateReceiptDataRef = useRef(onUpdateReceiptData); // Ref für onUpdateReceiptData, um Endlosschleifen zu vermeiden
   const prevLeftPanelWidthRef = useRef<number | null>(null); // Referenz für vorherige linke Panel-Breite
@@ -339,14 +285,11 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   const quantityInputRef = useRef<HTMLInputElement>(null);
   const vatRateInputRef = useRef<HTMLInputElement>(null);
   const bundleUnitInputRef = useRef<HTMLInputElement>(null);
-  const imageContainerRef = useRef<HTMLDivElement>(null);
   const previousQuantityRef = useRef<number>(1);
   const previousLinkedArticleIdRef = useRef<string | undefined>(undefined);
   const isLinkingRef = useRef<boolean>(false);
   const isChangingArticleRef = useRef<boolean>(false);
-  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isInitializedRef = useRef<boolean>(false);
-  const wheelHandlerRef = useRef<((e: WheelEvent) => void) | null>(null);
 
   // Artikelformular-Hook für den rechten Bereich
   const {
@@ -488,19 +431,28 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   // Validierungsfunktionen
   const isArticleValid = (article: ReceiptArticle): boolean => {
     return !!(
+      // Artikelname
       article.name &&
       article.name.trim() !== '' &&
-      receiptSupplierId &&
-      receiptSupplierId.trim() !== '' &&
-      receiptSupplierSearchTerm &&
-      receiptSupplierSearchTerm.trim() !== '' &&
-      receiptSupplierSearchTerm !== 'Kein Lieferant ausgewählt!' &&
+      // Kategorie
+      article.category &&
+      article.category.trim() !== '' &&
+      // Steuerkonto
+      article.taxAccount &&
+      article.taxAccount.trim() !== '' &&
+      // MwSt-Satz
+      article.vatRate !== undefined &&
+      article.vatRate !== null &&
+      // Gebindeeinheit
       article.bundleUnit &&
       article.bundleUnit.trim() !== '' &&
+      // Gebinde-Preis
       article.bundlePrice &&
       article.bundlePrice > 0 &&
+      // Inhalt
       article.content &&
       article.content > 0 &&
+      // InhaltEinheit
       article.contentUnit &&
       article.contentUnit.trim() !== ''
     );
@@ -510,13 +462,38 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     return isArticleValid(article);
   };
 
+  // Bestimme den Status eines Artikels für die Anzeige
+  const getArticleStatus = (article: ReceiptArticle): 'ignore' | 'warning' | 'linked' | 'new' => {
+    // Priorität 1: excludeFromUpdate hat Vorrang
+    if (article.excludeFromUpdate) {
+      return 'ignore';
+    }
+    
+    // Priorität 2: Validierung fehlgeschlagen
+    if (!isArticleValid(article)) {
+      return 'warning';
+    }
+    
+    // Priorität 3: Artikel ist verlinkt
+    if (article.linkedArticleId) {
+      return 'linked';
+    }
+    
+    // Priorität 4: Artikel ist vollständig aber nicht verlinkt (wird neu angelegt)
+    return 'new';
+  };
+
   // Validierung für einzelne Felder
   const isFieldInvalid = (fieldName: string, value: any): boolean => {
     switch (fieldName) {
       case 'name':
         return !value || value.trim() === '';
-      case 'supplier':
-        return !receiptSupplierId || receiptSupplierSearchTerm === 'Kein Lieferant ausgewählt!';
+      case 'category':
+        return !value || value.trim() === '';
+      case 'taxAccount':
+        return !value || value.trim() === '';
+      case 'vatRate':
+        return value === undefined || value === null;
       case 'bundleUnit':
         return !value || value.trim() === '';
       case 'bundlePrice':
@@ -550,12 +527,12 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           ...prev,
           category: matchingCategory
         }));
-        console.log(`✅ Kategorie automatisch erkannt: "${matchingCategory}" (aus Wort: "${longestWord}")`);
+        // console.log(`✅ Kategorie automatisch erkannt: "${matchingCategory}" (aus Wort: "${longestWord}")`);
       }
     }
   };
 
-  // Automatische Verknüpfung beim Anwählen eines Artikels
+  // Artikelwechsel: Price-Berechnung und Formular-Füllung
   useEffect(() => {
     // Wichtig: Nur ausführen wenn Modal geöffnet ist!
     if (!show) return;
@@ -565,147 +542,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       
       // Aktualisiere previousQuantityRef bei Artikelwechsel
       previousQuantityRef.current = selectedArticle.quantity || 1;
-      
-      console.log('🔍 [AUTO-LINK] Prüfe Artikel:', {
-        name: selectedArticle.name,
-        nameOCR: selectedArticle.nameOCR,
-        supplierArticleNumber: selectedArticle.supplierArticleNumber,
-        receiptSupplierId,
-        linkedArticleId: selectedArticle.linkedArticleId
-      });
-      
-      // Versuche automatische Verknüpfung wenn noch nicht verknüpft und Lieferant vorhanden
-      if (!selectedArticle.linkedArticleId && receiptSupplierId) {
-        let matchingArticles: Article[] = [];
-        
-        // Zuerst versuchen nach Lieferant + Artikelnummer zu suchen (höchste Priorität)
-        if (selectedArticle.supplierArticleNumber) {
-          console.log('🔍 [AUTO-LINK] Suche nach Lieferant + Artikelnummer:', {
-            supplierId: receiptSupplierId,
-            supplierArticleNumber: selectedArticle.supplierArticleNumber
-          });
-          
-          matchingArticles = state.articles.filter(article => 
-            article.supplierId === receiptSupplierId &&
-            article.supplierArticleNumber === selectedArticle.supplierArticleNumber
-          );
-          
-          console.log('📊 [AUTO-LINK] Treffer nach Artikelnummer:', matchingArticles.length, matchingArticles.map(a => ({ id: a.id, name: a.name })));
-        }
-        
-        // Wenn kein Treffer und nameOCR vorhanden, suche nach nameOCR
-        if (matchingArticles.length === 0 && selectedArticle.nameOCR) {
-          const nameOCRLower = selectedArticle.nameOCR.toLowerCase().trim();
-          console.log('🔍 [AUTO-LINK] Suche nach Lieferant + OCR-Name:', {
-            supplierId: receiptSupplierId,
-            nameOCR: selectedArticle.nameOCR,
-            nameOCRLower
-          });
-          
-          // Zeige alle Artikel des Lieferanten für Debugging
-          const supplierArticles = state.articles.filter(a => a.supplierId === receiptSupplierId);
-          console.log('📊 [AUTO-LINK] Alle Artikel des Lieferanten:', supplierArticles.length, supplierArticles.map(a => ({
-            id: a.id,
-            name: a.name,
-            namesOCR: a.namesOCR
-          })));
-          
-          matchingArticles = state.articles.filter(article => {
-            if (article.supplierId !== receiptSupplierId) return false;
-            
-            // Suche in namesOCR Array
-            if (article.namesOCR && article.namesOCR.length > 0) {
-              const found = article.namesOCR.some((ocrName: string) => 
-                ocrName.toLowerCase().trim() === nameOCRLower
-              );
-              if (found) {
-                console.log('✅ [AUTO-LINK] OCR-Name gefunden in Artikel:', {
-                  articleId: article.id,
-                  articleName: article.name,
-                  namesOCR: article.namesOCR,
-                  searchedName: nameOCRLower
-                });
-              }
-              return found;
-            }
-            
-            return false;
-          });
-          
-          console.log('📊 [AUTO-LINK] Treffer nach OCR-Name:', matchingArticles.length, matchingArticles.map(a => ({ id: a.id, name: a.name })));
-        }
-        
-        // Wenn genau ein Treffer, automatisch verknüpfen
-        if (matchingArticles.length === 1) {
-          const linkedArticle = matchingArticles[0];
-          const updatedArticles = [...editedArticles];
-          
-          // Übernehme Daten aus dem bestehenden Artikel
-          updatedArticles[selectedArticleIndex] = {
-            ...updatedArticles[selectedArticleIndex],
-            linkedArticleId: linkedArticle.id,
-            // WICHTIG: Übernehme Namen aus dem Artikelstamm, nicht aus OCR!
-            name: linkedArticle.name || selectedArticle.name || '',
-            // Übernehme wichtige Felder aus dem bestehenden Artikel
-            category: linkedArticle.category || selectedArticle.category || '',
-            bundleUnit: linkedArticle.bundleUnit || selectedArticle.bundleUnit || 'Stück',
-            contentUnit: linkedArticle.contentUnit || selectedArticle.contentUnit || 'Stück',
-            // Behalte Preise aus dem Scan (können sich geändert haben)
-            bundlePrice: selectedArticle.bundlePrice || linkedArticle.bundlePrice || 0,
-            pricePerUnit: selectedArticle.pricePerUnit || linkedArticle.pricePerUnit || 0,
-            content: linkedArticle.content || selectedArticle.content || 1,
-            // Übernehme weitere Felder aus dem bestehenden Artikel
-            supplierArticleNumber: linkedArticle.supplierArticleNumber || selectedArticle.supplierArticleNumber || '',
-            bundleEanCode: linkedArticle.bundleEanCode || selectedArticle.bundleEanCode || '',
-            contentEanCode: linkedArticle.contentEanCode || selectedArticle.contentEanCode || '',
-            allergens: linkedArticle.allergens || selectedArticle.allergens || [],
-            additives: linkedArticle.additives || selectedArticle.additives || [],
-            ingredients: linkedArticle.ingredients || selectedArticle.ingredients || '',
-            nutrition: linkedArticle.nutritionInfo ? {
-              calories: linkedArticle.nutritionInfo.calories || 0,
-              kilojoules: linkedArticle.nutritionInfo.kilojoules || 0,
-              protein: linkedArticle.nutritionInfo.protein || 0,
-              fat: linkedArticle.nutritionInfo.fat || 0,
-              carbohydrates: linkedArticle.nutritionInfo.carbohydrates || 0,
-              fiber: linkedArticle.nutritionInfo.fiber ?? 0,
-              sugar: linkedArticle.nutritionInfo.sugar ?? 0,
-              salt: linkedArticle.nutritionInfo.salt ?? 0,
-              alcohol: linkedArticle.nutritionInfo.alcohol
-            } : (selectedArticle.nutrition || {
-              calories: 0,
-              kilojoules: 0,
-              protein: 0,
-              fat: 0,
-              carbohydrates: 0,
-              fiber: 0,
-              sugar: 0,
-              salt: 0,
-              alcohol: undefined
-            }),
-            openFoodFactsCode: linkedArticle.openFoodFactsCode || selectedArticle.openFoodFactsCode || '',
-            notes: linkedArticle.notes || selectedArticle.notes || ''
-          };
-          
-          setEditedArticles(updatedArticles);
-          console.log('✅ Automatische Verknüpfung:', linkedArticle.name, selectedArticle.supplierArticleNumber ? `(Art-Nr: ${selectedArticle.supplierArticleNumber})` : `(OCR-Name: ${selectedArticle.nameOCR})`);
-          console.log('📋 [AUTO-LINK] Übernommene Daten:', {
-            category: linkedArticle.category,
-            bundleUnit: linkedArticle.bundleUnit,
-            contentUnit: linkedArticle.contentUnit
-          });
-          return; // Früh beenden, damit der zweite Effect die Änderung verarbeitet
-        } else if (matchingArticles.length > 1) {
-          console.warn('⚠️ [AUTO-LINK] Mehrere Treffer gefunden:', matchingArticles.length, matchingArticles.map(a => ({ id: a.id, name: a.name })));
-        } else {
-          console.log('❌ [AUTO-LINK] Keine Treffer gefunden');
-        }
-      } else {
-        if (selectedArticle.linkedArticleId) {
-          console.log('ℹ️ [AUTO-LINK] Artikel bereits verknüpft:', selectedArticle.linkedArticleId);
-        } else if (!receiptSupplierId) {
-          console.log('ℹ️ [AUTO-LINK] Kein Lieferant ausgewählt, überspringe Verknüpfung');
-        }
-      }
       
       // Berechne price, falls er fehlt oder 0 ist
       const quantity = selectedArticle.quantity || 1;
@@ -721,12 +557,12 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       
       // Aktualisiere Artikel mit berechnetem price, falls nötig
       if (calculatedPrice !== selectedArticle.price) {
-        const updatedArticles = [...editedArticles];
-        updatedArticles[selectedArticleIndex] = {
+          const updatedArticles = [...editedArticles];
+          updatedArticles[selectedArticleIndex] = {
           ...selectedArticle,
           price: calculatedPrice
         };
-        setEditedArticles(updatedArticles);
+          setEditedArticles(updatedArticles);
       }
       
       // Fülle Artikelformular mit Daten des ausgewählten Artikels
@@ -766,7 +602,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       // Beim Artikelwechsel IMMER das Formular aktualisieren, auch wenn sich die Daten nicht unterscheiden
       // Dies verhindert, dass alte Formularwerte in den neuen Artikel geschrieben werden
       isChangingArticleRef.current = true;
-      setArticleForm(newFormData);
+        setArticleForm(newFormData);
       
       // Setze Flag nach kurzer Verzögerung zurück, damit Sync-Effect nicht sofort auslöst
       setTimeout(() => {
@@ -788,7 +624,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   }, [selectedArticleIndex, receiptSupplierId, show]); // editedArticles entfernt, um Endlosschleife zu vermeiden
 
   // Separater Effect: Reagiere auf Änderungen der linkedArticleId des aktuellen Artikels
-  // (z.B. wenn autoLinkAllArticles einen Artikel verlinkt)
   useEffect(() => {
     if (!show) return;
     
@@ -798,11 +633,11 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       
       // Prüfe, ob sich die linkedArticleId geändert hat
       if (previousLinkedArticleIdRef.current !== currentLinkedArticleId && currentLinkedArticleId) {
-        console.log('🔄 [LINK-CHANGE] linkedArticleId geändert, aktualisiere Formular:', {
-          previous: previousLinkedArticleIdRef.current,
-          current: currentLinkedArticleId,
-          articleName: selectedArticle.name
-        });
+        // console.log('🔄 [LINK-CHANGE] linkedArticleId geändert, aktualisiere Formular:', {
+        //   previous: previousLinkedArticleIdRef.current,
+        //   current: currentLinkedArticleId,
+        //   articleName: selectedArticle.name
+        // });
         
         // Setze Flag, um Sync-Effect während Verlinkung zu überspringen
         isLinkingRef.current = true;
@@ -871,7 +706,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   // Funktion zum Anwenden des aktuellen Steuerkontos auf alle Artikel
   const applyTaxAccountToAllArticles = () => {
     if (!selectedTaxAccount) {
-      console.warn('⚠️ Kein Steuerkonto ausgewählt');
+      // console.warn('⚠️ Kein Steuerkonto ausgewählt');
       return;
     }
     const updatedArticles = editedArticles.map(article => ({
@@ -879,7 +714,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       taxAccount: selectedTaxAccount
     }));
     setEditedArticles(updatedArticles);
-    console.log(`✅ Steuerkonto ${selectedTaxAccount} auf alle ${updatedArticles.length} Artikel angewendet`);
+    // console.log(`✅ Steuerkonto ${selectedTaxAccount} auf alle ${updatedArticles.length} Artikel angewendet`);
   };
 
   // Funktion zum Hinzufügen eines neuen leeren Artikels vor dem aktuell ausgewählten Artikel
@@ -977,13 +812,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       isChangingArticleRef.current = false;
     }, 100);
     
-    console.log('✅ Neuer Artikel hinzugefügt an Position', selectedArticleIndex);
+    // console.log('✅ Neuer Artikel hinzugefügt an Position', selectedArticleIndex);
   }, [editedArticles, selectedArticleIndex, receiptSupplierId, selectedTaxAccount, receiptVatRate, setArticleForm, setBundlePriceInput, setContentInput, setPricePerUnitInput, setArticleSearchTerm]);
 
   // Funktion zum Entfernen des aktuell ausgewählten Artikels
   const handleRemoveArticle = useCallback(() => {
     if (editedArticles.length <= 1) {
-      console.warn('⚠️ Kann nicht den letzten Artikel entfernen');
+      // console.warn('⚠️ Kann nicht den letzten Artikel entfernen');
       return;
     }
     
@@ -997,7 +832,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       : selectedArticleIndex;
     setSelectedArticleIndex(newIndex);
     
-    console.log('✅ Artikel entfernt von Position', selectedArticleIndex);
+    // console.log('✅ Artikel entfernt von Position', selectedArticleIndex);
   }, [editedArticles, selectedArticleIndex]);
 
   // Handler für Lieferanten-Auswahl für alle Artikel
@@ -1043,11 +878,52 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     }
     setShowSupplierDropdown(false);
   };
+
+  // Handler für Auswahl eines recognizedName (wenn supplierId bereits vorhanden)
+  const handleRecognizedNameSelect = async (recognizedName: string) => {
+    if (!receiptSupplierId) return;
+    
+    // Finde den aktuellen Lieferanten
+    const currentSupplier = suppliers.find(s => s.id === receiptSupplierId) || 
+                           state.suppliers.find(s => s.id === receiptSupplierId);
+    
+    if (!currentSupplier) {
+      console.warn('⚠️ Lieferant nicht gefunden:', receiptSupplierId);
+      return;
+    }
+    
+    // Aktualisiere den Namen des Lieferanten
+    const updatedSupplier = {
+      ...currentSupplier,
+      name: recognizedName,
+      isDirty: true,
+      updatedAt: new Date()
+    };
+    
+    // Speichere über StorageLayer
+    const success = await storageLayer.save('suppliers', [updatedSupplier]);
+    if (success) {
+      // Aktualisiere globalen State
+      dispatch({ 
+        type: 'UPDATE_SUPPLIER', 
+        payload: { id: currentSupplier.id, supplier: updatedSupplier }
+      });
+      
+      // Aktualisiere auch den Suchbegriff
+      setReceiptSupplierSearchTerm(recognizedName);
+      
+      console.log('✅ Lieferantenname aktualisiert:', recognizedName);
+    } else {
+      console.error('❌ Fehler beim Speichern des Lieferanten');
+    }
+    
+    setShowSupplierDropdown(false);
+  };
   
   // Handler für Änderung der Netto-Preise Checkbox
   const handleNettoPricesChange = async (checked: boolean) => {
-    console.log('🔄 [NETTO-PREISE] Checkbox geändert:', checked);
-    console.log('🔄 [NETTO-PREISE] Aktueller State vor Update:', nettoPrices);
+    // console.log('🔄 [NETTO-PREISE] Checkbox geändert:', checked);
+    // console.log('🔄 [NETTO-PREISE] Aktueller State vor Update:', nettoPrices);
     
     // Setze State sofort
     setNettoPrices(checked);
@@ -1060,7 +936,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         const supplier = supplierFromState || suppliers.find(s => s.id === receiptSupplierId);
         
         if (supplier) {
-          console.log('🔄 [NETTO-PREISE] Aktualisiere Lieferant:', supplier.name, 'von', supplier.nettoPrices, 'zu', checked);
+          // console.log('🔄 [NETTO-PREISE] Aktualisiere Lieferant:', supplier.name, 'von', supplier.nettoPrices, 'zu', checked);
           
           const updatedSupplier = {
             ...supplier,
@@ -1077,18 +953,18 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               type: 'UPDATE_SUPPLIER', 
               payload: { id: supplier.id, supplier: updatedSupplier }
             });
-            console.log('✅ Netto-Preise Einstellung im Lieferanten aktualisiert:', checked);
+            // console.log('✅ Netto-Preise Einstellung im Lieferanten aktualisiert:', checked);
           } else {
-            console.error('❌ Fehler beim Speichern des Lieferanten');
+            // console.error('❌ Fehler beim Speichern des Lieferanten');
           }
         } else {
-          console.warn('⚠️ [NETTO-PREISE] Lieferant nicht gefunden:', receiptSupplierId);
+          // console.warn('⚠️ [NETTO-PREISE] Lieferant nicht gefunden:', receiptSupplierId);
         }
       } catch (error) {
-        console.error('❌ Fehler beim Aktualisieren der Netto-Preise Einstellung:', error);
+        // console.error('❌ Fehler beim Aktualisieren der Netto-Preise Einstellung:', error);
       }
     } else {
-      console.log('ℹ️ [NETTO-PREISE] Kein Lieferant ausgewählt, nur State aktualisiert');
+      // console.log('ℹ️ [NETTO-PREISE] Kein Lieferant ausgewählt, nur State aktualisiert');
     }
   };
 
@@ -1135,12 +1011,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       setSelectedArticleIndex(0);
       setReceiptSupplierId('');
       setReceiptSupplierSearchTerm('');
-      setScannedSupplierName('');
-      setHideScannedSupplierName(false);
       setReceiptDate('');
       setReceiptNumber('');
       setArticleSearchTerm('');
-      console.log('🧹 [RESET] Alle States beim Schließen zurückgesetzt');
     }
   }, [show]);
 
@@ -1151,14 +1024,14 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     
     // WICHTIG: Überspringe Sync während Verlinkung, um Endlosschleife zu vermeiden!
     if (isLinkingRef.current) {
-      console.log('⏭️ [SYNC] Überspringe Sync - Verlinkung läuft gerade');
+      // console.log('⏭️ [SYNC] Überspringe Sync - Verlinkung läuft gerade');
       return;
     }
     
     // WICHTIG: Überspringe Sync während Artikelwechsel, um zu verhindern, dass alte Formularwerte
     // in den neuen Artikel geschrieben werden
     if (isChangingArticleRef.current) {
-      console.log('⏭️ [SYNC] Überspringe Sync - Artikelwechsel läuft gerade');
+      // console.log('⏭️ [SYNC] Überspringe Sync - Artikelwechsel läuft gerade');
       return;
     }
     
@@ -1169,7 +1042,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       // aber der Artikel bereits einen Namen hat, dann nicht synchronisieren!
       // Der Artikelwechsel-Effect sollte zuerst laufen und articleForm mit den korrekten Daten füllen.
       if (!articleForm.name && currentArticle.name) {
-        console.log('⏭️ [SYNC] Überspringe Sync - articleForm wird gerade initialisiert');
+        // console.log('⏭️ [SYNC] Überspringe Sync - articleForm wird gerade initialisiert');
         return;
       }
       
@@ -1202,195 +1075,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   }, [articleForm, receiptSupplierId, selectedArticleIndex, show]); // show hinzugefügt
 
   // Funktion für automatische Verknüpfung aller Artikel
-  const autoLinkAllArticles = (articles: ReceiptArticle[], supplierId: string) => {
-    console.log('🔗 [AUTO-LINK-ALL] Starte Verknüpfung für', articles.length, 'Artikel mit Lieferant', supplierId);
-    console.log('🔗 [AUTO-LINK-ALL] Verfügbare Artikel in state.articles:', state.articles.length);
-    
-    const updatedArticles = articles.map((article, index) => {
-      // Überspringe bereits verknüpfte Artikel
-      if (article.linkedArticleId) {
-        console.log(`⏭️ [AUTO-LINK-ALL] Artikel ${index + 1} bereits verknüpft:`, article.linkedArticleId);
-        return article;
-      }
-      
-      console.log(`🔍 [AUTO-LINK-ALL] Prüfe Artikel ${index + 1}:`, {
-        name: article.name,
-        nameOCR: article.nameOCR,
-        supplierArticleNumber: article.supplierArticleNumber
-      });
-      
-      let matchingArticles: Article[] = [];
-      
-      // Zuerst versuchen nach Lieferant + Artikelnummer zu suchen (höchste Priorität)
-      if (article.supplierArticleNumber) {
-        matchingArticles = state.articles.filter(a => 
-          a.supplierId === supplierId &&
-          a.supplierArticleNumber === article.supplierArticleNumber
-        );
-        
-        console.log(`📊 [AUTO-LINK-ALL] Artikel ${index + 1} - Treffer nach Artikelnummer:`, matchingArticles.length);
-        
-        if (matchingArticles.length === 1) {
-          const linkedArticle = matchingArticles[0];
-          console.log(`✅ [AUTO-LINK-ALL] Artikel ${index + 1} verknüpft per Artikelnummer:`, article.name, '->', linkedArticle.name);
-          return {
-            ...article,
-            linkedArticleId: linkedArticle.id,
-            // WICHTIG: Übernehme Namen aus dem Artikelstamm, nicht aus OCR!
-            name: linkedArticle.name || article.name || '',
-            // Übernehme wichtige Felder aus dem bestehenden Artikel
-            category: linkedArticle.category || article.category || '',
-            bundleUnit: linkedArticle.bundleUnit || article.bundleUnit || 'Stück',
-            contentUnit: linkedArticle.contentUnit || article.contentUnit || 'Stück',
-            // Behalte Preise aus dem Scan (können sich geändert haben)
-            bundlePrice: article.bundlePrice || linkedArticle.bundlePrice || 0,
-            pricePerUnit: article.pricePerUnit || linkedArticle.pricePerUnit || 0,
-            // WICHTIG: content aus dem Scan hat Priorität (auch wenn 0), nur wenn nicht vorhanden, verwende linkedArticle.content
-            content: article.content !== undefined && article.content !== null ? article.content : (linkedArticle.content !== undefined && linkedArticle.content !== null ? linkedArticle.content : 1),
-            // Übernehme weitere Felder aus dem bestehenden Artikel
-            supplierArticleNumber: linkedArticle.supplierArticleNumber || article.supplierArticleNumber || '',
-            bundleEanCode: linkedArticle.bundleEanCode || article.bundleEanCode || '',
-            contentEanCode: linkedArticle.contentEanCode || article.contentEanCode || '',
-            allergens: linkedArticle.allergens || article.allergens || [],
-            additives: linkedArticle.additives || article.additives || [],
-            ingredients: linkedArticle.ingredients || article.ingredients || '',
-            nutrition: linkedArticle.nutritionInfo ? {
-              calories: linkedArticle.nutritionInfo.calories || 0,
-              kilojoules: linkedArticle.nutritionInfo.kilojoules || 0,
-              protein: linkedArticle.nutritionInfo.protein || 0,
-              fat: linkedArticle.nutritionInfo.fat || 0,
-              carbohydrates: linkedArticle.nutritionInfo.carbohydrates || 0,
-              fiber: linkedArticle.nutritionInfo.fiber ?? 0,
-              sugar: linkedArticle.nutritionInfo.sugar ?? 0,
-              salt: linkedArticle.nutritionInfo.salt ?? 0,
-              alcohol: linkedArticle.nutritionInfo.alcohol
-            } : (article.nutrition || {
-              calories: 0,
-              kilojoules: 0,
-              protein: 0,
-              fat: 0,
-              carbohydrates: 0,
-              fiber: 0,
-              sugar: 0,
-              salt: 0,
-              alcohol: undefined
-            }),
-            openFoodFactsCode: linkedArticle.openFoodFactsCode || article.openFoodFactsCode || '',
-            notes: linkedArticle.notes || article.notes || ''
-          };
-        }
-      }
-      
-      // Wenn kein Treffer und nameOCR vorhanden, suche nach nameOCR
-      if (matchingArticles.length === 0 && article.nameOCR) {
-        const nameOCRLower = article.nameOCR.toLowerCase().trim();
-        console.log(`🔍 [AUTO-LINK-ALL] Artikel ${index + 1} - Suche nach OCR-Name:`, nameOCRLower);
-        
-        // Zeige alle Artikel des Lieferanten für Debugging
-        const supplierArticles = state.articles.filter(a => a.supplierId === supplierId);
-        console.log(`📊 [AUTO-LINK-ALL] Artikel ${index + 1} - Alle Artikel des Lieferanten:`, supplierArticles.length, supplierArticles.map(a => ({
-          id: a.id,
-          name: a.name,
-          namesOCR: a.namesOCR
-        })));
-        
-        matchingArticles = state.articles.filter(a => {
-          if (a.supplierId !== supplierId) return false;
-          
-          // Suche in namesOCR Array
-          if (a.namesOCR && a.namesOCR.length > 0) {
-            const found = a.namesOCR.some((ocrName: string) => 
-              ocrName.toLowerCase().trim() === nameOCRLower
-            );
-            if (found) {
-              console.log(`✅ [AUTO-LINK-ALL] OCR-Name gefunden in Artikel:`, {
-                articleId: a.id,
-                articleName: a.name,
-                namesOCR: a.namesOCR,
-                searchedName: nameOCRLower
-              });
-            }
-            return found;
-          }
-          
-          return false;
-        });
-        
-        console.log(`📊 [AUTO-LINK-ALL] Artikel ${index + 1} - Treffer nach OCR-Name:`, matchingArticles.length);
-        
-        if (matchingArticles.length === 1) {
-          const linkedArticle = matchingArticles[0];
-          console.log(`✅ [AUTO-LINK-ALL] Artikel ${index + 1} verknüpft per OCR-Name:`, article.nameOCR, '->', linkedArticle.name);
-          return {
-            ...article,
-            linkedArticleId: linkedArticle.id,
-            // WICHTIG: Übernehme Namen aus dem Artikelstamm, nicht aus OCR!
-            name: linkedArticle.name || article.name || '',
-            // Übernehme wichtige Felder aus dem bestehenden Artikel
-            category: linkedArticle.category || article.category || '',
-            bundleUnit: linkedArticle.bundleUnit || article.bundleUnit || 'Stück',
-            contentUnit: linkedArticle.contentUnit || article.contentUnit || 'Stück',
-            // Behalte Preise aus dem Scan (können sich geändert haben)
-            bundlePrice: article.bundlePrice || linkedArticle.bundlePrice || 0,
-            pricePerUnit: article.pricePerUnit || linkedArticle.pricePerUnit || 0,
-            // WICHTIG: content aus dem Scan hat Priorität (auch wenn 0), nur wenn nicht vorhanden, verwende linkedArticle.content
-            content: article.content !== undefined && article.content !== null ? article.content : (linkedArticle.content !== undefined && linkedArticle.content !== null ? linkedArticle.content : 1),
-            // Übernehme weitere Felder aus dem bestehenden Artikel
-            supplierArticleNumber: linkedArticle.supplierArticleNumber || article.supplierArticleNumber || '',
-            bundleEanCode: linkedArticle.bundleEanCode || article.bundleEanCode || '',
-            contentEanCode: linkedArticle.contentEanCode || article.contentEanCode || '',
-            allergens: linkedArticle.allergens || article.allergens || [],
-            additives: linkedArticle.additives || article.additives || [],
-            ingredients: linkedArticle.ingredients || article.ingredients || '',
-            nutrition: linkedArticle.nutritionInfo ? {
-              calories: linkedArticle.nutritionInfo.calories || 0,
-              kilojoules: linkedArticle.nutritionInfo.kilojoules || 0,
-              protein: linkedArticle.nutritionInfo.protein || 0,
-              fat: linkedArticle.nutritionInfo.fat || 0,
-              carbohydrates: linkedArticle.nutritionInfo.carbohydrates || 0,
-              fiber: linkedArticle.nutritionInfo.fiber ?? 0,
-              sugar: linkedArticle.nutritionInfo.sugar ?? 0,
-              salt: linkedArticle.nutritionInfo.salt ?? 0,
-              alcohol: linkedArticle.nutritionInfo.alcohol
-            } : (article.nutrition || {
-              calories: 0,
-              kilojoules: 0,
-              protein: 0,
-              fat: 0,
-              carbohydrates: 0,
-              fiber: 0,
-              sugar: 0,
-              salt: 0,
-              alcohol: undefined
-            }),
-            openFoodFactsCode: linkedArticle.openFoodFactsCode || article.openFoodFactsCode || '',
-            notes: linkedArticle.notes || article.notes || ''
-          };
-        } else if (matchingArticles.length > 1) {
-          console.warn(`⚠️ [AUTO-LINK-ALL] Artikel ${index + 1} hat mehrere Treffer:`, matchingArticles.map(a => a.name));
-        } else {
-          console.log(`❌ [AUTO-LINK-ALL] Artikel ${index + 1} nicht gefunden:`, article.nameOCR);
-        }
-      }
-      
-      return article;
-    });
-    
-    // Aktualisiere Artikel nur wenn sich etwas geändert hat
-    const hasChanges = updatedArticles.some((article, index) => 
-      article.linkedArticleId !== articles[index].linkedArticleId
-    );
-    
-    if (hasChanges) {
-      console.log('💾 [AUTO-LINK-ALL] Aktualisiere Artikelliste mit Verknüpfungen');
-      setEditedArticles(updatedArticles);
-    } else {
-      console.log('ℹ️ [AUTO-LINK-ALL] Keine Verknüpfungen gefunden');
-    }
-    
-    // Gib das aktualisierte Array zurück
-    return updatedArticles;
-  };
 
   // Lade AccountingAccounts und vatRates beim Öffnen
   useEffect(() => {
@@ -1399,61 +1083,75 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         try {
           // Lade AccountingSettings für selectedChartId und vatRates
           const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
+          let chartId: AccountingChartId = 'skr03';
           if (settings && settings.length > 0) {
             const firstSettings = settings[0];
             if (firstSettings.selectedChartId) {
-              setSelectedChartId(firstSettings.selectedChartId);
+              chartId = firstSettings.selectedChartId;
+              setSelectedChartId(chartId);
             }
             if (firstSettings.vatRates && firstSettings.vatRates.length > 0) {
               setVatRates(firstSettings.vatRates);
             }
           }
           
-          // Lade AccountingAccounts
+          // Lade AccountingAccounts und filtere direkt beim Laden
           const accounts = await storageLayer.load<AccountingAccount>('accountingAccounts');
           if (accounts) {
-            // Filtere nur aktive Konten für den ausgewählten Chart
+            // Filtere nur aktive Konten für den ausgewählten Chart direkt beim Laden
             const activeAccounts = accounts.filter(acc => 
               acc.status === 'active' && 
-              acc.chartId === (settings?.[0]?.selectedChartId || 'skr03')
+              acc.chartId === chartId
             );
             setAccountingAccounts(activeAccounts);
           }
         } catch (error) {
-          console.error('❌ Fehler beim Laden der Accounting-Daten:', error);
+          // // console.error('❌ Fehler beim Laden der Accounting-Daten:', error);
         }
       };
       
       loadAccountingData();
-    }
+        }
   }, [show]);
 
+  // Lade aktuelle Artikel aus storageLayer beim Öffnen des Such-Modals
+  useEffect(() => {
+    if (showArticleSearchModal) {
+      const loadCurrentArticles = async () => {
+        try {
+          const articles = await storageLayer.load<Article>('articles');
+          if (articles) {
+            setCurrentArticles(articles);
+          }
+        } catch (error) {
+          console.error('❌ Fehler beim Laden der Artikel aus storageLayer:', error);
+          // Fallback auf State, falls storageLayer fehlschlägt
+          setCurrentArticles(state.articles);
+        }
+      };
+      
+      loadCurrentArticles();
+    }
+  }, [showArticleSearchModal, state.articles]);
+    
   // Aktualisiere Refs, wenn sich Props ändern
   useEffect(() => {
     receiptDataRef.current = receiptData;
     onUpdateReceiptDataRef.current = onUpdateReceiptData;
   }, [receiptData, onUpdateReceiptData]);
 
-  // Initialisiere editedArticles beim Öffnen und finde passenden Lieferanten
+  // Initialisiere editedArticles beim Öffnen
   useEffect(() => {
     if (show) {
       const isFirstInit = !isInitializedRef.current;
       isInitializedRef.current = true;
-      
-      console.log('🚀 [INIT] Initialisiere ReceiptReviewModal mit', receiptData.articles.length, 'Artikeln', isFirstInit ? '(erstes Öffnen)' : '(Re-Render)');
-      console.log('🚀 [INIT] Verfügbare Artikel in state.articles:', state.articles.length);
-      
-      // WICHTIG: Setze ZUERST editedArticles und selectedArticleIndex zurück,
-      // damit der Sync-Effect nicht alte Daten überschreibt!
-      setEditedArticles([]);
-      setSelectedArticleIndex(0);
       
       // Reset Refs
       previousLinkedArticleIdRef.current = undefined;
       previousQuantityRef.current = 1;
       isLinkingRef.current = false;
       
-      // Dann setze articleForm zurück, bevor wir neue Daten laden!
+      // Setze articleForm zurück, bevor wir neue Daten laden!
       // Das verhindert, dass alte Werte die neuen überschreiben
       setArticleForm({
         name: '',
@@ -1489,268 +1187,46 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       setContentInput('1,00');
       setPricePerUnitInput('0,00');
       
-      // Stelle sicher, dass content immer 1 ist und bundlePrice der Einzelpreis ist
-      const normalizedArticles = receiptData.articles.map(article => {
-        // Berechne Einzelpreis falls noch nicht korrekt gesetzt
-        let bundlePrice = article.bundlePrice || 0;
-        if (article.price && article.quantity && article.quantity > 0 && bundlePrice === article.price) {
-          // Falls bundlePrice noch gleich Gesamtpreis ist, berechne Einzelpreis
-          bundlePrice = article.price / article.quantity;
-        }
-        
-        // Stelle sicher, dass nameOCR gesetzt ist (aus dem ursprünglichen Namen)
-        const nameOCR = article.nameOCR || article.name || '';
-        
-        console.log('🔍 [INIT] Normalisiere Artikel:', {
-          name: article.name,
-          nameOCR: article.nameOCR,
-          nameOCRSet: nameOCR
-        });
-        
-        return {
-          ...article,
-          nameOCR: nameOCR, // Stelle sicher, dass nameOCR immer gesetzt ist
-          bundlePrice: bundlePrice || article.pricePerUnit || 0,
-          content: 1, // Immer 1 für Inhalt bei automatischer Übernahme
-          contentUnit: article.contentUnit || 'Stück'
-        };
-      });
-      
-      setEditedArticles(normalizedArticles);
+      // Verwende Artikel direkt aus receiptData (keine Normalisierung mehr)
+      setEditedArticles(receiptData.articles);
       setSelectedArticleIndex(0);
-      setHideScannedSupplierName(false); // Reset beim Öffnen
       
       // Setze Belegdatum und Belegnummer aus receiptData
       setReceiptDate(receiptData.date || '');
       setReceiptNumber(receiptData.receiptNumber || '');
       
-      // Setze erkannten Lieferantennamen
-      if (receiptData.supplier) {
-        setScannedSupplierName(receiptData.supplier);
-      }
-      
-      // Finde passenden Lieferanten anhand des Namens
-      if (receiptData.supplier) {
-        console.log('🔍 [INIT] Suche nach Lieferant:', receiptData.supplier);
-        // Verwende State statt Props, da State nach Speichern aktualisiert wird
-        const suppliersToUse = state.suppliers.length > 0 ? state.suppliers : suppliers;
-        // Prüfe zuerst auf exakte Übereinstimmung
-        const exactMatch = suppliersToUse.find(s => 
-          s.name.toLowerCase() === receiptData.supplier!.toLowerCase()
-        );
-        
-        if (exactMatch) {
-          console.log('✅ [INIT] Exakter Lieferant gefunden:', exactMatch.name);
-          setReceiptSupplierId(exactMatch.id);
-          setReceiptSupplierSearchTerm(exactMatch.name);
-          
-          // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen oder wenn Lieferant sich geändert hat
-          if (isFirstInit || receiptSupplierId !== exactMatch.id) {
-            const supplierNettoPrices = (exactMatch as any).nettoPrices || false;
-            setNettoPrices(supplierNettoPrices);
-            console.log('🔄 [INIT] nettoPrices vom Lieferanten übernommen:', supplierNettoPrices);
-          } else {
-            console.log('⏭️ [INIT] nettoPrices nicht überschrieben (bereits gesetzt)');
-          }
-          
-          // Setze supplierId für alle Artikel (verwende bereits normalisierte Artikel)
-          const updatedArticles = normalizedArticles.map(article => {
-            // Stelle sicher, dass nameOCR gesetzt ist
-            const nameOCR = article.nameOCR || article.name || '';
-            
-            return {
-              ...article,
-              nameOCR: nameOCR, // Stelle sicher, dass nameOCR immer gesetzt ist
-              supplierId: exactMatch.id
-            };
-          });
-          setEditedArticles(updatedArticles);
-          
-          // Versuche automatische Verknüpfung für alle Artikel nach Lieferanten-Auswahl
-          // Nur wenn autoLinkPerformed noch nicht gesetzt ist
-          if (!receiptData.autoLinkPerformed) {
-            setTimeout(() => {
-              console.log('🔍 [INIT] Starte automatische Verknüpfung für alle Artikel...');
-              const linkedArticles = autoLinkAllArticles(updatedArticles, exactMatch.id);
-              setEditedArticles(linkedArticles);
-              
-              // Setze Flag und speichere
-              const updatedReceiptData: ExtendedReceiptData = {
-                ...receiptData,
-                autoLinkPerformed: true,
-                articles: linkedArticles
-              };
-              
-              if (onUpdateReceiptDataRef.current) {
-                onUpdateReceiptDataRef.current(updatedReceiptData);
-              }
-            }, 100);
-          } else {
-            console.log('⏭️ [INIT] Automatische Verknüpfung wurde bereits durchgeführt, überspringe');
-          }
-        } else {
-          // Schrittweise Volltextsuche mit Wort-für-Wort-Erweiterung
-          const findSupplierByProgressiveSearch = (searchName: string): Supplier | null => {
-            // Teile den Namen in Wörter auf (nur alphanumerische Zeichen)
-            const words = searchName.toLowerCase()
-              .split(/\s+/)
-              .map(word => word.trim())
-              .filter(word => word.length > 0);
-            
-            if (words.length === 0) {
-              return null;
-            }
-            
-            // Beginne mit dem ersten Wort
-            for (let wordCount = 1; wordCount <= words.length; wordCount++) {
-              // Baue Suchbegriff aus ersten N Wörtern
-              const searchTerm = words.slice(0, wordCount).join(' ');
-              
-              // Suche alle Lieferanten, deren Name den Suchbegriff enthält
-              // Verwende State statt Props, da State nach Speichern aktualisiert wird
-              const suppliersToUse = state.suppliers.length > 0 ? state.suppliers : suppliers;
-              const matches = suppliersToUse.filter(s => 
-                s.name.toLowerCase().includes(searchTerm)
-              );
-              
-              if (matches.length === 1) {
-                // Eindeutiger Treffer gefunden!
-                console.log(`✅ Eindeutiger Treffer gefunden mit "${searchTerm}":`, matches[0].name);
-                return matches[0];
-              } else if (matches.length === 0) {
-                // Keine Treffer mehr möglich, da wir bereits alle Wörter verwendet haben
-                // oder keine weiteren Treffer mit zusätzlichen Wörtern gefunden werden
-                console.log(`❌ Keine Treffer mit "${searchTerm}"`);
-                return null;
-              } else {
-                // Mehrere Treffer - weiter mit nächstem Wort
-                console.log(`⚠️ ${matches.length} Treffer mit "${searchTerm}", erweitere Suche...`);
-                // Wenn wir bereits alle Wörter verwendet haben, können wir nicht weiter suchen
-                if (wordCount === words.length) {
-                  // Kein eindeutiger Treffer möglich - gib null zurück
-                  console.log(`❌ Kein eindeutiger Treffer möglich nach Verwendung aller Wörter`);
-                  return null;
-                }
-              }
-            }
-            
-            return null;
-          };
-          
-          const matchingSupplier = findSupplierByProgressiveSearch(receiptData.supplier);
-          
-          if (matchingSupplier) {
-            setReceiptSupplierId(matchingSupplier.id);
-            setReceiptSupplierSearchTerm(matchingSupplier.name);
-            
-            // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen oder wenn Lieferant sich geändert hat
-            if (isFirstInit || receiptSupplierId !== matchingSupplier.id) {
-              const supplierNettoPrices = (matchingSupplier as any).nettoPrices || false;
-              setNettoPrices(supplierNettoPrices);
-              console.log('🔄 [INIT] nettoPrices vom Lieferanten übernommen:', supplierNettoPrices);
-            } else {
-              console.log('⏭️ [INIT] nettoPrices nicht überschrieben (bereits gesetzt)');
-            }
-            
-            // Setze supplierId für alle Artikel (verwende bereits normalisierte Artikel)
-            const updatedArticles = normalizedArticles.map(article => {
-              // Stelle sicher, dass nameOCR gesetzt ist
-              const nameOCR = article.nameOCR || article.name || '';
-              
-              return {
-                ...article,
-                nameOCR: nameOCR, // Stelle sicher, dass nameOCR immer gesetzt ist
-                supplierId: matchingSupplier.id
-              };
-            });
-            setEditedArticles(updatedArticles);
-            
-            // Versuche automatische Verknüpfung für alle Artikel nach Lieferanten-Auswahl
-            // Nur wenn autoLinkPerformed noch nicht gesetzt ist
-            if (!receiptData.autoLinkPerformed) {
-              setTimeout(() => {
-                console.log('🔍 [INIT] Starte automatische Verknüpfung für alle Artikel...');
-                const linkedArticles = autoLinkAllArticles(updatedArticles, matchingSupplier.id);
-                setEditedArticles(linkedArticles);
-                
-                // Setze Flag und speichere
-                const updatedReceiptData: ExtendedReceiptData = {
-                  ...receiptData,
-                  autoLinkPerformed: true,
-                  articles: linkedArticles
-                };
-                
-                if (onUpdateReceiptDataRef.current) {
-                  onUpdateReceiptDataRef.current(updatedReceiptData);
-                }
-              }, 100);
-            } else {
-              console.log('⏭️ [INIT] Automatische Verknüpfung wurde bereits durchgeführt, überspringe');
-            }
-          } else {
-            // Kein Lieferant gefunden - setze auf "Kein Lieferant ausgewählt!"
-            setReceiptSupplierId('');
-            setReceiptSupplierSearchTerm('');
-          }
-        }
-      } else if (receiptData.supplierId) {
+      // Setze Lieferant direkt aus receiptData
+      if (receiptData.supplierId) {
         setReceiptSupplierId(receiptData.supplierId);
-        // Verwende State statt Props, da State nach Speichern aktualisiert wird
+        // Finde Lieferanten-Namen für Anzeige
         const suppliersToUse = state.suppliers.length > 0 ? state.suppliers : suppliers;
         const supplier = suppliersToUse.find(s => s.id === receiptData.supplierId);
         if (supplier) {
           setReceiptSupplierSearchTerm(supplier.name);
-          setScannedSupplierName(supplier.name); // Kein Unterschied bei exakter ID-Übereinstimmung
-          
-          // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen oder wenn Lieferant sich geändert hat
-          if (isFirstInit || receiptSupplierId !== receiptData.supplierId) {
+          // Übernehme nettoPrices vom Lieferanten - nur beim ersten Öffnen
+          if (isFirstInit) {
             const supplierNettoPrices = (supplier as any).nettoPrices || false;
             setNettoPrices(supplierNettoPrices);
-            console.log('🔄 [INIT] nettoPrices vom Lieferanten übernommen:', supplierNettoPrices);
-          } else {
-            console.log('⏭️ [INIT] nettoPrices nicht überschrieben (bereits gesetzt)');
           }
         } else {
-          // Lieferant-ID existiert nicht mehr - setze auf "Kein Lieferant ausgewählt!"
+          // Lieferant-ID existiert nicht mehr
           setReceiptSupplierId('');
           setReceiptSupplierSearchTerm('');
           setNettoPrices(false);
         }
       } else {
-        // Kein Lieferant erkannt - setze auf "Kein Lieferant ausgewählt!"
+        // Kein Lieferant vorhanden
         setReceiptSupplierId('');
         setReceiptSupplierSearchTerm('');
         setNettoPrices(false);
-      }
+    }
     }
     
     // Fülle Formular mit dem ersten Artikel nach dem Initialisieren
     // (außerhalb des if-Blocks, damit es immer ausgeführt wird)
     if (show && receiptData.articles && receiptData.articles.length > 0) {
-      // Erstelle normalizedArticles erneut, falls sie nicht im Scope sind
-      const normalizedArticles = receiptData.articles.map(article => {
-        // Berechne Einzelpreis falls noch nicht korrekt gesetzt
-        let bundlePrice = article.bundlePrice || 0;
-        if (article.price && article.quantity && article.quantity > 0 && bundlePrice === article.price) {
-          // Falls bundlePrice noch gleich Gesamtpreis ist, berechne Einzelpreis
-          bundlePrice = article.price / article.quantity;
-        }
-        
-        // Stelle sicher, dass nameOCR gesetzt ist (aus dem ursprünglichen Namen)
-        const nameOCR = article.nameOCR || article.name || '';
-        
-        return {
-          ...article,
-          nameOCR: nameOCR,
-          bundlePrice: bundlePrice || article.pricePerUnit || 0,
-          content: 1,
-          contentUnit: article.contentUnit || 'Stück'
-        };
-      });
-      
-      if (normalizedArticles.length > 0) {
-        const firstArticle = normalizedArticles[0];
-        const initialFormData = {
+      const firstArticle = receiptData.articles[0];
+      const initialFormData = {
           name: firstArticle.name || '',
           category: firstArticle.category || '',
           supplierId: receiptData.supplierId || firstArticle.supplierId || '',
@@ -1792,28 +1268,14 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         const searchTerm = firstArticle.nameOCR || getLongestWord(firstArticle.name || '');
         setArticleSearchTerm(searchTerm);
         
-        console.log('✅ [INIT] Formular mit erstem Artikel befüllt:', {
-          name: firstArticle.name,
-          category: firstArticle.category,
-          quantity: firstArticle.quantity
-        });
-      }
+        // console.log('✅ [INIT] Formular mit erstem Artikel befüllt:', {
+        //   name: firstArticle.name,
+        //   category: firstArticle.category,
+        //   quantity: firstArticle.quantity
+        // });
     }
   }, [show, receiptData.articles, receiptData.supplier, receiptData.supplierId]); // suppliers entfernt, um Re-Render nach Speichern zu vermeiden
 
-  // Aktualisiere Scan-Daten wenn sich receiptData ändert
-  useEffect(() => {
-    if (show && receiptData) {
-      setScanTotals({
-        totalAmount: receiptData.totalAmount || 0,
-        vat7: receiptData.vat7 || 0,
-        vat19: receiptData.vat19 || 0
-      });
-      // Aktualisiere Datum nur beim Öffnen, nicht bei jeder Änderung
-      // (Belegnummer wird bereits im Initialisierungs-Effect gesetzt und sollte nicht überschrieben werden)
-      // Datum kann auch manuell geändert werden, daher nur beim Öffnen setzen
-    }
-  }, [show, receiptData.totalAmount, receiptData.vat7, receiptData.vat19]);
 
   // Schließe Steuerkonto-Dropdown beim Klick außerhalb
   useEffect(() => {
@@ -1838,7 +1300,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     if (receiptImagePath) {
       const pathLower = receiptImagePath.toLowerCase();
       if (pathLower.endsWith('.pdf')) {
-        console.log('📄 [PDF-CHECK] PDF erkannt über receiptImagePath (.pdf Endung):', receiptImagePath);
+        // console.log('📄 [PDF-CHECK] PDF erkannt über receiptImagePath (.pdf Endung):', receiptImagePath);
         return true;
       }
       
@@ -1852,10 +1314,10 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             const entityType = pathParts[1];
             const entityId = pathParts[2];
             const imageData = imageStructure?.pictures?.[entityType]?.[entityId];
-            console.log('📄 [PDF-CHECK] imageData aus LocalStorage:', imageData);
+            // console.log('📄 [PDF-CHECK] imageData aus LocalStorage:', imageData);
             if (imageData) {
               if (typeof imageData === 'object' && imageData.fileType === 'application/pdf') {
-                console.log('📄 [PDF-CHECK] PDF erkannt über gespeicherten fileType in LocalStorage:', receiptImagePath);
+                // console.log('📄 [PDF-CHECK] PDF erkannt über gespeicherten fileType in LocalStorage:', receiptImagePath);
                 return true;
               }
               // Prüfe auch, ob es ein IndexedDB-Verweis ist (dann müssen wir IndexedDB prüfen)
@@ -1870,7 +1332,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                   // aus dem bereits geladenen IndexedDB-Eintrag haben können
                   // Für jetzt: Wenn Blob URL vorhanden und IndexedDB-Verweis, nehmen wir an, es ist ein PDF
                   // (da wir wissen, dass PDFs in IndexedDB gespeichert werden)
-                  console.log('📄 [PDF-CHECK] IndexedDB-Verweis gefunden, prüfe IndexedDB direkt...');
+                  // console.log('📄 [PDF-CHECK] IndexedDB-Verweis gefunden, prüfe IndexedDB direkt...');
                   // Wir können hier nicht async machen, daher prüfen wir imageUrl
                 }
               }
@@ -1878,7 +1340,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           }
         }
       } catch (e) {
-        console.error('📄 [PDF-CHECK] Fehler beim Parsen von LocalStorage:', e);
+        // console.error('📄 [PDF-CHECK] Fehler beim Parsen von LocalStorage:', e);
       }
     }
     
@@ -1887,7 +1349,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       const urlLower = imageUrl.toLowerCase();
       // Prüfe auf .pdf Endung oder PDF MIME-Type
       if (urlLower.endsWith('.pdf') || urlLower.includes('application/pdf') || urlLower.includes('data:application/pdf')) {
-        console.log('📄 [PDF-CHECK] PDF erkannt über imageUrl:', imageUrl.substring(0, 50));
+        // console.log('📄 [PDF-CHECK] PDF erkannt über imageUrl:', imageUrl.substring(0, 50));
         return true;
       }
       // Für blob: URLs: Wenn receiptImagePath vorhanden ist und es ein IndexedDB-Verweis ist,
@@ -1908,13 +1370,13 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               if (imageData && typeof imageData === 'object' && imageData._indexedDB) {
                 // Es ist ein IndexedDB-Verweis - prüfe, ob fileType gespeichert ist
                 if (imageData.fileType === 'application/pdf') {
-                  console.log('📄 [PDF-CHECK] PDF erkannt über fileType in IndexedDB-Verweis:', receiptImagePath);
+                  // console.log('📄 [PDF-CHECK] PDF erkannt über fileType in IndexedDB-Verweis:', receiptImagePath);
                   return true;
                 }
                 // Wenn fileType nicht gespeichert ist, aber es ist ein IndexedDB-Verweis und eine Blob URL,
                 // nehmen wir an, es könnte ein PDF sein (da PDFs als Blob URLs geladen werden)
                 // Aber das ist nicht zuverlässig - besser: direkt aus IndexedDB lesen
-                console.log('📄 [PDF-CHECK] IndexedDB-Verweis ohne fileType, prüfe IndexedDB direkt...');
+                // console.log('📄 [PDF-CHECK] IndexedDB-Verweis ohne fileType, prüfe IndexedDB direkt...');
               }
             }
           }
@@ -1926,29 +1388,29 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     
     // Fallback zu receiptImage
     if (receiptImage) {
-      if (typeof receiptImage === 'string') {
+    if (typeof receiptImage === 'string') {
         const strLower = receiptImage.toLowerCase();
         if (strLower.endsWith('.pdf') || strLower.includes('application/pdf') || strLower.includes('data:application/pdf')) {
-          console.log('📄 [PDF-CHECK] PDF erkannt über receiptImage (String):', receiptImage.substring(0, 50));
+          // console.log('📄 [PDF-CHECK] PDF erkannt über receiptImage (String):', receiptImage.substring(0, 50));
           return true;
         }
       } else {
         if (receiptImage.type === 'application/pdf') {
-          console.log('📄 [PDF-CHECK] PDF erkannt über receiptImage (File):', receiptImage.name);
+          // console.log('📄 [PDF-CHECK] PDF erkannt über receiptImage (File):', receiptImage.name);
           return true;
         }
       }
     }
     
-    console.log('📄 [PDF-CHECK] Kein PDF erkannt - receiptImagePath:', receiptImagePath, 'imageUrl:', imageUrl?.substring(0, 50));
+    // console.log('📄 [PDF-CHECK] Kein PDF erkannt - receiptImagePath:', receiptImagePath, 'imageUrl:', imageUrl?.substring(0, 50));
     return false;
   }, [receiptImage, imageUrl, receiptImagePath]);
 
   // Lade Bild-URL wenn receiptImage vorhanden
   useEffect(() => {
-    console.log('🖼️ [IMAGE] receiptImage geändert:', receiptImage);
-    console.log('📄 [IMAGE] receiptImagePath:', receiptImagePath);
-    console.log('🖼️ [IMAGE] Aktueller imageUrl:', imageUrl);
+    // console.log('🖼️ [IMAGE] receiptImage geändert:', receiptImage);
+    // console.log('📄 [IMAGE] receiptImagePath:', receiptImagePath);
+    // console.log('🖼️ [IMAGE] Aktueller imageUrl:', imageUrl);
     
     // Wenn receiptImagePath vorhanden ist, aber receiptImage nicht, dann wird das Bild
     // von ReceiptReviewModalWithImage geladen und als receiptImage (String-URL) übergeben
@@ -1961,22 +1423,22 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         setImageUrl(receiptImage);
       } else {
         // File-Objekt - konvertiere zu URL
-        console.log('🖼️ [IMAGE] Konvertiere File zu URL:', receiptImage.name, receiptImage.type);
+        // console.log('🖼️ [IMAGE] Konvertiere File zu URL:', receiptImage.name, receiptImage.type);
         const url = URL.createObjectURL(receiptImage);
-        console.log('🖼️ [IMAGE] URL erstellt:', url);
+        // console.log('🖼️ [IMAGE] URL erstellt:', url);
         setImageUrl(url);
         return () => {
           // Cleanup: URL freigeben
-          console.log('🖼️ [IMAGE] URL freigegeben');
+          // console.log('🖼️ [IMAGE] URL freigegeben');
           URL.revokeObjectURL(url);
         };
       }
     } else if (receiptImagePath) {
       // Wenn nur receiptImagePath vorhanden ist, wird das Bild von ReceiptReviewModalWithImage geladen
       // Wir müssen hier nichts tun, da ReceiptReviewModalWithImage receiptImage als String-URL setzt
-      console.log('📄 [IMAGE] Warte auf Bild-Laden durch ReceiptReviewModalWithImage...');
+      // console.log('📄 [IMAGE] Warte auf Bild-Laden durch ReceiptReviewModalWithImage...');
     } else {
-      console.log('🖼️ [IMAGE] Kein Bild vorhanden');
+      // console.log('🖼️ [IMAGE] Kein Bild vorhanden');
       setImageUrl('');
     }
   }, [receiptImage, receiptImagePath]);
@@ -1985,7 +1447,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   useEffect(() => {
     return () => {
       if (imageUrl && imageUrl.startsWith('blob:')) {
-        console.log('🖼️ [IMAGE] Cleanup: Revoke Blob URL');
+        // console.log('🖼️ [IMAGE] Cleanup: Revoke Blob URL');
         URL.revokeObjectURL(imageUrl);
       }
     };
@@ -2020,18 +1482,34 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         });
       }
       
-      console.log('📄 [PDF-CANVAS] Starte Rendering von PDF:', pdfUrl.substring(0, 50));
+      // console.log('📄 [PDF-CANVAS] Starte Rendering von PDF:', pdfUrl.substring(0, 50));
       
-      // Lade PDF (konvertiere Blob URL zu ArrayBuffer falls nötig)
-      let pdfData: any = pdfUrl;
-      if (pdfUrl.startsWith('blob:')) {
+      // Lade PDF - konvertiere immer zu ArrayBuffer für bessere Kompatibilität
+      let pdfData: ArrayBuffer;
+      if (pdfUrl.startsWith('blob:') || pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+        // Für Blob-URLs und HTTP-URLs: Lade als ArrayBuffer
+        const response = await fetch(pdfUrl);
+        if (!response.ok) {
+          throw new Error(`Fehler beim Laden des PDFs: ${response.status} ${response.statusText}`);
+        }
+        pdfData = await response.arrayBuffer();
+      } else {
+        // Für Data URLs oder andere Formate
         const response = await fetch(pdfUrl);
         pdfData = await response.arrayBuffer();
       }
       
-      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+      // Warte kurz, um sicherzustellen, dass die Daten vollständig geladen sind
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const loadingTask = pdfjsLib.getDocument({ 
+        data: pdfData,
+        // Zusätzliche Optionen für bessere Kompatibilität
+        verbosity: 0, // Reduziere Logging
+        stopAtErrors: false // Versuche trotz kleiner Fehler zu rendern
+      });
       const pdf = await loadingTask.promise;
-      console.log('📄 [PDF-CANVAS] PDF geladen, Seiten:', pdf.numPages);
+      // console.log('📄 [PDF-CANVAS] PDF geladen, Seiten:', pdf.numPages);
 
       const scale = 2.0; // Höhere Auflösung für Druck
       const canvasUrls: string[] = [];
@@ -2045,7 +1523,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) {
-          console.error(`❌ [PDF-CANVAS] Konnte Canvas-Context für Seite ${pageNum} nicht erstellen`);
+          // console.error(`❌ [PDF-CANVAS] Konnte Canvas-Context für Seite ${pageNum} nicht erstellen`);
           continue;
         }
 
@@ -2066,41 +1544,23 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
         const dataUrl = canvas.toDataURL('image/png');
         canvasUrls.push(dataUrl);
         
-        console.log(`✅ [PDF-CANVAS] Seite ${pageNum}/${pdf.numPages} gerendert:`, canvas.width, 'x', canvas.height);
+        // console.log(`✅ [PDF-CANVAS] Seite ${pageNum}/${pdf.numPages} gerendert:`, canvas.width, 'x', canvas.height);
       }
 
-      console.log(`✅ [PDF-CANVAS] PDF erfolgreich gerendert: ${canvasUrls.length} Seiten`);
+      // console.log(`✅ [PDF-CANVAS] PDF erfolgreich gerendert: ${canvasUrls.length} Seiten`);
       return canvasUrls;
     } catch (error) {
-      console.error('❌ [PDF-CANVAS] Fehler beim Rendern des PDFs:', error);
+      // console.error('❌ [PDF-CANVAS] Fehler beim Rendern des PDFs:', error);
       return [];
     }
   }, []);
 
-  // Rendere PDF zu Canvas für Anzeige im Original-Beleg-Bereich
-  useEffect(() => {
-    if (show && isPDF && imageUrl && displayPdfCanvasUrls.length === 0) {
-      console.log('📄 [PDF-CANVAS-DISPLAY] Starte PDF-Rendering für Anzeige');
-      renderPdfToCanvas(imageUrl).then((canvasUrls) => {
-        if (canvasUrls.length > 0) {
-          setDisplayPdfCanvasUrls(canvasUrls);
-          setCurrentPdfPage(0); // Starte mit erster Seite
-          console.log(`✅ [PDF-CANVAS-DISPLAY] PDF erfolgreich gerendert: ${canvasUrls.length} Seiten`);
-        }
-      });
-    }
-    
-    // Cleanup: Entferne Canvas URLs wenn Modal geschlossen wird
-    if (!show && displayPdfCanvasUrls.length > 0) {
-      setDisplayPdfCanvasUrls([]);
-      setCurrentPdfPage(0);
-    }
-  }, [show, isPDF, imageUrl, displayPdfCanvasUrls.length, renderPdfToCanvas]);
+  // PDF-Rendering für Anzeige wird jetzt in ReceiptImageViewer Komponente gehandhabt
 
   // Rendere PDF zu Canvas wenn PDF geladen wird und Druck-Preview geöffnet wird
   useEffect(() => {
     if (showPrintPreview && isPDF && imageUrl && pdfCanvasUrls.length === 0) {
-      console.log('📄 [PDF-CANVAS] Starte PDF-Rendering für Druck-Preview');
+      // console.log('📄 [PDF-CANVAS] Starte PDF-Rendering für Druck-Preview');
       renderPdfToCanvas(imageUrl).then((canvasUrls) => {
         if (canvasUrls.length > 0) {
           setPdfCanvasUrls(canvasUrls);
@@ -2140,7 +1600,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     let vat19 = 0;
     
     editedArticles.forEach(article => {
-      const quantity = article.quantity || 1;
+        const quantity = article.quantity || 1;
       const basePrice = article.price || (article.bundlePrice ? article.bundlePrice * quantity : 0);
       const vatRate = article.vatRate || 19; // Standard 19% falls nicht gesetzt
       
@@ -2201,9 +1661,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     if (field === 'grossTotal') {
       return Math.abs(calculatedTotals.grossTotal - scanTotals.totalAmount) > 0.01; // Toleranz für Rundungsfehler
     } else {
-      const calculated = calculatedTotals[field];
-      const scanned = scanTotals[field];
-      return Math.abs(calculated - scanned) > 0.01; // Toleranz für Rundungsfehler
+    const calculated = calculatedTotals[field];
+    const scanned = scanTotals[field];
+    return Math.abs(calculated - scanned) > 0.01; // Toleranz für Rundungsfehler
     }
   };
 
@@ -2233,10 +1693,10 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     const bundlePriceNetto = bundlePriceBrutto / (1 + vatRate / 100);
     const pricePerUnitNetto = pricePerUnitBrutto / (1 + vatRate / 100);
     
-    console.log(`🔄 [PREIS-UMRECHNUNG] Artikel "${article.name}": Brutto → Netto (${vatRate}%)`, {
-      bundlePrice: `${bundlePriceBrutto.toFixed(2)} → ${bundlePriceNetto.toFixed(2)}`,
-      pricePerUnit: `${pricePerUnitBrutto.toFixed(2)} → ${pricePerUnitNetto.toFixed(2)}`
-    });
+    // console.log(`🔄 [PREIS-UMRECHNUNG] Artikel "${article.name}": Brutto → Netto (${vatRate}%)`, {
+    //   bundlePrice: `${bundlePriceBrutto.toFixed(2)} → ${bundlePriceNetto.toFixed(2)}`,
+    //   pricePerUnit: `${pricePerUnitBrutto.toFixed(2)} → ${pricePerUnitNetto.toFixed(2)}`
+    // });
     
     return {
       bundlePrice: bundlePriceNetto,
@@ -2244,168 +1704,128 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     };
   };
 
+  // Hilfsfunktion: Prüfe, ob sich relevante Felder zwischen ReceiptArticle und Article unterscheiden
+  const hasArticleChanged = (receiptArticle: ReceiptArticle, existingArticle: Article): boolean => {
+    // Prüfe alle relevanten Felder
+    if ((receiptArticle.name || '') !== (existingArticle.name || '')) return true;
+    if ((receiptArticle.category || '') !== (existingArticle.category || '')) return true;
+    if ((receiptArticle.supplierArticleNumber || '') !== (existingArticle.supplierArticleNumber || '')) return true;
+    if ((receiptArticle.taxAccount || '') !== (existingArticle.accountingAccountNumber || '')) return true;
+    if ((receiptArticle.bundleUnit || '') !== (existingArticle.bundleUnit || '')) return true;
+    
+    // Preise: Umrechnung zu Netto für Vergleich
+    const { bundlePrice: receiptBundlePrice } = convertPricesToNetto(receiptArticle);
+    if (Math.abs(receiptBundlePrice - (existingArticle.bundlePrice || 0)) > 0.01) return true; // Toleranz für Rundungsfehler
+    
+    if (Math.abs((receiptArticle.content || 0) - (existingArticle.content || 0)) > 0.0001) return true; // Toleranz für Rundungsfehler
+    if ((receiptArticle.contentUnit || '') !== (existingArticle.contentUnit || '')) return true;
+    if ((receiptArticle.notes || '') !== (existingArticle.notes || '')) return true;
+    if ((receiptArticle.bundleEanCode || '') !== (existingArticle.bundleEanCode || '')) return true;
+    if ((receiptArticle.contentEanCode || '') !== (existingArticle.contentEanCode || '')) return true;
+    
+    return false;
+  };
+
   const handleSave = async () => {
     try {
-      // Wenn Beleg noch nicht abgeschlossen ist, speichere nur processedOcrData
-      if (!isCompleted) {
-        console.log('💾 Speichere Beleg-Daten (noch nicht abgeschlossen)...');
-        
-        // Aktualisiere processedOcrData mit aktuellen Werten
-        const updatedReceiptData: ExtendedReceiptData = {
-          ...receiptData,
-          supplier: receiptSupplierId ? suppliers.find(s => s.id === receiptSupplierId)?.name || receiptData.supplier : receiptData.supplier,
-          supplierId: receiptSupplierId || receiptData.supplierId,
-          date: receiptDate || receiptData.date,
-          receiptNumber: receiptNumber || receiptData.receiptNumber,
-          articles: editedArticles,
-          totalArticles: editedArticles.length,
-          totalAmount: calculatedTotals.grossTotal,
-          vat7: calculatedTotals.vat7,
-          vat19: calculatedTotals.vat19,
-          isCompleted: false,
-          printListPosition: receiptData.printListPosition,
-          leftPanelWidth: leftPanelWidth,
-          rightPanelWidth: rightPanelWidth,
-          autoLinkPerformed: receiptData.autoLinkPerformed // Behalte Flag beim Speichern
-        };
-        
-        // Aktualisiere über onUpdateReceiptData
-        if (onUpdateReceiptData) {
-          await onUpdateReceiptData(updatedReceiptData);
-        }
-        
-        // Oder über onSaveReceipt wenn vorhanden
-        if (onSaveReceipt) {
-          await onSaveReceipt({ processedOcrData: updatedReceiptData });
-        }
-        
-        console.log('✅ Beleg-Daten gespeichert');
-        return; // Beende hier, da noch nicht abgeschlossen
-      }
+      // Speichere immer processedOcrData mit aktuellen Werten
+      // Inkludiere Zoom, Position und Panel-Breiten beim Speichern
+      const updatedReceiptData: ExtendedReceiptData = {
+        ...receiptData,
+        supplier: receiptSupplierId ? suppliers.find(s => s.id === receiptSupplierId)?.name || receiptData.supplier : receiptData.supplier,
+        supplierId: receiptSupplierId || receiptData.supplierId,
+        date: receiptDate || receiptData.date,
+        receiptNumber: receiptNumber || receiptData.receiptNumber,
+        articles: editedArticles,
+        totalArticles: editedArticles.length,
+        totalAmount: calculatedTotals.grossTotal,
+        vat7: calculatedTotals.vat7,
+        vat19: calculatedTotals.vat19,
+        isCompleted: receiptData.isCompleted || false,
+        printListPosition: printPreviewListPosition, // Aktuelle Druck-Position
+        imageZoom: prevImageZoomRef.current ?? receiptData.imageZoom ?? 1, // Aktueller Zoom
+        imagePosition: prevImagePositionRef.current ?? receiptData.imagePosition ?? { x: 0, y: 0 }, // Aktuelle Position
+        leftPanelWidth: leftPanelWidth,
+        rightPanelWidth: rightPanelWidth,
+        autoLinkPerformed: receiptData.autoLinkPerformed
+      };
       
-      // Wenn Beleg abgeschlossen ist, übernehme Artikel und speichere receiptDetails
-      console.log('💾 Übernehme Artikel und schließe Beleg ab...');
-      
-      // Filtere vollständige Artikel für die Verarbeitung (ohne excludeFromUpdate)
-      const completeArticles = editedArticles.filter(article => 
-        isArticleComplete(article) && !article.excludeFromUpdate
-      );
-      
-      // Alle vollständigen Artikel für receiptDetails (inklusive excludeFromUpdate)
-      const allCompleteArticlesForReceipt = editedArticles.filter(article => 
-        isArticleComplete(article)
-      );
-
-      if (allCompleteArticlesForReceipt.length === 0) {
-        alert('Keine vollständigen Artikel zum Übernehmen gefunden.');
-        return;
-      }
-
-      console.log(`💾 Übernehme ${completeArticles.length} vollständige Artikel (${allCompleteArticlesForReceipt.length} insgesamt für ReceiptDetails)...`);
-
+      // Verarbeite Artikel: Verlinkte Artikel prüfen und vollständige, nicht verlinkte Artikel anlegen
       const articlesToSave: Article[] = [];
       const articlesToUpdate: Article[] = [];
+      const updatedReceiptArticles: ReceiptArticle[] = [...editedArticles];
 
-      // Verarbeite jeden vollständigen Artikel
-      for (const receiptArticle of completeArticles) {
+      // Lade aktuelle Artikel aus storageLayer
+      let allArticlesFromStorage: Article[] = [];
+      try {
+        const loadedArticles = await storageLayer.load<Article>('articles');
+        if (loadedArticles) {
+          allArticlesFromStorage = loadedArticles;
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Laden der Artikel aus storageLayer:', error);
+        allArticlesFromStorage = state.articles;
+      }
+
+      // Verarbeite jeden Artikel
+      for (let i = 0; i < editedArticles.length; i++) {
+        const receiptArticle = editedArticles[i];
+        
+        // Ignoriere Artikel mit excludeFromUpdate oder unvollständige Artikel
+        if (receiptArticle.excludeFromUpdate || !isArticleComplete(receiptArticle)) {
+          continue;
+        }
+
+        // Fall 1: Artikel ist verlinkt - prüfe auf Änderungen
         if (receiptArticle.linkedArticleId) {
-          // Artikel aktualisieren: Finde bestehenden Artikel im State
-          const existingArticle = state.articles.find(a => a.id === receiptArticle.linkedArticleId);
+          const existingArticle = allArticlesFromStorage.find(a => a.id === receiptArticle.linkedArticleId);
           
           if (existingArticle) {
-            // Erstelle aktualisierten Artikel mit allen Feldern aus receiptArticle
-            // Füge OCR-Namen zu namesOCR hinzu, falls vorhanden
-            const currentOCRName = receiptArticle.nameOCR; // Nur nameOCR verwenden, nicht name als Fallback
-            const existingNamesOCR = existingArticle.namesOCR || [];
-            const updatedNamesOCR = currentOCRName && !existingNamesOCR.includes(currentOCRName)
-              ? [...existingNamesOCR, currentOCRName]
-              : existingNamesOCR;
-            
-            // Rechne Preise von Brutto zu Netto um, wenn nötig
-            const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
-            
-            const updatedArticle: Article = {
-              ...existingArticle,
-              name: receiptArticle.name || existingArticle.name,
-              namesOCR: updatedNamesOCR, // Füge OCR-Namen hinzu
-              category: (receiptArticle.category || existingArticle.category) as ArticleCategory,
-              supplierId: receiptSupplierId || existingArticle.supplierId,
-              supplierArticleNumber: receiptArticle.supplierArticleNumber || existingArticle.supplierArticleNumber,
-              bundleUnit: (receiptArticle.bundleUnit || existingArticle.bundleUnit) as Unit,
-              bundlePrice: convertedBundlePrice,
-              bundleEanCode: receiptArticle.bundleEanCode || existingArticle.bundleEanCode,
-              content: receiptArticle.content !== undefined && receiptArticle.content !== null ? receiptArticle.content : existingArticle.content,
-              contentUnit: (receiptArticle.contentUnit || existingArticle.contentUnit) as Unit,
-              contentEanCode: receiptArticle.contentEanCode || existingArticle.contentEanCode,
-              pricePerUnit: convertedPricePerUnit,
-              accountingAccountNumber: receiptArticle.taxAccount || existingArticle.accountingAccountNumber, // SKR-Konto übernehmen
-              allergens: receiptArticle.allergens || existingArticle.allergens,
-              additives: receiptArticle.additives || existingArticle.additives,
-              ingredients: receiptArticle.ingredients || existingArticle.ingredients,
-              nutritionInfo: receiptArticle.nutrition || existingArticle.nutritionInfo,
-              openFoodFactsCode: receiptArticle.openFoodFactsCode || existingArticle.openFoodFactsCode,
-              notes: receiptArticle.notes || existingArticle.notes,
-              isDirty: true,
-              syncStatus: 'pending'
-            };
-            
-            articlesToUpdate.push(updatedArticle);
-            console.log(`📝 Aktualisiere Artikel: ${updatedArticle.name} (ID: ${updatedArticle.id})`);
-          } else {
-            console.warn(`⚠️ Verknüpfter Artikel mit ID ${receiptArticle.linkedArticleId} nicht gefunden. Wird als neuer Artikel angelegt.`);
-            // Falls verknüpfter Artikel nicht gefunden, als neuen Artikel anlegen
-            // Rechne Preise von Brutto zu Netto um, wenn nötig
-            const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
-            
-            const newArticle: Article = {
-              id: UUIDUtils.generateId(),
-              name: receiptArticle.name || '',
-              namesOCR: receiptArticle.nameOCR ? [receiptArticle.nameOCR] : [], // Initialisiere mit OCR-Namen
-              category: (receiptArticle.category || '') as ArticleCategory,
-              supplierId: receiptSupplierId || '',
-              supplierArticleNumber: receiptArticle.supplierArticleNumber || '',
-              bundleUnit: (receiptArticle.bundleUnit || '') as Unit,
-              bundlePrice: convertedBundlePrice,
-              bundleEanCode: receiptArticle.bundleEanCode || '',
-              content: receiptArticle.content || 0,
-              contentUnit: (receiptArticle.contentUnit || '') as Unit,
-              contentEanCode: receiptArticle.contentEanCode || '',
-              pricePerUnit: convertedPricePerUnit,
-              accountingAccountNumber: receiptArticle.taxAccount, // SKR-Konto übernehmen
-              allergens: receiptArticle.allergens || [],
-              additives: receiptArticle.additives || [],
-              ingredients: receiptArticle.ingredients || '',
-              nutritionInfo: receiptArticle.nutrition || {
-                calories: 0,
-                kilojoules: 0,
-                protein: 0,
-                fat: 0,
-                carbohydrates: 0,
-                fiber: 0,
-                sugar: 0,
-                salt: 0,
-                alcohol: undefined
-              },
-              openFoodFactsCode: receiptArticle.openFoodFactsCode || '',
-              notes: receiptArticle.notes || '',
-              isNew: true,
-              isDirty: true,
-              syncStatus: 'pending',
-              alcohol: receiptArticle.nutrition?.alcohol
-            };
-            
-            articlesToSave.push(newArticle);
-            console.log(`➕ Lege neuen Artikel an: ${newArticle.name}`);
+            // Prüfe, ob sich relevante Felder geändert haben
+            if (hasArticleChanged(receiptArticle, existingArticle)) {
+              // Füge OCR-Namen zu namesOCR hinzu, falls vorhanden
+              const currentOCRName = receiptArticle.nameOCR;
+              const existingNamesOCR = existingArticle.namesOCR || [];
+              const updatedNamesOCR = currentOCRName && !existingNamesOCR.includes(currentOCRName)
+                ? [...existingNamesOCR, currentOCRName]
+                : existingNamesOCR;
+              
+              // Rechne Preise von Brutto zu Netto um, wenn nötig
+              const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
+              
+              const updatedArticle: Article = {
+                ...existingArticle,
+                name: receiptArticle.name || existingArticle.name,
+                namesOCR: updatedNamesOCR,
+                category: (receiptArticle.category || existingArticle.category) as ArticleCategory,
+                supplierId: receiptSupplierId || existingArticle.supplierId,
+                supplierArticleNumber: receiptArticle.supplierArticleNumber || existingArticle.supplierArticleNumber,
+                bundleUnit: (receiptArticle.bundleUnit || existingArticle.bundleUnit) as Unit,
+                bundlePrice: convertedBundlePrice,
+                bundleEanCode: receiptArticle.bundleEanCode || existingArticle.bundleEanCode,
+                content: receiptArticle.content !== undefined && receiptArticle.content !== null ? receiptArticle.content : existingArticle.content,
+                contentUnit: (receiptArticle.contentUnit || existingArticle.contentUnit) as Unit,
+                contentEanCode: receiptArticle.contentEanCode || existingArticle.contentEanCode,
+                pricePerUnit: convertedPricePerUnit,
+                accountingAccountNumber: receiptArticle.taxAccount || existingArticle.accountingAccountNumber,
+                notes: receiptArticle.notes || existingArticle.notes,
+                isDirty: true,
+                syncStatus: 'pending'
+              };
+              
+              articlesToUpdate.push(updatedArticle);
+            }
           }
-        } else {
-          // Neuen Artikel anlegen
+        } 
+        // Fall 2: Artikel ist vollständig aber nicht verlinkt - lege neuen Artikel an und verlinke
+        else {
           // Rechne Preise von Brutto zu Netto um, wenn nötig
           const { bundlePrice: convertedBundlePrice, pricePerUnit: convertedPricePerUnit } = convertPricesToNetto(receiptArticle);
           
           const newArticle: Article = {
             id: UUIDUtils.generateId(),
             name: receiptArticle.name || '',
-            namesOCR: receiptArticle.nameOCR ? [receiptArticle.nameOCR] : [], // Initialisiere mit OCR-Namen
+            namesOCR: receiptArticle.nameOCR ? [receiptArticle.nameOCR] : [],
             category: (receiptArticle.category || '') as ArticleCategory,
             supplierId: receiptSupplierId || '',
             supplierArticleNumber: receiptArticle.supplierArticleNumber || '',
@@ -2416,7 +1836,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             contentUnit: (receiptArticle.contentUnit || '') as Unit,
             contentEanCode: receiptArticle.contentEanCode || '',
             pricePerUnit: convertedPricePerUnit,
-            accountingAccountNumber: receiptArticle.taxAccount, // SKR-Konto übernehmen
+            accountingAccountNumber: receiptArticle.taxAccount || '',
             allergens: receiptArticle.allergens || [],
             additives: receiptArticle.additives || [],
             ingredients: receiptArticle.ingredients || '',
@@ -2440,20 +1860,23 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           };
           
           articlesToSave.push(newArticle);
-          console.log(`➕ Lege neuen Artikel an: ${newArticle.name}`);
+          
+          // Verlinke den ReceiptArticle mit dem neuen Artikel
+          updatedReceiptArticles[i] = {
+            ...receiptArticle,
+            linkedArticleId: newArticle.id
+          };
         }
       }
 
       // Speichere neue Artikel
       if (articlesToSave.length > 0) {
-        console.log(`💾 Speichere ${articlesToSave.length} neue Artikel über StorageLayer...`);
         const success = await storageLayer.save('articles', articlesToSave);
         if (!success) {
           throw new Error('Fehler beim Speichern der neuen Artikel');
         }
-        console.log('✅ Neue Artikel erfolgreich gespeichert');
         
-        // Aktualisiere globalen State für neue Artikel
+        // Aktualisiere globalen State
         articlesToSave.forEach(article => {
           dispatch({ type: 'ADD_ARTICLE', payload: article });
         });
@@ -2461,199 +1884,100 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
 
       // Aktualisiere bestehende Artikel
       if (articlesToUpdate.length > 0) {
-        console.log(`💾 Aktualisiere ${articlesToUpdate.length} bestehende Artikel über StorageLayer...`);
         const success = await storageLayer.save('articles', articlesToUpdate);
         if (!success) {
           throw new Error('Fehler beim Aktualisieren der Artikel');
         }
-        console.log('✅ Artikel erfolgreich aktualisiert');
         
-        // Aktualisiere globalen State für geänderte Artikel
+        // Aktualisiere globalen State
         articlesToUpdate.forEach(article => {
           dispatch({ type: 'UPDATE_ARTICLE', payload: { id: article.id, article } });
         });
       }
 
-      // Erstelle receiptDetails mit article IDs
-      // Warte kurz, damit die Artikel im State aktualisiert sind
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Sammle alle article IDs (sowohl neue als auch aktualisierte)
-      const allArticleIds = new Map<string, string>();
-      articlesToSave.forEach(article => {
-        // Finde das passende ReceiptArticle
-        const receiptArticle = completeArticles.find(ra => 
-          ra.name === article.name && 
-          (!ra.linkedArticleId || ra.linkedArticleId === article.id)
-        );
-        if (receiptArticle) {
-          allArticleIds.set(receiptArticle.name + (receiptArticle.supplierArticleNumber || ''), article.id);
+      // Aktualisiere editedArticles mit verlinkten IDs
+      const finalArticles = articlesToSave.length > 0 ? updatedReceiptArticles : editedArticles;
+      if (articlesToSave.length > 0) {
+        setEditedArticles(finalArticles);
+      }
+
+      // Prüfe, ob alle Artikel entweder verlinkt, vollständig oder ignoriert sind
+      const allArticlesProcessed = finalArticles.every(article => {
+        // Artikel ist ignoriert
+        if (article.excludeFromUpdate) {
+          return true;
         }
+        // Artikel ist vollständig
+        if (isArticleComplete(article)) {
+          return true;
+        }
+        // Artikel ist verlinkt (auch wenn nicht vollständig)
+        if (article.linkedArticleId) {
+          return true;
+        }
+        // Artikel ist weder vollständig noch verlinkt noch ignoriert
+        return false;
       });
-      articlesToUpdate.forEach(article => {
-        allArticleIds.set(article.id, article.id);
+
+      // Debug-Log für isCompleted-Prüfung
+      console.log('🔍 [handleSave] isCompleted-Prüfung:', {
+        totalArticles: finalArticles.length,
+        allArticlesProcessed,
+        articlesStatus: finalArticles.map(a => ({
+          name: a.name,
+          excludeFromUpdate: a.excludeFromUpdate,
+          isComplete: isArticleComplete(a),
+          linkedArticleId: a.linkedArticleId,
+          status: a.excludeFromUpdate ? 'ignored' : (isArticleComplete(a) ? 'complete' : (a.linkedArticleId ? 'linked' : 'incomplete'))
+        }))
+      });
+
+      // Setze isCompleted basierend auf dem Status aller Artikel
+      const finalIsCompleted = allArticlesProcessed;
+      
+      // Erstelle accounting-Einträge aus taxAccountTotals
+      const accountingEntries: ReceiptAccountingEntry[] = taxAccountTotals.map((item) => {
+        const vatRate = extractVatRateFromAccountName(item.accountName);
+        return {
+          id: UUIDUtils.generateId(),
+          accountNumber: item.accountNumber,
+          accountName: item.accountName,
+          amount: item.total,
+          vatRate: vatRate !== null ? vatRate : undefined
+        };
       });
       
-      const receiptDetails = {
-        lineItems: allCompleteArticlesForReceipt.map((receiptArticle): ReceiptLineItem => {
-          // Finde die article ID (nur für Artikel ohne excludeFromUpdate)
-          let articleId: string | undefined;
-          if (!receiptArticle.excludeFromUpdate) {
-            if (receiptArticle.linkedArticleId) {
-              articleId = receiptArticle.linkedArticleId;
-            } else {
-              // Suche in den neu gespeicherten Artikeln über Map
-              const key = receiptArticle.name + (receiptArticle.supplierArticleNumber || '');
-              articleId = allArticleIds.get(key);
-            }
-          }
-          // Für Artikel mit excludeFromUpdate bleibt articleId undefined
-          
-          return {
-            id: UUIDUtils.generateId(),
-            articleId: articleId,
-            description: receiptArticle.name || '',
-            quantity: receiptArticle.quantity || 1,
-            unit: receiptArticle.bundleUnit || 'Stück',
-            unitPrice: receiptArticle.bundlePrice || 0,
-            vatRate: receiptArticle.vatRate || 19,
-            taxAccount: receiptArticle.taxAccount,
-            total: (receiptArticle.bundlePrice || 0) * (receiptArticle.quantity || 1)
-          };
-        }),
-        currency: 'EUR',
-        totalNet: calculatedTotals.netSum,
-        totalVat: calculatedTotals.vat7 + calculatedTotals.vat19,
-        totalGross: calculatedTotals.grossTotal
+      // Aktualisiere processedOcrData mit finalen Werten
+      const finalReceiptData: ExtendedReceiptData = {
+        ...updatedReceiptData,
+        articles: finalArticles,
+        isCompleted: finalIsCompleted
       };
       
-      // Aktualisiere Receipt mit receiptDetails und isCompleted=true
-      // Speichere auch processedOcrData mit Layout-Breiten
-      const finalProcessedOcrData: ExtendedReceiptData = {
-        ...receiptData,
-        supplier: receiptSupplierId ? suppliers.find(s => s.id === receiptSupplierId)?.name || receiptData.supplier : receiptData.supplier,
-        supplierId: receiptSupplierId || receiptData.supplierId,
-        date: receiptDate || receiptData.date,
-        receiptNumber: receiptNumber || receiptData.receiptNumber,
-        articles: editedArticles,
-          totalArticles: editedArticles.length,
-          totalAmount: calculatedTotals.grossTotal,
-          vat7: calculatedTotals.vat7,
-          vat19: calculatedTotals.vat19,
-          isCompleted: true,
-        printListPosition: receiptData.printListPosition,
-        leftPanelWidth: leftPanelWidth,
-        rightPanelWidth: rightPanelWidth
-      };
+      // Aktualisiere processedOcrData (Zwischenspeicherung)
+      if (onUpdateReceiptData) {
+        await onUpdateReceiptData(finalReceiptData);
+      }
       
+      // Speichere finalen Beleg (nur einmal am Ende)
       if (onSaveReceipt) {
-        await onSaveReceipt({
-          processedOcrData: finalProcessedOcrData,
-          receiptDetails: receiptDetails,
-          isCompleted: true
+        await onSaveReceipt({ 
+          processedOcrData: finalReceiptData,
+          accounting: accountingEntries,
+          isCompleted: finalIsCompleted
         });
       }
-      
-      // Callback aufrufen falls vorhanden
-      if (onSave) {
-        onSave(completeArticles);
-      }
 
-      console.log(`✅ Erfolgreich ${articlesToSave.length} neue und ${articlesToUpdate.length} aktualisierte Artikel übernommen.`);
-      console.log(`✅ ReceiptDetails mit ${receiptDetails.lineItems.length} LineItems gespeichert.`);
-      
+      // Schließe das Modal nach erfolgreichem Speichern
       onClose();
+
     } catch (error: any) {
-      console.error('❌ Fehler beim Übernehmen der Artikel:', error);
-      alert(`Fehler beim Übernehmen der Artikel: ${error.message}`);
+      console.error('❌ Fehler beim Speichern:', error);
+      alert(`Fehler beim Speichern: ${error.message}`);
     }
   };
 
-  // Handler für Bild-Drag
-  const handleImageMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return; // Nur linke Maustaste
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: e.clientX - imagePosition.x,
-      y: e.clientY - imagePosition.y
-    };
-    e.preventDefault();
-  };
-
-  const handleImageMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    setImagePosition({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y
-    });
-  }, [isDragging]);
-
-  const handleImageMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Event-Listener für globales Mouse-Move und Mouse-Up
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleImageMouseMove);
-      document.addEventListener('mouseup', handleImageMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleImageMouseMove);
-        document.removeEventListener('mouseup', handleImageMouseUp);
-      };
-    }
-  }, [isDragging, handleImageMouseMove, handleImageMouseUp]);
-
-  // Event-Listener für Wheel-Event (nicht-passiv, damit preventDefault funktioniert)
-  useEffect(() => {
-    if (!show) return;
-    
-    // Prüfe ob ein Bild vorhanden ist (für normale Bilder) oder Canvas-URLs für PDFs
-    const hasImage = !isPDF && imageUrl;
-    const hasPdfCanvas = isPDF && displayPdfCanvasUrls.length > 0;
-    
-    if (!hasImage && !hasPdfCanvas) {
-      console.log('⏭️ [WHEEL] Kein Bild/PDF-Canvas vorhanden, Wheel-Handler nicht registriert');
-      return;
-    }
-    
-    // Warte kurz, damit der Container gerendert ist
-    const timeoutId = setTimeout(() => {
-      const container = imageContainerRef.current;
-      if (!container) {
-        console.log('⚠️ [WHEEL] imageContainerRef.current ist null');
-        return;
-      }
-
-      console.log('✅ [WHEEL] Registriere Wheel-Handler für Bildvergrößerung');
-
-      const wheelHandler = (e: WheelEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        setImageZoom(prevZoom => {
-          const newZoom = Math.max(0.5, Math.min(5, prevZoom + delta));
-          return newZoom;
-        });
-      };
-
-      // Speichere Handler in Ref für Cleanup
-      wheelHandlerRef.current = wheelHandler;
-      container.addEventListener('wheel', wheelHandler, { passive: false });
-    }, 100);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      // Entferne Event-Listener falls vorhanden
-      const container = imageContainerRef.current;
-      const wheelHandler = wheelHandlerRef.current;
-      if (container && wheelHandler) {
-        console.log('🧹 [WHEEL] Entferne Wheel-Handler');
-        container.removeEventListener('wheel', wheelHandler);
-        wheelHandlerRef.current = null;
-      }
-    };
-  }, [show, isPDF, imageUrl, displayPdfCanvasUrls.length]);
+  // Bild-Drag und Wheel-Handler werden jetzt in ReceiptImageViewer Komponente gehandhabt
 
   // Scroll zu ausgewähltem Element in Category-Dropdown
   useEffect(() => {
@@ -2789,14 +2113,14 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     // Für PDFs: Verwende Canvas-URLs wenn verfügbar
     if (isPDF) {
       if (pdfCanvasUrls.length === 0 || !printPreviewImageSize) {
-        console.warn('⚠️ PDF-Canvas nicht verfügbar für Druck');
+        // console.warn('⚠️ PDF-Canvas nicht verfügbar für Druck');
         return;
       }
     } else {
       // Für Bilder: Prüfe ob Bild und Größe verfügbar sind
-      if (!printImageRef.current || !printPreviewImageSize) {
-        console.warn('⚠️ Bildgröße nicht verfügbar für Druck');
-        return;
+    if (!printImageRef.current || !printPreviewImageSize) {
+        // console.warn('⚠️ Bildgröße nicht verfügbar für Druck');
+      return;
       }
     }
     
@@ -2809,12 +2133,12 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     const positionPercentX = (printPreviewListPosition.x / imageWidth) * 100;
     const positionPercentY = (printPreviewListPosition.y / imageHeight) * 100;
 
-    console.log('🖨️ Druck-Position:', {
-      pixelPosition: printPreviewListPosition,
-      imageSize: printPreviewImageSize,
-      percentPosition: { x: positionPercentX, y: positionPercentY },
-      isPDF: isPDF
-    });
+    // console.log('🖨️ Druck-Position:', {
+    //   pixelPosition: printPreviewListPosition,
+    //   imageSize: printPreviewImageSize,
+    //   percentPosition: { x: positionPercentX, y: positionPercentY },
+    //   isPDF: isPDF
+    // });
 
     // Erstelle HTML-Inhalt für PDF (mehrere Canvas-Bilder, eine pro Seite) oder Bild
     let receiptContent: string;
@@ -2870,7 +2194,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
             }
             @media print {
               html, body {
-                margin: 0;
+                margin: 0; 
                 padding: 0;
                 width: 100%;
                 height: auto;
@@ -3007,16 +2331,16 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                       data-page-index="${index}" 
                     />
                     ${index === 0 ? `
-                      <div class="tax-account-list">
-                        <div class="tax-account-title">Artikelsummen nach Steuerkonten:</div>
-                        ${taxAccountTotals.map(item => `
-                          <div class="tax-account-item">
-                            ${item.total.toFixed(2).replace('.', ',')} € - ${item.accountNumber} - ${item.accountName}
-                          </div>
-                        `).join('')}
-                      </div>
+            <div class="tax-account-list">
+              <div class="tax-account-title">Artikelsummen nach Steuerkonten:</div>
+              ${taxAccountTotals.map(item => `
+                <div class="tax-account-item">
+                  ${item.total.toFixed(2).replace('.', ',')} € - ${item.accountNumber} - ${item.accountName}
+                </div>
+              `).join('')}
+            </div>
                     ` : ''}
-                  </div>
+          </div>
                 </div>
               `).join('')
               : `
@@ -3097,27 +2421,10 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
     printWindow.document.close();
   }, [imageUrl, pdfCanvasUrls, taxAccountTotals, printPreviewListPosition, printPreviewImageSize, isPDF]);
 
-  // Reset Zoom und Position beim Öffnen, Wiederherstellen der Druck-Position
+  // Reset beim Öffnen, Wiederherstellen der Druck-Position
   // WICHTIG: Nur beim Öffnen (show wird true), nicht bei jeder receiptData-Änderung!
   useEffect(() => {
     if (show) {
-      // Wiederherstelle gespeicherte Bildansicht-Einstellungen
-      if (receiptData.imageZoom !== undefined) {
-        setImageZoom(receiptData.imageZoom);
-        prevImageZoomRef.current = receiptData.imageZoom;
-      } else {
-        setImageZoom(1);
-        prevImageZoomRef.current = 1;
-      }
-      
-      if (receiptData.imagePosition) {
-        setImagePosition(receiptData.imagePosition);
-        prevImagePositionRef.current = receiptData.imagePosition;
-      } else {
-        setImagePosition({ x: 0, y: 0 });
-        prevImagePositionRef.current = { x: 0, y: 0 };
-      }
-      
       // Wiederherstelle gespeicherte Druck-Position
       if (receiptData.printListPosition) {
         setPrintPreviewListPosition(receiptData.printListPosition);
@@ -3139,29 +2446,16 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       
       // Wiederherstelle Fertig-Status
       setIsCompleted(receiptData.isCompleted || false);
+      
+      // Initialisiere Refs mit aktuellen Werten beim Öffnen
+      prevImageZoomRef.current = receiptData.imageZoom ?? 1;
+      prevImagePositionRef.current = receiptData.imagePosition ?? { x: 0, y: 0 };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show]); // Nur bei show-Änderung, nicht bei receiptData-Änderungen!
   
-  // Speichere Position beim Ändern (nur wenn sie sich wirklich geändert hat)
-  useEffect(() => {
-    // Prüfe ob Position sich geändert hat (nicht beim ersten Laden)
-    if (prevPositionRef.current && 
-        onUpdateReceiptData && 
-        printPreviewListPosition &&
-        (prevPositionRef.current.x !== printPreviewListPosition.x || 
-         prevPositionRef.current.y !== printPreviewListPosition.y)) {
-      // Aktualisiere nur die Position, nicht die gesamten Daten
-      if (onUpdateReceiptDataRef.current) {
-        onUpdateReceiptDataRef.current({
-          ...receiptDataRef.current,
-          printListPosition: printPreviewListPosition
-        });
-      }
-    }
-    prevPositionRef.current = printPreviewListPosition;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printPreviewListPosition]); // Nur bei Änderung der Position, nicht bei jeder receiptData-Änderung
+  // Speichere Position NICHT automatisch - nur beim Speichern des Beleges
+  // useEffect entfernt, um Datenlast zu reduzieren
 
   // Speichere Fertig-Status beim Ändern
   useEffect(() => {
@@ -3173,51 +2467,16 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       if (onUpdateReceiptDataRef.current) {
         onUpdateReceiptDataRef.current({
           ...receiptDataRef.current,
-          isCompleted: isCompleted
-        });
+        isCompleted: isCompleted
+      });
       }
     }
     prevCompletedRef.current = isCompleted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCompleted]); // Nur bei Änderung des Status, nicht bei jeder receiptData-Änderung
 
-  // Speichere Bild-Zoom beim Ändern (nur wenn er sich wirklich geändert hat)
-  useEffect(() => {
-    // Prüfe ob Zoom sich geändert hat (nicht beim ersten Laden)
-    if (prevImageZoomRef.current !== null && 
-        onUpdateReceiptData && 
-        prevImageZoomRef.current !== imageZoom) {
-      // Aktualisiere nur den Zoom, nicht die gesamten Daten
-      if (onUpdateReceiptDataRef.current) {
-        onUpdateReceiptDataRef.current({
-          ...receiptDataRef.current,
-          imageZoom: imageZoom
-        });
-      }
-    }
-    prevImageZoomRef.current = imageZoom;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageZoom]); // Nur bei Änderung des Zooms, nicht bei jeder receiptData-Änderung
-
-  // Speichere Bild-Position beim Ändern (nur wenn sie sich wirklich geändert hat)
-  useEffect(() => {
-    // Prüfe ob Position sich geändert hat (nicht beim ersten Laden)
-    if (prevImagePositionRef.current && 
-        onUpdateReceiptData && 
-        imagePosition &&
-        (prevImagePositionRef.current.x !== imagePosition.x || 
-         prevImagePositionRef.current.y !== imagePosition.y)) {
-      // Aktualisiere nur die Position, nicht die gesamten Daten
-      if (onUpdateReceiptDataRef.current) {
-        onUpdateReceiptDataRef.current({
-          ...receiptDataRef.current,
-          imagePosition: imagePosition
-        });
-      }
-    }
-    prevImagePositionRef.current = imagePosition;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imagePosition]); // Nur bei Änderung der Position, nicht bei jeder receiptData-Änderung
+  // Bild-Zoom und Position werden jetzt in ReceiptImageViewer Komponente verwaltet
+  // und über Callbacks (onZoomChange, onPositionChange) zurückgegeben
 
   if (!show) return null;
 
@@ -3343,20 +2602,65 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                     }}
                     title={article.excludeFromUpdate ? 'Dieser Artikel wird nicht mit den Stammdaten aktualisiert' : 'Doppelklick zum Ausblenden beim Update'}
                   >
-                    {/* Zeile 1: Artikelbezeichnung mit Verknüpfungs-Status */}
+                    {/* Zeile 1: Artikelbezeichnung mit Status */}
                     <div className="d-flex justify-content-between align-items-center mb-1">
+                      <span className="text-theme-primary" style={{ fontWeight: 'bold' }}>{article.name || 'Unbenannt'}</span>
                       <div className="d-flex align-items-center gap-2">
-                        <span className="text-theme-primary" style={{ fontWeight: 'bold' }}>{article.name || 'Unbenannt'}</span>
-                        {article.linkedArticleId && (
-                          <FaCheck style={{ fontSize: '0.9rem', color: '#28a745' }} title="Mit Artikelstamm verknüpft" />
-                        )}
-                        {isArticleComplete(article) && !article.linkedArticleId && (
-                          <FaExclamationTriangle style={{ fontSize: '0.9rem', color: colors.accent || '#ffc107' }} title="Vollständig - wird als neuer Artikel angelegt" />
-                        )}
+                        {(() => {
+                          const status = getArticleStatus(article);
+                          switch (status) {
+                            case 'ignore':
+                              return (
+                                <FaBan 
+                                  style={{ fontSize: '0.9rem', color: colors.textSecondary || '#6c757d' }} 
+                                  title="Wird nicht mit den Stammdaten aktualisiert" 
+                                />
+                              );
+                            case 'warning':
+                              return (
+                                <FaExclamationTriangle 
+                                  style={{ fontSize: '0.9rem', color: colors.accent || '#ffc107' }} 
+                                  title="Artikel ist noch nicht vollständig ausgefüllt" 
+                                />
+                              );
+                            case 'linked':
+                              return (
+                                <FaCheck 
+                                  style={{ fontSize: '0.9rem', color: '#28a745' }} 
+                                  title="Mit Artikelstamm verknüpft" 
+                                />
+                              );
+                            case 'new':
+                              return (
+                                <FaPlus 
+                                  style={{ fontSize: '0.9rem', color: colors.primary || '#007bff' }} 
+                                  title="Vollständig - wird als neuer Artikel angelegt" 
+                                />
+                              );
+                            default:
+                              return null;
+                          }
+                        })()}
+                        <span 
+                          className="badge" 
+                          style={{ 
+                            fontSize: '0.7em',
+                            width: '1.2rem',
+                            height: '1.2rem',
+                            borderRadius: '50%',
+                            backgroundColor: 'transparent',
+                            border: `1px solid ${colors.text}`,
+                            color: colors.text,
+                            padding: 0,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            lineHeight: 1
+                          }}
+                        >
+                          {article.vatRate === 7 ? '2' : article.vatRate === 19 ? '1' : article.vatRate === 0 ? '0' : `${article.vatRate || 19}%`}
+                        </span>
                       </div>
-                      <span className="badge" style={{ fontSize: '0.7em', padding: '0.15rem 0.5rem' }}>
-                        {article.vatRate === 7 ? '2' : article.vatRate === 19 ? '1' : article.vatRate === 0 ? '0' : `${article.vatRate || 19}%`}
-                      </span>
                     </div>
                     
                     {/* Zeile 2: Menge x Gebindeeinheit à Einzelpreis = Gesamtpreis */}
@@ -3481,7 +2785,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               </div>
             </div>
           </div>
-          
+
           {/* Resize-Handle zwischen Beleg-Übersicht und Artikel bearbeiten */}
           <div
             onMouseDown={handleLeftResizeStart}
@@ -3547,13 +2851,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                         <div className="mb-4">
                           <div className="flex flex-wrap -mx-2">
                             {/* Lieferant */}
-                            <div className={`px-2 mb-3 flex-shrink-0 ${
-                              scannedSupplierName && !hideScannedSupplierName && scannedSupplierName.toLowerCase() !== (receiptSupplierId ? getSupplierName(receiptSupplierId).toLowerCase() : receiptSupplierSearchTerm.toLowerCase())
-                                ? 'w-full md:w-1/2'
-                                : !(scannedSupplierName && !hideScannedSupplierName && scannedSupplierName.toLowerCase() !== (receiptSupplierId ? getSupplierName(receiptSupplierId).toLowerCase() : receiptSupplierSearchTerm.toLowerCase()))
-                                  ? 'w-full md:w-1/2'
-                                  : 'w-full md:w-1/2'
-                            }`}>
+                            <div className="px-2 mb-3 flex-shrink-0 w-full md:w-1/2">
                               <label className="form-label form-label-themed">
                                 Lieferant (für alle Artikel)
                               </label>
@@ -3573,7 +2871,32 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                         setShowSupplierDropdown(true);
                                       }
                                     }}
-                                    onFocus={() => setShowSupplierDropdown(true)}
+                                    onFocus={() => {
+                                      // Setze receiptSupplierSearchTerm zurück, damit alle recognizedNames angezeigt werden
+                                      setReceiptSupplierSearchTerm('');
+                                      
+                                      // Debug: Logge Supplier-Info beim Öffnen des Dropdowns
+                                      if (receiptSupplierId) {
+                                        const currentSupplier = suppliers.find(s => s.id === receiptSupplierId) || 
+                                                               state.suppliers.find(s => s.id === receiptSupplierId);
+                                        console.log('🔍 [ReceiptReviewModal] Dropdown geöffnet - Supplier gefunden:', {
+                                          id: currentSupplier?.id,
+                                          name: currentSupplier?.name,
+                                          recognizedNames: currentSupplier?.recognizedNames,
+                                          recognizedNamesType: typeof currentSupplier?.recognizedNames,
+                                          recognizedNamesIsArray: Array.isArray(currentSupplier?.recognizedNames),
+                                          recognizedNamesLength: currentSupplier?.recognizedNames?.length,
+                                          suppliersLength: suppliers.length,
+                                          stateSuppliersLength: state.suppliers.length
+                                        });
+                                      } else {
+                                        console.log('🔍 [ReceiptReviewModal] Dropdown geöffnet - Kein supplierId, zeige alle Lieferanten:', {
+                                          suppliersLength: suppliers.length,
+                                          stateSuppliersLength: state.suppliers.length
+                                        });
+                                      }
+                                      setShowSupplierDropdown(true);
+                                    }}
                                     onBlur={() => {
                                       setTimeout(() => setShowSupplierDropdown(false), 200);
                                     }}
@@ -3583,15 +2906,48 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                         // Hier könnte man die Navigation implementieren
                                       } else if (e.key === 'Enter') {
                                         e.preventDefault();
-                                        // Wähle ersten passenden Lieferanten aus oder "Kein Lieferant"
-                                        if (receiptSupplierSearchTerm === '' || receiptSupplierSearchTerm === 'Kein Lieferant ausgewählt!') {
-                                          handleReceiptSupplierSelect(null);
+                                        
+                                        // Wenn supplierId vorhanden: Suche in recognizedNames
+                                        if (receiptSupplierId) {
+                                          const currentSupplier = suppliers.find(s => s.id === receiptSupplierId) || 
+                                                                 state.suppliers.find(s => s.id === receiptSupplierId);
+                                          
+                                          // Stelle sicher, dass recognizedNames ein Array ist
+                                          let recognizedNamesArray: string[] = [];
+                                          if (currentSupplier?.recognizedNames) {
+                                            if (Array.isArray(currentSupplier.recognizedNames)) {
+                                              recognizedNamesArray = currentSupplier.recognizedNames;
+                                            } else if (typeof currentSupplier.recognizedNames === 'string') {
+                                              // Falls es ein JSON-String ist, parse es
+                                              try {
+                                                recognizedNamesArray = JSON.parse(currentSupplier.recognizedNames);
+                                              } catch (e) {
+                                                console.warn('⚠️ [ReceiptReviewModal] Fehler beim Parsen von recognizedNames:', e);
+                                              }
+                                            }
+                                          }
+                                          
+                                          if (currentSupplier && recognizedNamesArray.length > 0) {
+                                            const filtered = recognizedNamesArray.filter((name: string) => 
+                                              name.toLowerCase().includes(receiptSupplierSearchTerm.toLowerCase())
+                                            );
+                                            if (filtered.length > 0) {
+                                              handleRecognizedNameSelect(filtered[0]);
+                                            } else if (receiptSupplierSearchTerm === currentSupplier.name) {
+                                              handleRecognizedNameSelect(currentSupplier.name);
+                                            }
+                                          }
                                         } else {
-                                          const filtered = suppliers.filter(s => 
-                                            s.name.toLowerCase().includes(receiptSupplierSearchTerm.toLowerCase())
-                                          );
-                                          if (filtered.length > 0) {
-                                            handleReceiptSupplierSelect(filtered[0]);
+                                          // Kein supplierId: Suche in allen Lieferanten
+                                          if (receiptSupplierSearchTerm === '' || receiptSupplierSearchTerm === 'Kein Lieferant ausgewählt!') {
+                                            handleReceiptSupplierSelect(null);
+                                          } else {
+                                            const filtered = suppliers.filter(s => 
+                                              s.name.toLowerCase().includes(receiptSupplierSearchTerm.toLowerCase())
+                                            );
+                                            if (filtered.length > 0) {
+                                              handleReceiptSupplierSelect(filtered[0]);
+                                            }
                                           }
                                         }
                                       }
@@ -3602,18 +2958,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                       color: !receiptSupplierId ? 'var(--theme-text-secondary)' : 'var(--theme-text)'
                                     }}
                                   />
-                                  {receiptSupplierId && scannedSupplierName && !hideScannedSupplierName && scannedSupplierName.toLowerCase() !== getSupplierName(receiptSupplierId).toLowerCase() && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-input"
-                                      onClick={() => {
-                                        setHideScannedSupplierName(true);
-                                      }}
-                                      title="Gewählten Lieferanten übernehmen (erkannten Namen ignorieren)"
-                                    >
-                                      <FaCheck />
-                                    </button>
-                                  )}
                                 </div>
                                 {showSupplierDropdown && (
                                   <div className="absolute w-full" style={{
@@ -3627,241 +2971,218 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                     borderRadius: '0 0 0.375rem 0.375rem',
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                                   }}>
-                                    {/* Option: Kein Lieferant ausgewählt */}
-                                    <div
-                                      className="px-3 py-2 cursor-pointer"
-                                      onClick={() => handleReceiptSupplierSelect(null)}
-                                      style={{
-                                        color: colors.text,
-                                        borderBottom: `1px solid ${colors.cardBorder}`,
-                                        cursor: 'pointer',
-                                        backgroundColor: !receiptSupplierId ? (colors.accent || colors.primary) + '20' : 'transparent',
-                                        fontStyle: 'italic'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        if (receiptSupplierId) {
-                                          e.currentTarget.style.backgroundColor = colors.secondary;
-                                        }
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        if (receiptSupplierId) {
-                                          e.currentTarget.style.backgroundColor = 'transparent';
-                                        }
-                                      }}
-                                    >
-                                      Kein Lieferant ausgewählt!
-                                    </div>
-                                    
-                                    {/* Gefilterte Lieferanten */}
                                     {(() => {
-                                      const filteredSuppliers = receiptSupplierSearchTerm
-                                        ? suppliers.filter(s => 
-                                            s.name.toLowerCase().includes(receiptSupplierSearchTerm.toLowerCase())
-                                          )
-                                        : suppliers;
-                                      
-                                      return filteredSuppliers.length > 0 ? (
-                                        filteredSuppliers.map((supplier) => (
-                                          <div
-                                            key={supplier.id}
-                                            className="px-3 py-2 cursor-pointer"
-                                            onClick={() => handleReceiptSupplierSelect(supplier)}
-                                            style={{
-                                              color: colors.text,
-                                              borderBottom: `1px solid ${colors.cardBorder}`,
-                                              cursor: 'pointer',
-                                              backgroundColor: receiptSupplierId === supplier.id ? (colors.accent || colors.primary) + '20' : 'transparent'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                              if (receiptSupplierId !== supplier.id) {
-                                                e.currentTarget.style.backgroundColor = colors.secondary;
-                                              }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              if (receiptSupplierId !== supplier.id) {
-                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                              }
-                                            }}
-                                          >
-                                            <div style={{ fontWeight: 'bold' }}>{supplier.name}</div>
-                                            <small style={{ color: colors.accent || colors.primary }}>{supplier.contactPerson}</small>
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
-                                          Kein Lieferant gefunden
-                                        </div>
-                                      );
-                                    })()}
-                                    
-                                    {/* Option: Neuen Lieferanten anlegen */}
-                                    {receiptSupplierSearchTerm && !suppliers.some(s => s.name.toLowerCase() === receiptSupplierSearchTerm.toLowerCase()) && (
-                                      <div
-                                        className="px-3 py-2 cursor-pointer"
-                                        onClick={() => {
-                                          if (onNewSupplier) {
-                                            onNewSupplier(receiptSupplierSearchTerm);
+                                      // Wenn supplierId vorhanden: Zeige recognizedNames
+                                      if (receiptSupplierId) {
+                                        const supplierFromProps = suppliers.find(s => s.id === receiptSupplierId);
+                                        const supplierFromState = state.suppliers.find(s => s.id === receiptSupplierId);
+                                        const currentSupplier = supplierFromProps || supplierFromState;
+                                        
+                                        // Debug: Logge beide Quellen
+                                        console.log('🔍 [ReceiptReviewModal] Supplier-Suche:', {
+                                          receiptSupplierId,
+                                          supplierFromProps: supplierFromProps ? {
+                                            id: supplierFromProps.id,
+                                            name: supplierFromProps.name,
+                                            recognizedNames: supplierFromProps.recognizedNames,
+                                            recognizedNamesType: typeof supplierFromProps.recognizedNames,
+                                            recognizedNamesIsArray: Array.isArray(supplierFromProps.recognizedNames)
+                                          } : null,
+                                          supplierFromState: supplierFromState ? {
+                                            id: supplierFromState.id,
+                                            name: supplierFromState.name,
+                                            recognizedNames: supplierFromState.recognizedNames,
+                                            recognizedNamesType: typeof supplierFromState.recognizedNames,
+                                            recognizedNamesIsArray: Array.isArray(supplierFromState.recognizedNames)
+                                          } : null,
+                                          currentSupplier: currentSupplier ? {
+                                            id: currentSupplier.id,
+                                            name: currentSupplier.name,
+                                            recognizedNames: currentSupplier.recognizedNames,
+                                            recognizedNamesType: typeof currentSupplier.recognizedNames,
+                                            recognizedNamesIsArray: Array.isArray(currentSupplier.recognizedNames)
+                                          } : null
+                                        });
+                                        
+                                        // Stelle sicher, dass recognizedNames ein Array ist
+                                        let recognizedNamesArray: string[] = [];
+                                        if (currentSupplier?.recognizedNames) {
+                                          if (Array.isArray(currentSupplier.recognizedNames)) {
+                                            recognizedNamesArray = currentSupplier.recognizedNames;
+                                          } else if (typeof currentSupplier.recognizedNames === 'string') {
+                                            // Falls es ein JSON-String ist, parse es
+                                            try {
+                                              recognizedNamesArray = JSON.parse(currentSupplier.recognizedNames);
+                                            } catch (e) {
+                                              console.warn('⚠️ [ReceiptReviewModal] Fehler beim Parsen von recognizedNames:', e);
+                                            }
                                           }
-                                        }}
-                                        style={{
-                                          color: colors.accent || colors.primary,
-                                          borderTop: `2px solid ${colors.accent || colors.primary}`,
-                                          borderBottom: `1px solid ${colors.cardBorder}`,
-                                          cursor: 'pointer',
-                                          fontWeight: 'bold'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                          e.currentTarget.style.backgroundColor = colors.secondary;
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          e.currentTarget.style.backgroundColor = 'transparent';
-                                        }}
-                                      >
-                                        "{receiptSupplierSearchTerm}" als neuen Lieferanten anlegen
-                                      </div>
-                                    )}
+                                        }
+                                        
+                                        if (currentSupplier && recognizedNamesArray.length > 0) {
+                                          // Filtere recognizedNames: entferne aktuellen Namen und filtere nach Suchbegriff
+                                          const filteredNames = recognizedNamesArray
+                                            .filter((name: string) => name !== currentSupplier.name) // Entferne aktuellen Namen
+                                            .filter((name: string) => 
+                                              receiptSupplierSearchTerm
+                                                ? name.toLowerCase().includes(receiptSupplierSearchTerm.toLowerCase())
+                                                : true
+                                            );
+                                          
+                                          return filteredNames.length > 0 ? (
+                                            <>
+                                              {/* Zeige recognizedNames ohne den aktuellen Namen */}
+                                              {filteredNames.map((name: string, index: number) => {
+                                                return (
+                                                  <div
+                                                    key={`recognized-${index}`}
+                                                    className="px-3 py-2 cursor-pointer"
+                                                    onClick={() => handleRecognizedNameSelect(name)}
+                                                    style={{
+                                                      color: colors.text,
+                                                      borderBottom: index < filteredNames.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                                                      cursor: 'pointer',
+                                                      backgroundColor: receiptSupplierSearchTerm === name ? (colors.accent || colors.primary) + '20' : 'transparent'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                      if (receiptSupplierSearchTerm !== name) {
+                                                        e.currentTarget.style.backgroundColor = colors.secondary;
+                                                      }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                      if (receiptSupplierSearchTerm !== name) {
+                                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                                      }
+                                                    }}
+                                                  >
+                                                    <div>{name}</div>
+                                                    <small style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
+                                                      Erkannter Name
+                                                    </small>
+                                                  </div>
+                                                );
+                                              })}
+                                            </>
+                                          ) : (
+                                            <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
+                                              Kein erkanntes Name gefunden
+                                            </div>
+                                          );
+                                        } else {
+                                          // Keine recognizedNames vorhanden
+                                          return (
+                                            <div className="px-3 py-2" style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
+                                              Keine erkannten Namen für diesen Lieferanten vorhanden
+                                            </div>
+                                          );
+                                        }
+                                      } else {
+                                        // Kein supplierId: Zeige alle Lieferanten
+                                        return (
+                                          <>
+                                            {/* Option: Kein Lieferant ausgewählt */}
+                                            <div
+                                              className="px-3 py-2 cursor-pointer"
+                                              onClick={() => handleReceiptSupplierSelect(null)}
+                                              style={{
+                                                color: colors.text,
+                                                borderBottom: `1px solid ${colors.cardBorder}`,
+                                                cursor: 'pointer',
+                                                backgroundColor: !receiptSupplierId ? (colors.accent || colors.primary) + '20' : 'transparent',
+                                                fontStyle: 'italic'
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                if (receiptSupplierId) {
+                                                  e.currentTarget.style.backgroundColor = colors.secondary;
+                                                }
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                if (receiptSupplierId) {
+                                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                                }
+                                              }}
+                                            >
+                                              Kein Lieferant ausgewählt!
+                                            </div>
+                                            
+                                            {/* Gefilterte Lieferanten */}
+                                            {(() => {
+                                              const filteredSuppliers = receiptSupplierSearchTerm
+                                                ? suppliers.filter(s => 
+                                                    s.name.toLowerCase().includes(receiptSupplierSearchTerm.toLowerCase())
+                                                  )
+                                                : suppliers;
+                                              
+                                              return filteredSuppliers.length > 0 ? (
+                                                filteredSuppliers.map((supplier) => (
+                                                  <div
+                                                    key={supplier.id}
+                                                    className="px-3 py-2 cursor-pointer"
+                                                    onClick={() => handleReceiptSupplierSelect(supplier)}
+                                                    style={{
+                                                      color: colors.text,
+                                                      borderBottom: `1px solid ${colors.cardBorder}`,
+                                                      cursor: 'pointer',
+                                                      backgroundColor: receiptSupplierId === supplier.id ? (colors.accent || colors.primary) + '20' : 'transparent'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                      if (receiptSupplierId !== supplier.id) {
+                                                        e.currentTarget.style.backgroundColor = colors.secondary;
+                                                      }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                      if (receiptSupplierId !== supplier.id) {
+                                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                                      }
+                                                    }}
+                                                  >
+                                                    <div style={{ fontWeight: 'bold' }}>{supplier.name}</div>
+                                                    <small style={{ color: colors.accent || colors.primary }}>{supplier.contactPerson}</small>
+                                                  </div>
+                                                ))
+                                              ) : (
+                                                <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
+                                                  Kein Lieferant gefunden
+                                                </div>
+                                              );
+                                            })()}
+                                            
+                                            {/* Option: Neuen Lieferanten anlegen */}
+                                            {receiptSupplierSearchTerm && !suppliers.some(s => s.name.toLowerCase() === receiptSupplierSearchTerm.toLowerCase()) && (
+                                              <div
+                                                className="px-3 py-2 cursor-pointer"
+                                                onClick={() => {
+                                                  if (onNewSupplier) {
+                                                    onNewSupplier(receiptSupplierSearchTerm);
+                                                  }
+                                                }}
+                                                style={{
+                                                  color: colors.accent || colors.primary,
+                                                  borderTop: `2px solid ${colors.accent || colors.primary}`,
+                                                  borderBottom: `1px solid ${colors.cardBorder}`,
+                                                  cursor: 'pointer',
+                                                  fontWeight: 'bold'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  e.currentTarget.style.backgroundColor = colors.secondary;
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                                }}
+                                              >
+                                                "{receiptSupplierSearchTerm}" als neuen Lieferanten anlegen
+                                              </div>
+                                            )}
+                                          </>
+                                        );
+                                      }
+                                    })()}
                                   </div>
                                 )}
                               </div>
                             </div>
                             
-                            {/* Erkannte Lieferantenname (wenn nicht exakt übereinstimmend und nicht ausgeblendet) */}
-                            {scannedSupplierName && !hideScannedSupplierName && scannedSupplierName.toLowerCase() !== (receiptSupplierId ? getSupplierName(receiptSupplierId).toLowerCase() : receiptSupplierSearchTerm.toLowerCase()) && (
-                              <div className="w-full md:w-1/2 px-2 mb-3 flex-shrink-0">
-                                <label className="form-label form-label-themed">
-                                  Erkannt (aus Beleg)
-                                </label>
-                                <div className="input-group">
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={scannedSupplierName}
-                                    onChange={(e) => setScannedSupplierName(e.target.value)}
-                                    placeholder="Erkannt (aus Beleg)"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-input"
-                                    onClick={async () => {
-                                      if (!scannedSupplierName.trim()) return;
-                                      
-                                      if (receiptSupplierId) {
-                                        // Update vorhandenen Lieferanten
-                                        const supplier = suppliers.find(s => s.id === receiptSupplierId);
-                                        if (supplier) {
-                                          const updatedSupplier = {
-                                            ...supplier,
-                                            name: scannedSupplierName.trim()
-                                          };
-                                          
-                                          try {
-                                            // Aktualisiere über StorageLayer
-                                            const storageMode = localStorage.getItem('chef_storage_mode');
-                                            if (storageMode === 'cloud') {
-                                              const response = await fetch(`http://localhost:3001/api/v1/suppliers/${supplier.id}`, {
-                                                method: 'PUT',
-                                                headers: {
-                                                  'Content-Type': 'application/json',
-                                                },
-                                                body: JSON.stringify(updatedSupplier)
-                                              });
-                                              
-                                              if (!response.ok) {
-                                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                                              }
-                                              
-                                              const result = await response.json();
-                                              updatedSupplier.id = result.data.id;
-                                            }
-                                            
-                                            // Aktualisiere lokalen State
-                                            dispatch({ 
-                                              type: 'UPDATE_SUPPLIER', 
-                                              payload: { id: supplier.id, supplier: updatedSupplier }
-                                            });
-                                            
-                                            // Aktualisiere die Anzeige
-                                            setReceiptSupplierSearchTerm(scannedSupplierName.trim());
-                                            setReceiptSupplierId(supplier.id);
-                                            
-                                            console.log('✅ Lieferant aktualisiert:', scannedSupplierName.trim());
-                                          } catch (error) {
-                                            console.error('❌ Fehler beim Aktualisieren des Lieferanten:', error);
-                                          }
-                                        }
-                                      } else {
-                                        // Erstelle neuen Lieferanten
-                                        const newSupplier: SupplierType = {
-                                          id: UUIDUtils.generateId(),
-                                          name: scannedSupplierName.trim(),
-                                          contactPerson: '',
-                                          email: '',
-                                          phoneNumbers: [],
-                                          address: {
-                                            street: '',
-                                            zipCode: '',
-                                            city: '',
-                                            country: 'Deutschland'
-                                          },
-                                          website: '',
-                                          notes: '',
-                                          isNew: true,
-                                          isDirty: true,
-                                          syncStatus: 'pending'
-                                        };
-                                        
-                                        try {
-                                          // Speichere über StorageLayer
-                                          const success = await storageLayer.save('suppliers', [newSupplier]);
-                                          
-                                          if (!success) {
-                                            throw new Error('Fehler beim Speichern des neuen Lieferanten');
-                                          }
-                                          
-                                          // Aktualisiere globalen State
-                                          dispatch({ 
-                                            type: 'ADD_SUPPLIER', 
-                                            payload: newSupplier 
-                                          });
-                                          
-                                          // Konvertiere zu Supplier (useArticleForm Typ) für die Auswahl
-                                          const supplierForSelection: Supplier = {
-                                            id: newSupplier.id,
-                                            name: newSupplier.name,
-                                            contactPerson: newSupplier.contactPerson || '',
-                                            email: newSupplier.email || '',
-                                            phoneNumbers: newSupplier.phoneNumbers.map(phone => ({
-                                              type: phone.type,
-                                              number: phone.number
-                                            })),
-                                            address: newSupplier.address,
-                                            website: newSupplier.website || '',
-                                            notes: newSupplier.notes || ''
-                                          };
-                                          
-                                          // Wähle den neuen Lieferanten aus
-                                          handleReceiptSupplierSelect(supplierForSelection);
-                                          
-                                          console.log('✅ Neuer Lieferant erstellt:', scannedSupplierName.trim());
-                                        } catch (error) {
-                                          console.error('❌ Fehler beim Erstellen des neuen Lieferanten:', error);
-                                        }
-                                      }
-                                    }}
-                                    title={receiptSupplierId ? "Lieferantennamen übernehmen" : "Neuen Lieferanten erstellen"}
-                                  >
-                                    {receiptSupplierId ? (
-                                      <FaCheck />
-                                    ) : (
-                                      <FaPlus />
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Belegdatum und Belegnummer (ausgeblendet wenn erkanntes Feld sichtbar ist) */}
-                            {!(scannedSupplierName && !hideScannedSupplierName && scannedSupplierName.toLowerCase() !== (receiptSupplierId ? getSupplierName(receiptSupplierId).toLowerCase() : receiptSupplierSearchTerm.toLowerCase())) && (
+                            {/* Belegdatum und Belegnummer */}
                               <>
                                 <div className="w-full md:w-1/5 px-2 mb-3 flex-shrink-0">
                                   <label className="form-label form-label-themed">
@@ -3890,7 +3211,6 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                   />
                                 </div>
                               </>
-                            )}
                           </div>
                         </div>
 
@@ -4010,9 +3330,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                           className="btn btn-outline-input"
                           title="Artikel aus Bestand übernehmen"
                           onClick={() => {
-                            // Setze Suchbegriff auf längstes Wort aus Artikelname für automatische Zuordnung
+                            // Setze Suchbegriff auf längstes Wort aus Artikelname (name, nicht nameOCR) für automatische Zuordnung
                             const currentArticle = editedArticles[selectedArticleIndex];
-                            const articleName = currentArticle.nameOCR || currentArticle.name || '';
+                            const articleName = currentArticle.name || '';
                             // Extrahiere das längste Wort aus dem Artikelnamen
                             const words = articleName.trim().split(/\s+/).filter(word => word.length > 0);
                             const longestWord = words.length > 0 
@@ -4174,7 +3494,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
 
                               switch (e.key) {
                                 case 'ArrowDown':
-                                  e.preventDefault();
+                                e.preventDefault();
                                   setShowTaxAccountDropdown(true);
                                   setSelectedTaxAccountIndex(prev => {
                                     if (prev < filtered.length - 1) return prev + 1;
@@ -4204,12 +3524,12 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                     const extractedVatRate = extractVatRateFromAccountName(account.name);
                                     if (extractedVatRate !== null) {
                                       setReceiptVatRate(extractedVatRate);
-                                      console.log(`✅ MwSt-Satz ${extractedVatRate}% aus Kontonamen "${account.name}" ermittelt`);
+                                      // console.log(`✅ MwSt-Satz ${extractedVatRate}% aus Kontonamen "${account.name}" ermittelt`);
                                       // vatRate ermittelt: Fokus direkt zu Gebindeeinheit
                                       setTimeout(() => {
                                         if (bundleUnitInputRef.current) {
                                           bundleUnitInputRef.current.focus();
-                                        }
+                                }
                                       }, 100);
                                     } else {
                                       // Keine vatRate ermittelt: Fokus auf MwSt-Satz-Feld setzen
@@ -4238,8 +3558,8 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                 
                                 case 'Escape':
                                   e.preventDefault();
-                                  setShowTaxAccountDropdown(false);
-                                  setTaxAccountSearchTerm('');
+                                setShowTaxAccountDropdown(false);
+                                setTaxAccountSearchTerm('');
                                   setSelectedTaxAccountIndex(-1);
                                   break;
                                 
@@ -4266,17 +3586,17 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                             ref={taxAccountDropdownListRef}
                             className="absolute" 
                             style={{
-                              top: '100%',
-                              left: 0,
-                              right: 0,
-                              width: '100%',
-                              maxHeight: '300px',
-                              overflowY: 'auto',
-                              zIndex: 10000,
-                              backgroundColor: colors.card,
-                              border: `1px solid ${colors.cardBorder}`,
-                              borderRadius: '0 0 0.375rem 0.375rem',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            width: '100%',
+                            maxHeight: '300px',
+                            overflowY: 'auto',
+                            zIndex: 10000,
+                            backgroundColor: colors.card,
+                            border: `1px solid ${colors.cardBorder}`,
+                            borderRadius: '0 0 0.375rem 0.375rem',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                             }}
                           >
                             {(() => {
@@ -4304,7 +3624,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                     const extractedVatRate = extractVatRateFromAccountName(account.name);
                                     if (extractedVatRate !== null) {
                                       setReceiptVatRate(extractedVatRate);
-                                      console.log(`✅ MwSt-Satz ${extractedVatRate}% aus Kontonamen "${account.name}" ermittelt`);
+                                      // console.log(`✅ MwSt-Satz ${extractedVatRate}% aus Kontonamen "${account.name}" ermittelt`);
                                       // vatRate ermittelt: Fokus direkt zu Gebindeeinheit
                                       setTimeout(() => {
                                         if (bundleUnitInputRef.current) {
@@ -4331,31 +3651,31 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                       setEditedArticles(updatedArticles);
                                     }
                                   }}
-                                    style={{
-                                      color: colors.text,
-                                      borderBottom: index < filteredArray.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
-                                      cursor: 'pointer',
+                                  style={{
+                                    color: colors.text,
+                                    borderBottom: index < filteredArray.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                                    cursor: 'pointer',
                                       backgroundColor: selectedTaxAccountIndex === index ? (colors.accent || colors.primary) + '20' : (selectedTaxAccount === account.number ? (colors.accent || colors.primary) + '10' : 'transparent'),
-                                      minHeight: '38px'
-                                    }}
+                                    minHeight: '38px'
+                                  }}
                                     onMouseEnter={() => {
                                       setSelectedTaxAccountIndex(index);
-                                    }}
-                                  >
-                                    <div style={{ fontSize: '0.9rem', fontWeight: selectedTaxAccount === account.number ? 'bold' : 'normal' }}>
-                                      <span style={{ display: 'inline-block', width: '50px', fontWeight: 'bold' }}>{account.number}</span>
-                                      <span>{account.name}</span>
-                                    </div>
+                                  }}
+                                >
+                                  <div style={{ fontSize: '0.9rem', fontWeight: selectedTaxAccount === account.number ? 'bold' : 'normal' }}>
+                                    <span style={{ display: 'inline-block', width: '50px', fontWeight: 'bold' }}>{account.number}</span>
+                                    <span>{account.name}</span>
                                   </div>
+                                </div>
                                 ))
                               ) : (
-                                <div className="px-3 py-2" style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
-                                  Keine Konten gefunden
+                              <div className="px-3 py-2" style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
+                                Keine Konten gefunden
                                 </div>
                               );
                             })()}
-                          </div>
-                        )}
+                              </div>
+                            )}
                       </div>
                     </div>
                     <div className="md:w-1/3 px-2 mb-3">
@@ -4562,18 +3882,18 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                 ref={bundleUnitDropdownRef}
                                 className="bundle-unit-dropdown" 
                                 style={{
-                                  position: 'fixed',
-                                  width: '200%',
-                                  maxWidth: '300px',
-                                  zIndex: 1001,
-                                  maxHeight: '200px',
-                                  overflowY: 'auto',
-                                  backgroundColor: colors.card,
-                                  border: `1px solid ${colors.cardBorder}`,
-                                  borderRadius: '0 0 0.375rem 0.375rem',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                  top: `${rect.bottom}px`,
-                                  left: `${rect.left}px`
+                                position: 'fixed',
+                                width: '200%',
+                                maxWidth: '300px',
+                                zIndex: 1001,
+                                maxHeight: '200px',
+                                overflowY: 'auto',
+                                backgroundColor: colors.card,
+                                border: `1px solid ${colors.cardBorder}`,
+                                borderRadius: '0 0 0.375rem 0.375rem',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                top: `${rect.bottom}px`,
+                                left: `${rect.left}px`
                                 }}
                               >
                               {getFilteredBundleUnits().length > 0 ? (
@@ -4608,7 +3928,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                   Keine Einheit gefunden
                                 </div>
                               )}
-                              {bundleUnitSearchTerm && !UNITS.includes(bundleUnitSearchTerm) && (
+                              {bundleUnitSearchTerm && !getFilteredBundleUnits().some(u => u.toLowerCase() === bundleUnitSearchTerm.toLowerCase()) && (
                                 <div
                                   className="px-3 py-2 cursor-pointer"
                                   onClick={() => handleBundleUnitSelect(bundleUnitSearchTerm)}
@@ -4866,18 +4186,18 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                 ref={contentUnitDropdownRef}
                                 className="content-unit-dropdown" 
                                 style={{
-                                  position: 'fixed',
-                                  width: '200%',
-                                  maxWidth: '300px',
-                                  zIndex: 1001,
-                                  maxHeight: '200px',
-                                  overflowY: 'auto',
-                                  backgroundColor: colors.card,
-                                  border: `1px solid ${colors.cardBorder}`,
-                                  borderRadius: '0 0 0.375rem 0.375rem',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                  top: `${rect.bottom}px`,
-                                  left: `${rect.left}px`
+                                position: 'fixed',
+                                width: '200%',
+                                maxWidth: '300px',
+                                zIndex: 1001,
+                                maxHeight: '200px',
+                                overflowY: 'auto',
+                                backgroundColor: colors.card,
+                                border: `1px solid ${colors.cardBorder}`,
+                                borderRadius: '0 0 0.375rem 0.375rem',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                top: `${rect.bottom}px`,
+                                left: `${rect.left}px`
                                 }}
                               >
                               {getFilteredContentUnits().length > 0 ? (
@@ -4912,7 +4232,7 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                                   Keine Einheit gefunden
                                 </div>
                               )}
-                              {contentUnitSearchTerm && !UNITS.includes(contentUnitSearchTerm) && (
+                              {contentUnitSearchTerm && !getFilteredContentUnits().some(u => u.toLowerCase() === contentUnitSearchTerm.toLowerCase()) && (
                                 <div
                                   className="px-3 py-2 cursor-pointer"
                                   onClick={() => handleContentUnitSelect(contentUnitSearchTerm)}
@@ -5087,344 +4407,50 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
               </button>
               <div className="d-flex align-items-center gap-2">
                 <button
-                  className="btn btn-link p-0"
-                  onClick={() => setIsCompleted(!isCompleted)}
-                  style={{ 
-                    color: isCompleted ? '#28a745' : colors.textSecondary,
-                    fontSize: '1.5rem',
-                    transition: 'all 0.2s'
-                  }}
-                  title={isCompleted ? 'Beleg als fertig markiert' : 'Beleg als fertig markieren'}
-                >
-                  {isCompleted ? <FaCheckCircle /> : <FaClock />}
-                </button>
-                <button
                   className="btn btn-outline-primary"
                   onClick={handleSave}
-                  disabled={completeArticlesCount === 0}
                 >
                   <FaSave className="me-1" />
-                  {isCompleted 
-                    ? (completeArticlesCount > 0 
-                        ? `${completeArticlesCount} Artikel übernehmen`
-                        : 'Keine vollständigen Artikel')
-                    : 'Beleg Speichern'
-                  }
+                  Beleg Speichern
                 </button>
               </div>
             </div>
           </div>
           
-          {/* Resize-Handle zwischen Artikel bearbeiten und Original-Beleg */}
-          {imageUrl && (
-            <>
-              <div
-                onMouseDown={handleRightResizeStart}
-                style={{
-                  width: '8px',
-                  cursor: 'col-resize',
-                  backgroundColor: isResizingRight ? colors.primary : 'transparent',
-                  flexShrink: 0,
-                  position: 'relative',
-                  margin: '0',
-                  transition: 'background-color 0.2s'
-                }}
-                title="Ziehen zum Anpassen der Breite"
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: '50%',
-                    top: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '2px',
-                    height: '40px',
-                    backgroundColor: colors.cardBorder || '#dee2e6',
-                    borderRadius: '1px'
-                  }}
-                />
-              </div>
-              
-              {/* Rechte Seite: Bildansicht (Original-Beleg) */}
-              <div 
-                className="card"
-                style={{
-                  width: `${rightPanelWidth}px`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  flexShrink: 0,
-                  maxHeight: '90vh',
-                  height: '90vh'
-                }}
-              >
-              {/* Header */}
-              <div 
-                className="card-header"
-                style={{ 
-                  flexShrink: 0,
-                  padding: '0.75rem'
-                }}
-              >
-                <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0 form-label-themed">Original-Beleg</h5>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      className="btn btn-link p-0"
-                      onClick={() => setShowJsonDialog(true)}
-                      style={{ color: colors.text }}
-                      title="Scan-Ergebnis als JSON anzeigen"
-                    >
-                      <FaCode />
-                    </button>
-                    <button
-                      className="btn btn-link p-0"
-                      onClick={() => setShowPrintPreview(true)}
-                      style={{ color: colors.text }}
-                      title="Druck-Preview öffnen"
-                    >
-                      <FaPrint />
-                    </button>
-                    <button
-                      className="btn btn-link p-0"
-                      onClick={() => {
-                        setImageZoom(1);
-                        setImagePosition({ x: 0, y: 0 });
-                      }}
-                      style={{ color: colors.text }}
-                      title="Zoom und Position zurücksetzen"
-                    >
-                      <FaImage />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bildansicht */}
-              <div 
-                ref={imageContainerRef}
-                className="card-body"
-                style={{
-                  overflow: 'hidden',
-                  flex: 1,
-                  padding: '0.75rem',
-                  position: 'relative',
-                  backgroundColor: '#f5f5f5',
-                  cursor: (isPDF && displayPdfCanvasUrls.length === 0) ? 'default' : (isDragging ? 'grabbing' : 'grab')
-                }}
-                onMouseDown={(isPDF && displayPdfCanvasUrls.length === 0) ? undefined : handleImageMouseDown}
-              >
-                {isPDF && displayPdfCanvasUrls.length > 0 ? (
-                  // PDF als Canvas-Bild anzeigen (mit Zoom/Pan)
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) translate(-50%, -50%) scale(${imageZoom})`,
-                      transformOrigin: 'center center',
-                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-                    }}
-                  >
-                    <img
-                      src={displayPdfCanvasUrls[currentPdfPage]}
-                      alt={`PDF-Beleg Seite ${currentPdfPage + 1}`}
-                      style={{
-                        maxWidth: '100%',
-                        height: 'auto',
-                        display: 'block',
-                        userSelect: 'none',
-                        pointerEvents: 'none'
-                      }}
-                      draggable={false}
-                      onError={(e) => {
-                        console.error('❌ [PDF-CANVAS] Fehler beim Laden des PDF-Canvas:', e);
-                        e.currentTarget.style.display = 'none';
-                      }}
-                      onLoad={() => {
-                        console.log(`✅ [PDF-CANVAS] PDF-Seite ${currentPdfPage + 1} erfolgreich geladen`);
-                      }}
-                    />
-                  </div>
-                ) : isPDF && !imageUrl ? (
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    height: '100%',
-                    color: colors.text 
-                  }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <p>PDF wird geladen...</p>
-                    </div>
-                  </div>
-                ) : isPDF && imageUrl && displayPdfCanvasUrls.length === 0 ? (
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    height: '100%',
-                    color: colors.text 
-                  }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <p>PDF wird gerendert...</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) translate(-50%, -50%) scale(${imageZoom})`,
-                      transformOrigin: 'center center',
-                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-                    }}
-                  >
-                    <img
-                      src={imageUrl}
-                      alt="Original-Beleg"
-                      style={{
-                        maxWidth: '100%',
-                        height: 'auto',
-                        display: 'block',
-                        userSelect: 'none',
-                        pointerEvents: 'none'
-                      }}
-                      draggable={false}
-                      onError={(e) => {
-                        // Nur Fehler loggen wenn es kein PDF ist (PDFs werden im iframe geladen)
-                        if (!isPDF) {
-                          console.error('🖼️ [IMAGE] Fehler beim Laden des Bildes:', imageUrl);
-                          e.currentTarget.style.display = 'none';
-                        }
-                      }}
-                      onLoad={() => {
-                        // Nur Loggen wenn es kein PDF ist
-                        if (!isPDF) {
-                          console.log('🖼️ [IMAGE] Bild erfolgreich geladen:', imageUrl);
-                        }
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Steuerkonto-Summen oberhalb des Footers */}
-              {taxAccountTotals.length > 0 && (
-                <div 
-                  style={{
-                    flexShrink: 0,
-                    padding: '0.75rem',
-                    backgroundColor: 'transparent',
-                    borderTop: `1px solid ${colors.cardBorder}`,
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: colors.text }}>
-                    Artikelsummen nach Steuerkonten:
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-                    {taxAccountTotals.map((item) => (
-                      <div 
-                        key={item.accountNumber}
-                        style={{
-                          color: colors.text,
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '0.25rem',
-                          backgroundColor: colors.secondary + '80'
-                        }}
-                      >
-                        <span style={{ fontWeight: 'bold' }}>
-                          {item.total.toFixed(2).replace('.', ',')} €
-                        </span>
-                        {' - '}
-                        <span style={{ fontWeight: 'bold' }}>{item.accountNumber}</span>
-                        {' - '}
-                        <span>{item.accountName}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Footer mit Zoom-Anzeige und Seitennavigation für PDFs */}
-              {(!isPDF || (isPDF && displayPdfCanvasUrls.length > 0)) && (
-                <div 
-                  className="card-footer"
-                  style={{
-                    flexShrink: 0,
-                    padding: '0.5rem 0.75rem',
-                    fontSize: '0.85rem',
-                    color: colors.textSecondary
-                  }}
-                >
-                  <div className="d-flex justify-content-between align-items-center">
-                    <div className="d-flex align-items-center gap-3">
-                      <span>Zoom: {Math.round(imageZoom * 100)}%</span>
-                      {isPDF && displayPdfCanvasUrls.length > 1 && (
-                        <div className="d-flex align-items-center gap-2">
-                          <button
-                            onClick={() => {
-                              if (currentPdfPage > 0) {
-                                setCurrentPdfPage(currentPdfPage - 1);
-                                // Reset Zoom und Position beim Seitenwechsel
-                                setImageZoom(1);
-                                setImagePosition({ x: 0, y: 0 });
-                              }
-                            }}
-                            disabled={currentPdfPage === 0}
-                            style={{
-                              background: 'transparent',
-                              border: `1px solid ${colors.cardBorder}`,
-                              borderRadius: '0.25rem',
-                              padding: '0.25rem 0.5rem',
-                              color: colors.text,
-                              cursor: currentPdfPage === 0 ? 'not-allowed' : 'pointer',
-                              opacity: currentPdfPage === 0 ? 0.5 : 1
-                            }}
-                            title="Vorherige Seite"
-                          >
-                            <FaChevronLeft />
-                          </button>
-                          <span>
-                            Seite {currentPdfPage + 1} von {displayPdfCanvasUrls.length}
-                          </span>
-                          <button
-                            onClick={() => {
-                              if (currentPdfPage < displayPdfCanvasUrls.length - 1) {
-                                setCurrentPdfPage(currentPdfPage + 1);
-                                // Reset Zoom und Position beim Seitenwechsel
-                                setImageZoom(1);
-                                setImagePosition({ x: 0, y: 0 });
-                              }
-                            }}
-                            disabled={currentPdfPage === displayPdfCanvasUrls.length - 1}
-                            style={{
-                              background: 'transparent',
-                              border: `1px solid ${colors.cardBorder}`,
-                              borderRadius: '0.25rem',
-                              padding: '0.25rem 0.5rem',
-                              color: colors.text,
-                              cursor: currentPdfPage === displayPdfCanvasUrls.length - 1 ? 'not-allowed' : 'pointer',
-                              opacity: currentPdfPage === displayPdfCanvasUrls.length - 1 ? 0.5 : 1
-                            }}
-                            title="Nächste Seite"
-                          >
-                            <FaChevronRight />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <span>Zum Vergrößern/Verkleinern: Mausrad</span>
-                  </div>
-                  <div className="mt-1" style={{ fontSize: '0.75rem' }}>
-                    <span>Zum Verschieben: Linke Maustaste gedrückt halten</span>
-                  </div>
-                </div>
-              )}
-              </div>
-            </>
-          )}
+          {/* Original-Beleg Viewer */}
+          <ReceiptImageViewer
+            imageUrl={imageUrl || (typeof receiptImage === 'string' ? receiptImage : undefined)}
+            receiptImagePath={receiptImagePath}
+            receiptImage={receiptImage}
+            width={rightPanelWidth}
+            onWidthChange={(newWidth) => {
+              setRightPanelWidth(newWidth);
+              if (onUpdateReceiptDataRef.current) {
+                onUpdateReceiptDataRef.current({
+                  ...receiptDataRef.current,
+                  rightPanelWidth: newWidth
+                });
+              }
+            }}
+            showResizeHandle={!!imageUrl}
+            taxAccountTotals={taxAccountTotals}
+            onShowJson={() => setShowJsonDialog(true)}
+            onShowPrintPreview={() => setShowPrintPreview(true)}
+            colors={colors}
+            showHeader={true}
+            showFooter={true}
+            showTaxAccountTotals={true}
+            initialZoom={receiptData.imageZoom ?? 1}
+            initialPosition={receiptData.imagePosition ?? { x: 0, y: 0 }}
+            onZoomChange={(zoom) => {
+              prevImageZoomRef.current = zoom;
+              // Speichere nicht automatisch, nur beim Speichern des Beleges
+            }}
+            onPositionChange={(position) => {
+              prevImagePositionRef.current = position;
+              // Speichere nicht automatisch, nur beim Speichern des Beleges
+            }}
+          />
           {!imageUrl && receiptImage && (
             <div style={{ marginLeft: '1rem', padding: '1rem', color: colors.textSecondary }}>
               <small>Bild wird geladen...</small>
@@ -5442,106 +4468,175 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
           searchTerm={articleSearchTerm}
           onSearchTermChange={setArticleSearchTerm}
           colors={colors}
-          articles={state.articles}
-          onSelectArticle={(article) => {
+          articles={currentArticles}
+          onSelectArticle={async (article) => {
             // Übernehme alle Werte des ausgewählten Artikels
             const currentArticle = editedArticles[selectedArticleIndex];
             const updatedArticles = [...editedArticles];
             
+            // Lade Artikel direkt aus storageLayer (konsistent mit anderen Datenquellen wie Artikelformular)
+            // Dies stellt sicher, dass wir immer die aktuellsten Daten haben, unabhängig von der Datenquelle
+            let articleFromStorage: Article | null = null;
+            try {
+              const allArticlesFromStorage = await storageLayer.load<Article>('articles');
+              articleFromStorage = allArticlesFromStorage?.find(a => a.id === article.id) || null;
+            } catch (e) {
+              console.error('❌ Fehler beim Laden über storageLayer:', e);
+              throw new Error(`Fehler beim Laden des Artikels aus storageLayer: ${e}`);
+            }
+            
+            // Verwende nur Artikel aus storageLayer (kein Fallback)
+            if (!articleFromStorage) {
+              console.error('❌ Artikel nicht in storageLayer gefunden:', article.id);
+              throw new Error(`Artikel mit ID ${article.id} nicht in storageLayer gefunden`);
+            }
+            
+            const articleToUse = articleFromStorage;
+            
             // Verwende Einzelpreis aus dem Scan-Bereich (OCR-Daten)
             const scannedPrice = currentArticle.price || currentArticle.bundlePrice || 0;
-            const scannedQuantity = currentArticle.quantity || article.content || 1;
+            const scannedQuantity = currentArticle.quantity || articleToUse.content || 1;
             // Berechne Einzelpreis: Gesamtpreis / Menge
             const scannedPricePerUnit = scannedQuantity > 0 ? scannedPrice / scannedQuantity : scannedPrice;
             
             // Artikelnummer: OCR-Wert verwenden, wenn im Artikelstamm keine vorhanden
-            const supplierArticleNumber = currentArticle.supplierArticleNumber || article.supplierArticleNumber || '';
+            const supplierArticleNumber = currentArticle.supplierArticleNumber || articleToUse.supplierArticleNumber || '';
             
             // Füge OCR-Namen zu namesOCR hinzu, wenn Artikel verknüpft wird
             const currentOCRName = currentArticle.nameOCR || currentArticle.name;
-            let updatedNamesOCR = article.namesOCR || [];
+            let updatedNamesOCR = articleToUse.namesOCR || [];
             if (currentOCRName && !updatedNamesOCR.includes(currentOCRName)) {
               updatedNamesOCR = [...updatedNamesOCR, currentOCRName];
               
-              // Aktualisiere den Artikel im State, um OCR-Namen hinzuzufügen
-              const updatedArticleInState = state.articles.find(a => a.id === article.id);
-              if (updatedArticleInState) {
-                dispatch({
-                  type: 'UPDATE_ARTICLE',
-                  payload: {
-                    id: article.id,
-                    article: {
-                      ...updatedArticleInState,
-                      namesOCR: updatedNamesOCR
-                    }
+              // Aktualisiere den Artikel im State und speichere über StorageLayer
+              dispatch({
+                type: 'UPDATE_ARTICLE',
+                payload: {
+                  id: articleToUse.id,
+                  article: {
+                    ...articleToUse,
+                    namesOCR: updatedNamesOCR
                   }
-                });
-                
-                // Speichere auch direkt über StorageLayer (wird später beim Speichern übernommen)
-                storageLayer.save('articles', [{
-                  ...updatedArticleInState,
-                  namesOCR: updatedNamesOCR
-                }]).catch(err => console.error('Fehler beim Speichern von namesOCR:', err));
+                }
+              });
+              
+              // Speichere auch direkt über StorageLayer (wird später beim Speichern übernommen)
+              storageLayer.save('articles', [{
+                ...articleToUse,
+                namesOCR: updatedNamesOCR
+              }]).catch(err => console.error('Fehler beim Speichern von namesOCR:', err));
+            }
+            
+            // content aus verlinktem Artikel übernehmen (content ist in articles immer vorhanden)
+            // WICHTIG: Bei Verlinkung wird content immer aus dem Artikelstamm übernommen
+            // Verwende articleToUse (aus LocalStorage, dann State, dann Modal) für korrekte Werte
+            const contentValue = articleToUse.content;
+            
+            // Steuerkonto übernehmen
+            const taxAccountValue = articleToUse.accountingAccountNumber || currentArticle.taxAccount;
+            
+            // vatRate aus Steuerkonto ermitteln, falls vorhanden
+            let vatRateValue = currentArticle.vatRate || 19; // Standard MwSt
+            if (taxAccountValue) {
+              const account = accountingAccounts.find(acc => acc.number === taxAccountValue);
+              if (account) {
+                const extractedVatRate = extractVatRateFromAccountName(account.name);
+                if (extractedVatRate !== null) {
+                  vatRateValue = extractedVatRate;
+                }
               }
             }
             
+            // Berechne pricePerUnit neu: bundlePrice / content
+            const calculatedPricePerUnit = scannedPricePerUnit > 0 && contentValue > 0
+              ? scannedPricePerUnit / contentValue
+              : 0;
+            
+            // WICHTIG: content muss NACH ...articleToUse gesetzt werden, damit es nicht überschrieben wird
             updatedArticles[selectedArticleIndex] = {
-              // Alle Felder aus dem Artikel übernehmen
-              ...article,
+              // Alle Felder aus dem Artikel übernehmen (aus State, nicht aus Modal)
+              ...articleToUse,
               // Artikel-ID für Verknüpfung
-              linkedArticleId: article.id,
+              linkedArticleId: articleToUse.id,
               // OCR-Daten beibehalten (Preis, Menge, etc. vom Beleg)
-              name: article.name, // Verwende Namen aus Artikelstamm
+              name: articleToUse.name, // Verwende Namen aus Artikelstamm (wie in enrichReceiptData)
               nameOCR: currentArticle.nameOCR || currentArticle.name, // OCR-Namen beibehalten
               price: scannedPrice, // Gesamtpreis aus Scan-Bereich (für Anzeige)
               bundlePrice: scannedPricePerUnit, // Einzelpreis als Gebindepreis!
-              quantity: currentArticle.quantity || article.content,
-              unit: currentArticle.unit || article.contentUnit,
-              ean: currentArticle.ean || article.bundleEanCode,
+              quantity: currentArticle.quantity || articleToUse.content,
+              unit: currentArticle.unit || articleToUse.contentUnit,
+              ean: currentArticle.ean || articleToUse.bundleEanCode,
               // Artikelnummer: OCR-Wert wenn vorhanden, sonst aus Artikelstamm
               supplierArticleNumber: supplierArticleNumber,
               // Beleg-spezifische Daten beibehalten
-              supplierId: receiptSupplierId || article.supplierId,
-              // Inhalt immer auf 1 setzen
-              content: 1,
-              contentUnit: 'Stück'
+              supplierId: receiptSupplierId || articleToUse.supplierId,
+              // Felder aus Artikel übernehmen (wie in enrichReceiptData)
+              category: articleToUse.category || currentArticle.category || '',
+              taxAccount: taxAccountValue,
+              bundleUnit: articleToUse.bundleUnit || currentArticle.bundleUnit || 'Stück',
+              // WICHTIG: content muss explizit gesetzt werden, damit articleToUse.content verwendet wird
+              content: contentValue, // Direkt aus articleToUse (aus State)
+              contentUnit: articleToUse.contentUnit || currentArticle.contentUnit || 'Stück',
+              bundleEanCode: articleToUse.bundleEanCode || currentArticle.bundleEanCode || '',
+              contentEanCode: articleToUse.contentEanCode || currentArticle.contentEanCode || '',
+              notes: articleToUse.notes || currentArticle.notes || '',
+              vatRate: vatRateValue,
+              pricePerUnit: calculatedPricePerUnit
             };
             setEditedArticles(updatedArticles);
             
-            // Berechne Preis pro Einheit (sollte gleich scannedPricePerUnit sein)
-            const calculatedPricePerUnit = scannedPricePerUnit;
-            
             // Aktualisiere auch articleForm
             setArticleForm({
-              name: article.name,
-              category: article.category || '',
-              supplierId: receiptSupplierId || article.supplierId || '',
+              name: articleToUse.name,
+              category: articleToUse.category || '',
+              supplierId: receiptSupplierId || articleToUse.supplierId || '',
               supplierArticleNumber: supplierArticleNumber,
-              bundleUnit: article.bundleUnit || 'Stück',
+              bundleUnit: articleToUse.bundleUnit || 'Stück',
               bundlePrice: scannedPricePerUnit, // Einzelpreis!
-              bundleEanCode: currentArticle.ean || article.bundleEanCode || '',
-              content: 1, // Immer 1!
-              contentUnit: 'Stück', // Immer Stück!
-              contentEanCode: article.contentEanCode || '',
+              bundleEanCode: articleToUse.bundleEanCode || currentArticle.bundleEanCode || '',
+              content: contentValue, // Direkt aus articleToUse (aus State)
+              contentUnit: articleToUse.contentUnit || 'Stück',
+              contentEanCode: articleToUse.contentEanCode || '',
               pricePerUnit: calculatedPricePerUnit,
-              allergens: article.allergens || [],
-              additives: article.additives || [],
-              ingredients: article.ingredients || '',
-              nutrition: article.nutritionInfo || article.nutrition || {
+              allergens: articleToUse.allergens || [],
+              additives: articleToUse.additives || [],
+              ingredients: articleToUse.ingredients || '',
+              nutrition: articleToUse.nutritionInfo ? {
+                calories: articleToUse.nutritionInfo.calories || 0,
+                kilojoules: articleToUse.nutritionInfo.kilojoules || 0,
+                protein: articleToUse.nutritionInfo.protein || 0,
+                fat: articleToUse.nutritionInfo.fat || 0,
+                carbohydrates: articleToUse.nutritionInfo.carbohydrates || 0,
+                fiber: articleToUse.nutritionInfo.fiber ?? 0,
+                sugar: articleToUse.nutritionInfo.sugar ?? 0,
+                salt: articleToUse.nutritionInfo.salt ?? 0,
+                alcohol: articleToUse.nutritionInfo.alcohol
+              } : {
                 calories: 0, kilojoules: 0, protein: 0, fat: 0, carbohydrates: 0,
                 fiber: 0, sugar: 0, salt: 0, alcohol: undefined
               },
-              openFoodFactsCode: article.openFoodFactsCode || '',
-              notes: article.notes || ''
+              openFoodFactsCode: articleToUse.openFoodFactsCode || '',
+              notes: articleToUse.notes || ''
             });
             
             // Aktualisiere Input-Felder
             setBundlePriceInput(scannedPricePerUnit.toFixed(2).replace('.', ','));
-            setContentInput('1,00'); // Immer 1 für Inhalt
+            setContentInput(contentValue.toFixed(2).replace('.', ',')); // Priorisiere gescannten, sonst verknüpften, sonst 1
             setPricePerUnitInput(calculatedPricePerUnit.toFixed(2).replace('.', ','));
             
+            // Aktualisiere Steuerkonto im Formular, falls vorhanden
+            if (taxAccountValue) {
+              setSelectedTaxAccount(taxAccountValue);
+              setTaxAccountSearchTerm('');
+            }
+            
+            // Aktualisiere MwSt-Satz im Formular, falls ermittelt
+            if (vatRateValue !== 19) {
+              setReceiptVatRate(vatRateValue);
+            }
+            
             setShowArticleSearchModal(false);
-            console.log('✅ Artikel übernommen:', article.name, 'ID:', article.id, 'Einzelpreis aus Scan:', scannedPricePerUnit);
+            // console.log('✅ Artikel übernommen:', article.name, 'ID:', article.id, 'Einzelpreis aus Scan:', scannedPricePerUnit);
           }}
         />
       )}
@@ -5660,23 +4755,23 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <img 
-                  ref={printImageRef}
-                  src={imageUrl} 
-                  alt="Beleg" 
-                  style={{
-                    maxWidth: '100%',
-                    height: 'auto',
-                    display: 'block'
-                  }}
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    setPrintPreviewImageSize({
-                      width: img.naturalWidth,
-                      height: img.naturalHeight
-                    });
-                  }}
-                />
+              <img 
+                ref={printImageRef}
+                src={imageUrl} 
+                alt="Beleg" 
+                style={{
+                  maxWidth: '100%',
+                  height: 'auto',
+                  display: 'block'
+                }}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setPrintPreviewImageSize({
+                    width: img.naturalWidth,
+                    height: img.naturalHeight
+                  });
+                }}
+              />
               )}
               
               {/* Verschiebbare Artikelsummen-Liste */}
@@ -6069,4 +5164,6 @@ const ArticleSearchModal: React.FC<ArticleSearchModalProps> = ({
 };
 
 export default ReceiptReviewModal;
+
+export {};
 

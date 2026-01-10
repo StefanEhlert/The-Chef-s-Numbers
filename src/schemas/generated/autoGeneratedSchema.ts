@@ -1,5 +1,5 @@
 // Automatisch generierte Schema-Definitionen aus TypeScript-Interfaces
-// Generiert am: 2025-11-17T23:03:58.558Z
+// Generiert am: 2026-01-09T13:47:35.255Z
 // Automatische Schema-Generierung mit ts-morph
 
 export interface ColumnDefinition {
@@ -240,7 +240,7 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
     ]
   },
   "AccountingSettings": {
-    "tableName": "accountingsettingss",
+    "tableName": "accountingsettings",
     "interfaceName": "AccountingSettings",
     "columns": [
       {
@@ -283,6 +283,14 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
         "primary": false,
         "description": "ocrApiConfigs property",
         "tsType": "OCRApiConfig[]"
+      },
+      {
+        "name": "vat_rates",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "vatRates property",
+        "tsType": "VatRate[]"
       },
       {
         "name": "is_dirty",
@@ -433,6 +441,244 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
         "nullable": true,
         "primary": false,
         "description": "notes property",
+        "tsType": "string"
+      },
+      {
+        "name": "netto_prices",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "description": "nettoPrices property",
+        "tsType": "boolean"
+      },
+      {
+        "name": "recognized_names",
+        "type": "JSONB",
+        "nullable": true,
+        "primary": false,
+        "description": "recognizedNames property",
+        "tsType": "string[]"
+      },
+      {
+        "name": "is_dirty",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Wurde geändert?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "is_new",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Neuer Datensatz?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "sync_status",
+        "type": "sync_status_enum",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": "pending",
+        "description": "Sync-Status",
+        "tsType": "SyncStatus"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Erstellungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Aktualisierungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der erstellt hat",
+        "tsType": "string"
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt geändert hat",
+        "tsType": "string"
+      },
+      {
+        "name": "last_modified_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt modifiziert hat",
+        "tsType": "string"
+      }
+    ],
+    "baseInterfaces": [
+      "BaseEntity"
+    ]
+  },
+  "UnitEntity": {
+    "tableName": "unitentitys",
+    "interfaceName": "UnitEntity",
+    "columns": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": false,
+        "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
+        "tsType": "string"
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "nullable": false,
+        "primary": false,
+        "description": "name property",
+        "tsType": "string"
+      },
+      {
+        "name": "description",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "description property",
+        "tsType": "string"
+      },
+      {
+        "name": "is_dirty",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Wurde geändert?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "is_new",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": false,
+        "description": "Neuer Datensatz?",
+        "tsType": "boolean"
+      },
+      {
+        "name": "sync_status",
+        "type": "sync_status_enum",
+        "nullable": true,
+        "primary": false,
+        "defaultValue": "pending",
+        "description": "Sync-Status",
+        "tsType": "SyncStatus"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Erstellungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary": false,
+        "defaultValue": "CURRENT_TIMESTAMP",
+        "description": "Aktualisierungsdatum",
+        "tsType": "Date"
+      },
+      {
+        "name": "created_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der erstellt hat",
+        "tsType": "string"
+      },
+      {
+        "name": "updated_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt geändert hat",
+        "tsType": "string"
+      },
+      {
+        "name": "last_modified_by",
+        "type": "UUID",
+        "nullable": true,
+        "primary": false,
+        "description": "Benutzer-ID der zuletzt modifiziert hat",
+        "tsType": "string"
+      }
+    ],
+    "baseInterfaces": [
+      "BaseEntity"
+    ]
+  },
+  "CategoryEntity": {
+    "tableName": "categoryentitys",
+    "interfaceName": "CategoryEntity",
+    "columns": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": false,
+        "description": "Frontend-ID für State-Management",
+        "tsType": "string"
+      },
+      {
+        "name": "db_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary": true,
+        "defaultValue": "gen_random_uuid()",
+        "description": "Datenbank-ID (Primary Key) - wird von Prisma mit UUID() automatisch generiert",
+        "tsType": "string"
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "nullable": false,
+        "primary": false,
+        "description": "name property",
+        "tsType": "string"
+      },
+      {
+        "name": "description",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "description property",
         "tsType": "string"
       },
       {
@@ -1140,6 +1386,38 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
         "tsType": "string"
       },
       {
+        "name": "ocr_result",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "ocrResult property",
+        "tsType": "any"
+      },
+      {
+        "name": "ocr_provider",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "ocrProvider property",
+        "tsType": "'azure' | 'taggun'"
+      },
+      {
+        "name": "receipt_image_path",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "receiptImagePath property",
+        "tsType": "string"
+      },
+      {
+        "name": "processed_ocr_data",
+        "type": "TEXT",
+        "nullable": true,
+        "primary": false,
+        "description": "processedOcrData property",
+        "tsType": "any"
+      },
+      {
         "name": "is_dirty",
         "type": "BOOLEAN",
         "nullable": true,
@@ -1216,7 +1494,7 @@ export const AUTO_GENERATED_SCHEMA_DEFINITIONS: SchemaDefinitions = {
 };
 
 export const AUTO_GENERATED_SQL: string = `-- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-11-17T23:03:58.540Z
+-- Generiert am: 2026-01-09T13:47:35.240Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -1271,16 +1549,17 @@ CREATE INDEX IF NOT EXISTS idx_accountingaccounts_created_at ON accountingaccoun
 CREATE INDEX IF NOT EXISTS idx_accountingaccounts_updated_at ON accountingaccounts(updated_at);
 
 -- ========================================
--- Tabelle: accountingsettingss (Interface: AccountingSettings)
+-- Tabelle: accountingsettings (Interface: AccountingSettings)
 -- ========================================
 
--- Erstelle Tabelle: accountingsettingss (Interface: AccountingSettings)
-CREATE TABLE IF NOT EXISTS accountingsettingss (
+-- Erstelle Tabelle: accountingsettings (Interface: AccountingSettings)
+CREATE TABLE IF NOT EXISTS accountingsettings (
 id UUID NOT NULL,
 db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 selected_chart_id TEXT,
 customizations_enabled BOOLEAN,
 ocr_api_configs TEXT,
+vat_rates TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -1291,15 +1570,15 @@ updated_by UUID,
 last_modified_by UUID
 );
 
--- Indizes für accountingsettingss
+-- Indizes für accountingsettings
 -- Index für Frontend-ID (id)
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_id ON accountingsettingss(id);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_id ON accountingsettings(id);
 -- Index für Primary Key (db_id)
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_db_id ON accountingsettingss(db_id);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_db_id ON accountingsettings(db_id);
 -- Index für Erstellungsdatum
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_created_at ON accountingsettingss(created_at);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_created_at ON accountingsettings(created_at);
 -- Index für Aktualisierungsdatum
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_updated_at ON accountingsettingss(updated_at);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_updated_at ON accountingsettings(updated_at);
 
 -- ========================================
 -- Tabelle: suppliers (Interface: Supplier)
@@ -1316,6 +1595,8 @@ website TEXT,
 address JSONB,
 phone_numbers JSONB,
 notes TEXT,
+netto_prices BOOLEAN,
+recognized_names JSONB,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -1335,6 +1616,66 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_db_id ON suppliers(db_id);
 CREATE INDEX IF NOT EXISTS idx_suppliers_created_at ON suppliers(created_at);
 -- Index für Aktualisierungsdatum
 CREATE INDEX IF NOT EXISTS idx_suppliers_updated_at ON suppliers(updated_at);
+
+-- ========================================
+-- Tabelle: unitentitys (Interface: UnitEntity)
+-- ========================================
+
+-- Erstelle Tabelle: unitentitys (Interface: UnitEntity)
+CREATE TABLE IF NOT EXISTS unitentitys (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+name TEXT NOT NULL,
+description TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für unitentitys
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_unitentitys_id ON unitentitys(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_unitentitys_db_id ON unitentitys(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_unitentitys_created_at ON unitentitys(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_unitentitys_updated_at ON unitentitys(updated_at);
+
+-- ========================================
+-- Tabelle: categoryentitys (Interface: CategoryEntity)
+-- ========================================
+
+-- Erstelle Tabelle: categoryentitys (Interface: CategoryEntity)
+CREATE TABLE IF NOT EXISTS categoryentitys (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+name TEXT NOT NULL,
+description TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für categoryentitys
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_id ON categoryentitys(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_db_id ON categoryentitys(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_created_at ON categoryentitys(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_updated_at ON categoryentitys(updated_at);
 
 -- ========================================
 -- Tabelle: articles (Interface: Article)
@@ -1456,6 +1797,10 @@ line_item_count DECIMAL,
 accounting TEXT,
 is_completed BOOLEAN,
 notes TEXT,
+ocr_result TEXT,
+ocr_provider TEXT,
+receipt_image_path TEXT,
+processed_ocr_data TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',

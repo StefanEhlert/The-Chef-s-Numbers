@@ -1202,15 +1202,14 @@ button.btn-link.btn-action:hover {
 .belegverwaltung .modern-table thead th:nth-child(2) { width: 6%; }  /* Nr. */
 .belegverwaltung .modern-table thead th:nth-child(3) { width: 7%; } /* Datum */
 .belegverwaltung .modern-table thead th:nth-child(4) { width: 10%; } /* R-Nummer */
-.belegverwaltung .modern-table thead th:nth-child(5) { width: 25%; } /* Lieferant */
-.belegverwaltung .modern-table thead th:nth-child(6) { width: 8%; }  /* Zahlung */
-.belegverwaltung .modern-table thead th:nth-child(7) { width: 7%; }  /* Fälligkeit */
-.belegverwaltung .modern-table thead th:nth-child(8) { width: 5%; }  /* Pos. */
-.belegverwaltung .modern-table thead th:nth-child(9) { width: 11%; } /* Summe */
-.belegverwaltung .modern-table thead th:nth-child(10) { width: 8%; text-align: center; } /* Zustand */
-.belegverwaltung .modern-table thead th:nth-child(11) { width: 10%; text-align: right; } /* Aktionen */
-.belegverwaltung .modern-table tbody td:nth-child(10) { text-align: center; }
-.belegverwaltung .modern-table tbody td:nth-child(11) { text-align: right; }
+.belegverwaltung .modern-table thead th:nth-child(5) { width: 30%; } /* Lieferant */
+.belegverwaltung .modern-table thead th:nth-child(6) { width: 30%; } /* Notizen */
+.belegverwaltung .modern-table thead th:nth-child(7) { width: 5%; }  /* Pos. */
+.belegverwaltung .modern-table thead th:nth-child(8) { width: 11%; } /* Summe */
+.belegverwaltung .modern-table thead th:nth-child(9) { width: 8%; text-align: center; } /* Zustand */
+.belegverwaltung .modern-table thead th:nth-child(10) { width: 10%; text-align: right; } /* Aktionen */
+.belegverwaltung .modern-table tbody td:nth-child(9) { text-align: center; }
+.belegverwaltung .modern-table tbody td:nth-child(10) { text-align: right; }
 .belegverwaltung .modern-table thead th .table-header-label {
   display: flex;
   align-items: center;

@@ -1,6 +1,6 @@
 // Chef Numbers Prisma REST API Server
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-11-17T23:03:58.594Z
+// Automatisch generiert am: 2026-01-09T13:47:35.287Z
 
 const express = require('express');
 const cors = require('cors');
@@ -247,21 +247,21 @@ app.delete('/api/accountingaccounts', async (req, res) => {
 // AccountingSettings Routes
 // ========================================
 
-// GET all accountingsettingss
-app.get('/api/accountingsettingss', async (req, res) => {
+// GET all accountingsettings
+app.get('/api/accountingsettings', async (req, res) => {
   try {
     const data = await prisma.accountingSettings.findMany({
       orderBy: { createdAt: 'desc' }
     });
     res.json(data);
   } catch (error) {
-    console.error('Fehler beim Laden von accountingsettingss:', error);
-    res.status(500).json({ error: 'Fehler beim Laden von accountingsettingss', details: error.message });
+    console.error('Fehler beim Laden von accountingsettings:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von accountingsettings', details: error.message });
   }
 });
 
 // GET single AccountingSettings
-app.get('/api/accountingsettingss/:id', async (req, res) => {
+app.get('/api/accountingsettings/:id', async (req, res) => {
   try {
     const data = await prisma.accountingSettings.findUnique({
       where: { db_id: req.params.id }
@@ -277,7 +277,7 @@ app.get('/api/accountingsettingss/:id', async (req, res) => {
 });
 
 // POST new AccountingSettings
-app.post('/api/accountingsettingss', async (req, res) => {
+app.post('/api/accountingsettings', async (req, res) => {
   try {
     const dataToInsert = { ...req.body };
     
@@ -298,7 +298,7 @@ app.post('/api/accountingsettingss', async (req, res) => {
 });
 
 // PUT update AccountingSettings
-app.put('/api/accountingsettingss/:id', async (req, res) => {
+app.put('/api/accountingsettings/:id', async (req, res) => {
   try {
     const data = await prisma.accountingSettings.update({
       where: { db_id: req.params.id },
@@ -312,7 +312,7 @@ app.put('/api/accountingsettingss/:id', async (req, res) => {
 });
 
 // DELETE AccountingSettings (über Frontend-ID oder db_id)
-app.delete('/api/accountingsettingss', async (req, res) => {
+app.delete('/api/accountingsettings', async (req, res) => {
   try {
     const { id } = req.query;
     if (!id) {
@@ -424,6 +424,190 @@ app.delete('/api/suppliers', async (req, res) => {
   } catch (error) {
     console.error('Fehler beim Löschen von Supplier:', error);
     res.status(500).json({ error: 'Fehler beim Löschen von Supplier', details: error.message });
+  }
+});
+
+// ========================================
+// UnitEntity Routes
+// ========================================
+
+// GET all unitentitys
+app.get('/api/unitentitys', async (req, res) => {
+  try {
+    const data = await prisma.unitEntity.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von unitentitys:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von unitentitys', details: error.message });
+  }
+});
+
+// GET single UnitEntity
+app.get('/api/unitentitys/:id', async (req, res) => {
+  try {
+    const data = await prisma.unitEntity.findUnique({
+      where: { db_id: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'UnitEntity nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von UnitEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von UnitEntity', details: error.message });
+  }
+});
+
+// POST new UnitEntity
+app.post('/api/unitentitys', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues UnitEntity: ${dataToInsert.db_id}`);
+    }
+    
+    const data = await prisma.unitEntity.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von UnitEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von UnitEntity', details: error.message });
+  }
+});
+
+// PUT update UnitEntity
+app.put('/api/unitentitys/:id', async (req, res) => {
+  try {
+    const data = await prisma.unitEntity.update({
+      where: { db_id: req.params.id },
+      data: req.body
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren von UnitEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von UnitEntity', details: error.message });
+  }
+});
+
+// DELETE UnitEntity (über Frontend-ID oder db_id)
+app.delete('/api/unitentitys', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.unitEntity.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'UnitEntity nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von UnitEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von UnitEntity', details: error.message });
+  }
+});
+
+// ========================================
+// CategoryEntity Routes
+// ========================================
+
+// GET all categoryentitys
+app.get('/api/categoryentitys', async (req, res) => {
+  try {
+    const data = await prisma.categoryEntity.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von categoryentitys:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von categoryentitys', details: error.message });
+  }
+});
+
+// GET single CategoryEntity
+app.get('/api/categoryentitys/:id', async (req, res) => {
+  try {
+    const data = await prisma.categoryEntity.findUnique({
+      where: { db_id: req.params.id }
+    });
+    if (!data) {
+      return res.status(404).json({ error: 'CategoryEntity nicht gefunden' });
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Laden von CategoryEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Laden von CategoryEntity', details: error.message });
+  }
+});
+
+// POST new CategoryEntity
+app.post('/api/categoryentitys', async (req, res) => {
+  try {
+    const dataToInsert = { ...req.body };
+    
+    // Generiere db_id falls nicht vorhanden (MariaDB/MySQL hat keine native UUID-Generierung)
+    if (!dataToInsert.db_id) {
+      dataToInsert.db_id = generateUUID();
+      console.log(`🆕 Generiere db_id für neues CategoryEntity: ${dataToInsert.db_id}`);
+    }
+    
+    const data = await prisma.categoryEntity.create({
+      data: dataToInsert
+    });
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Fehler beim Erstellen von CategoryEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Erstellen von CategoryEntity', details: error.message });
+  }
+});
+
+// PUT update CategoryEntity
+app.put('/api/categoryentitys/:id', async (req, res) => {
+  try {
+    const data = await prisma.categoryEntity.update({
+      where: { db_id: req.params.id },
+      data: req.body
+    });
+    res.json(data);
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren von CategoryEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren von CategoryEntity', details: error.message });
+  }
+});
+
+// DELETE CategoryEntity (über Frontend-ID oder db_id)
+app.delete('/api/categoryentitys', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'ID parameter required' });
+    }
+    
+    // Versuche über Frontend-ID zu löschen
+    const deleted = await prisma.categoryEntity.deleteMany({
+      where: { id: id }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'CategoryEntity nicht gefunden' });
+    }
+    
+    res.json({ success: true, deleted: deleted.count });
+  } catch (error) {
+    console.error('Fehler beim Löschen von CategoryEntity:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen von CategoryEntity', details: error.message });
   }
 });
 
@@ -733,8 +917,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Schema Version: 2.2.2`);
   console.log(`🔗 Endpunkte:`);
   console.log(`   - /api/accountingaccounts`);
-  console.log(`   - /api/accountingsettingss`);
+  console.log(`   - /api/accountingsettings`);
   console.log(`   - /api/suppliers`);
+  console.log(`   - /api/unitentitys`);
+  console.log(`   - /api/categoryentitys`);
   console.log(`   - /api/articles`);
   console.log(`   - /api/recipes`);
   console.log(`   - /api/receipts`);

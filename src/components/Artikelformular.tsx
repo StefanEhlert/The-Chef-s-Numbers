@@ -66,6 +66,11 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const [formWidth, setFormWidth] = useState<number | null>(null); // null = responsive, number = feste Breite in %
   const [isResizing, setIsResizing] = useState(false);
   const [isInitialMount, setIsInitialMount] = useState(true); // Verhindert Transition beim ersten Öffnen
+  const [currentArticleIdInModal, setCurrentArticleIdInModal] = useState<string | null>(null); // Artikel-ID für Bild-Modal
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [isImageSaving, setIsImageSaving] = useState(false);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null); // Ausgewähltes Bild, das beim Schließen gespeichert werden soll
+  const [imageNeedsDeletion, setImageNeedsDeletion] = useState(false); // Flag: Bild soll beim Schließen gelöscht werden
 
   // Lade gespeicherte Breite
   const loadSavedWidth = (): number => {
@@ -141,10 +146,26 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const contentUnitContainerRef = useRef<HTMLDivElement>(null);
   const accountingAccountContainerRef = useRef<HTMLDivElement>(null);
   
-  // State für das ausgewählte Bild-File
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  // Hilfsfunktion: Gibt die aktuelle Artikel-ID zurück (oder generiert eine temporäre)
+  const getCurrentArticleId = (): string => {
+    // Wenn wir einen Artikel bearbeiten, verwende dessen ID
+    if (state.editingArticle?.id) {
+      return state.editingArticle.id;
+    }
+    // Wenn editingArticle aus dem Hook vorhanden ist, verwende dessen ID
+    if (editingArticle?.id) {
+      return editingArticle.id;
+    }
+    // Sonst generiere eine temporäre ID (wird beim Speichern des Artikels verwendet)
+    if (!currentArticleIdInModal) {
+      const tempId = UUIDUtils.generateId();
+      setCurrentArticleIdInModal(tempId);
+      return tempId;
+    }
+    return currentArticleIdInModal;
+  };
 
-  // Bild-Upload-Funktion für Artikel
+  // Bild-Upload-Funktion für Artikel - zeigt nur Vorschau, speichert beim Schließen
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -161,46 +182,46 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     }
 
     try {
-      // Speichere das File für späteres Speichern
-      setSelectedImageFile(file);
+      // Stelle sicher, dass die temporäre ID gespeichert ist
+      const articleId = getCurrentArticleId();
+      if (!currentArticleIdInModal) {
+        setCurrentArticleIdInModal(articleId);
+      }
       
-      // Bild in Base64 konvertieren und anzeigen
+      // Speichere File für späteres Speichern beim Schließen
+      setPendingImageFile(file);
+      setImageNeedsDeletion(false); // Neues Bild wird gespeichert, nicht gelöscht
+      
+      // Zeige Base64-Vorschau
       const reader = new FileReader();
       reader.onload = (e) => {
         const imageData = e.target?.result as string;
         setArticleImage(imageData);
-        console.log('✅ Artikelbild geladen');
+        console.log('✅ Artikelbild-Vorschau geladen (wird beim Schließen gespeichert)');
       };
       reader.onerror = () => {
         alert('Fehler beim Laden der Bilddatei');
+        setPendingImageFile(null);
       };
       reader.readAsDataURL(file);
       
     } catch (error) {
       console.error('❌ Fehler beim Laden des Bildes:', error);
       alert('Fehler beim Laden des Bildes');
+      setPendingImageFile(null);
     }
   };
 
-  // Bild löschen
+  // Bild löschen - markiert zum Löschen beim Schließen
   const handleRemoveImage = () => {
+    // Entferne Bild aus der Anzeige
     setArticleImage(null);
-    setSelectedImageFile(null);
+    setPendingImageFile(null);
+    setImageNeedsDeletion(true); // Markiere zum Löschen beim Schließen
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    console.log('🗑️ Artikelbild entfernt');
-  };
-
-  // Bild aus der Speicherung löschen
-  const deleteImageFromStorage = async (articleId: string) => {
-    try {
-      const imagePath = `pictures/articles/${articleId}`;
-      await storageLayer.deleteImage(imagePath);
-      console.log('🗑️ Artikelbild aus Speicherung gelöscht');
-    } catch (error) {
-      console.error('❌ Fehler beim Löschen des Artikelbildes aus Speicherung:', error);
-    }
+    console.log('🗑️ Artikelbild zum Löschen markiert (wird beim Schließen gelöscht)');
   };
 
   // Barcode-Scanner Handler
@@ -231,86 +252,97 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
   const openImageModal = async () => {
     console.log('🖼️ Öffne Artikel-Bild-Modal');
     
-    // Reset States beim Öffnen
-    setSelectedImageFile(null);
+    // Reset States beim Öffnen (aber NICHT articleImage - bleibt im State)
+    setPendingImageFile(null);
+    setImageNeedsDeletion(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     
-    // Prüfe ob wir einen Artikel bearbeiten oder einen neuen erstellen
-    if (state.editingArticle?.id) {
-      try {
-        const imagePath = `pictures/articles/${state.editingArticle.id}`;
-        const imageData = await storageLayer.loadImage(imagePath);
-        if (imageData) {
-          setArticleImage(imageData);
-          console.log('📷 Gespeichertes Artikelbild geladen');
-        } else {
-          setArticleImage(null);
-          console.log('📷 Kein gespeichertes Artikelbild gefunden');
-        }
-      } catch (error) {
-        console.error('❌ Fehler beim Laden des Artikelbildes:', error);
+    // Setze aktuelle Artikel-ID für das Modal
+    const articleId = getCurrentArticleId();
+    setCurrentArticleIdInModal(articleId);
+    
+    // Prüfe zuerst, ob bereits ein Bild im State ist (z.B. nach kürzlichem Speichern)
+    if (articleImage) {
+      console.log('📷 Verwende Bild aus State (wurde kürzlich gespeichert)');
+      setIsImageLoading(false);
+      setShowImageModal(true);
+      return;
+    }
+    
+    // Nur wenn kein Bild im State ist, lade vom Storage
+    setIsImageLoading(true);
+    try {
+      const imagePath = `pictures/articles/${articleId}`;
+      const imageData = await storageLayer.loadImage(imagePath);
+      if (imageData && imageData.url) {
+        setArticleImage(imageData.url);
+        console.log('📷 Gespeichertes Artikelbild vom Storage geladen');
+      } else {
         setArticleImage(null);
+        console.log('📷 Kein gespeichertes Artikelbild gefunden');
       }
-    } else {
-      // Neuer Artikel - kein gespeichertes Bild
+    } catch (error) {
+      console.error('❌ Fehler beim Laden des Artikelbildes:', error);
       setArticleImage(null);
-      console.log('🆕 Neuer Artikel - leeres Modal');
+    } finally {
+      setIsImageLoading(false);
     }
     
     setShowImageModal(true);
   };
 
+  // Modal schließen - speichert oder löscht Bild je nach Aktion
   const closeImageModal = async () => {
-    // Prüfe ob ein gespeichertes Bild gelöscht werden soll
-    if (!articleImage && state.editingArticle?.id) {
-      // Kein Bild im Modal, aber Artikel existiert → lösche gespeichertes Bild
-      console.log('🗑️ Kein Bild im Modal - lösche gespeichertes Bild');
-      await deleteImageFromStorage(state.editingArticle.id);
-    }
+    const articleId = getCurrentArticleId();
     
-    setShowImageModal(false);
-    console.log('🖼️ Artikel-Bild-Modal geschlossen');
-  };
-
-  // Bild übernehmen (speichert das Bild für späteres Speichern)
-  const handleAcceptImage = () => {
-    if (articleImage) {
-      console.log('✅ Artikelbild übernommen - wird beim Speichern gesichert');
-      setShowImageModal(false);
-    }
-  };
-
-  // Funktion zum Laden des Artikel-Bildes (außerhalb des Modals)
-  const loadArticleImage = async () => {
-    if (state.editingArticle?.id) {
-      try {
-        const imagePath = `pictures/articles/${state.editingArticle.id}`;
-        const imageData = await storageLayer.loadImage(imagePath);
-        if (imageData) {
-          setArticleImage(imageData);
-          console.log('📷 Gespeichertes Artikelbild neu geladen');
+    try {
+      // Wenn ein neues Bild hochgeladen wurde, speichere es
+      if (pendingImageFile && articleId) {
+        setIsImageSaving(true);
+        const imagePath = `pictures/articles/${articleId}`;
+        console.log('📤 Speichere Artikelbild beim Schließen...', { articleId, imagePath });
+        
+        const success = await storageLayer.saveImage(imagePath, pendingImageFile);
+        if (success) {
+          console.log('✅ Artikelbild erfolgreich gespeichert');
+          // WICHTIG: articleImage bleibt im State (Base64-Vorschau), damit es beim erneuten Öffnen sofort angezeigt wird
+          // Das Bild wird im Hintergrund zu Supabase hochgeladen, aber der State zeigt sofort die Vorschau
         } else {
+          console.error('❌ Fehler beim Speichern des Bildes');
+          alert('Fehler beim Speichern des Bildes. Bitte versuchen Sie es erneut.');
+          // Bei Fehler: State zurücksetzen
           setArticleImage(null);
-          console.log('📷 Kein gespeichertes Bild gefunden');
         }
-      } catch (error) {
-        console.error('❌ Fehler beim Laden des Artikelbildes:', error);
+        setIsImageSaving(false);
+      }
+      
+      // Wenn Bild gelöscht werden soll
+      if (imageNeedsDeletion && articleId) {
+        setIsImageSaving(true);
+        const imagePath = `pictures/articles/${articleId}`;
+        console.log('🗑️ Lösche Artikelbild beim Schließen...', { articleId, imagePath });
+        
+        await storageLayer.deleteImage(imagePath);
+        console.log('✅ Artikelbild erfolgreich gelöscht');
+        // State zurücksetzen, da Bild gelöscht wurde
+        setArticleImage(null);
+        setIsImageSaving(false);
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern/Löschen des Bildes:', error);
+      setIsImageSaving(false);
+      // Bei Fehler: State zurücksetzen
+      if (imageNeedsDeletion) {
         setArticleImage(null);
       }
-    }
-  };
-
-  // Bild nach Artikel-Speicherung speichern
-  const saveImageAfterArticleSave = async (articleId: string, imageFile: File) => {
-    try {
-      const imagePath = `pictures/articles/${articleId}`;
-      await storageLayer.saveImage(imagePath, imageFile);
-      console.log('📷 Artikelbild erfolgreich gespeichert');
-    } catch (error) {
-      console.error('❌ Fehler beim Speichern des Artikelbildes:', error);
-      // Fehler nicht anzeigen, da Artikel bereits gespeichert ist
+    } finally {
+      // Reset States (aber NICHT articleImage - bleibt für sofortige Anzeige beim erneuten Öffnen)
+      setPendingImageFile(null);
+      setImageNeedsDeletion(false);
+      setShowImageModal(false);
+      console.log('🖼️ Artikel-Bild-Modal geschlossen (Bild bleibt im State für schnelle Anzeige)');
     }
   };
 
@@ -485,6 +517,19 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
         hasImage: !!state.editingArticle.image,
         imageValue: state.editingArticle.image
       });
+      
+      // Prüfe ob es ein anderer Artikel ist (andere ID)
+      const isDifferentArticle = articleImage && 
+                                 state.editingArticle.id && 
+                                 currentArticleIdInModal && 
+                                 state.editingArticle.id !== currentArticleIdInModal;
+      
+      if (isDifferentArticle) {
+        // Neuer Artikel - lösche Bild aus State
+        console.log('🔄 Neuer Artikel geladen - lösche Bild aus State');
+        setArticleImage(null);
+        setCurrentArticleIdInModal(null);
+      }
       
       setArticleForEditing(state.editingArticle);
       setIsFromRecipeForm(false);
@@ -752,9 +797,14 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
       }
 
       // Erstelle Artikel mit Hybrid-ID-System
+      // Verwende temporäre ID aus Bild-Modal, falls vorhanden (für neue Artikel mit Bild)
+      const articleId = editingArticle 
+        ? editingArticle.id 
+        : (currentArticleIdInModal || UUIDUtils.generateId());
+      
       const articleToSave: Article = {
         ...articleForm,
-        id: editingArticle ? editingArticle.id : UUIDUtils.generateId(), // Frontend-ID (eindeutig)
+        id: articleId, // Frontend-ID (eindeutig) - verwendet temporäre ID falls vorhanden
         dbId: editingArticle?.dbId, // DB-ID falls vorhanden (für Updates)
         isNew: !editingArticle,
         isDirty: true,
@@ -792,24 +842,11 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
         dispatch({ type: 'ADD_ARTICLE', payload: articleToSave });
       }
       
-      // Bild nach Artikel-Speicherung speichern oder löschen
-      if (articleImage && selectedImageFile) {
-        console.log('📤 Starte Bild-Speicherung nach Artikel-Speicherung...', {
-          articleId: articleToSave.id,
-          hasImage: !!articleImage,
-          hasFile: !!selectedImageFile,
-          fileName: selectedImageFile.name
-        });
-        await saveImageAfterArticleSave(articleToSave.id, selectedImageFile);
-      } else if (!articleImage) {
-        // Kein Bild im Modal → lösche gespeichertes Bild falls vorhanden
-        console.log('🗑️ Kein Bild im Modal - lösche gespeichertes Bild nach Artikel-Speicherung');
-        await deleteImageFromStorage(articleToSave.id);
-      } else {
-        console.log('ℹ️ Kein neues Bild zum Speichern vorhanden', {
-          hasImage: !!articleImage,
-          hasFile: !!selectedImageFile
-        });
+      // Bild-Speicherung erfolgt jetzt direkt im Bild-Modal, nicht mehr hier
+      // Stelle nur sicher, dass die Artikel-ID im Formular gesetzt ist (falls temporäre ID verwendet wurde)
+      if (currentArticleIdInModal && currentArticleIdInModal === articleToSave.id) {
+        // Temporäre ID wurde verwendet - alles ist bereits synchronisiert
+        console.log('✅ Artikel-ID bereits synchronisiert mit Bild-Modal');
       }
       
       // Wenn erfolgreich, schließe das Modal
@@ -842,9 +879,11 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
     onClose();
     resetForm();
     setIsFromRecipeForm(false);
-    // Reset Bild-States
+    // Reset Bild-States (beim Schließen des gesamten Formulars)
     setArticleImage(null);
-    setSelectedImageFile(null);
+    setCurrentArticleIdInModal(null);
+    setPendingImageFile(null);
+    setImageNeedsDeletion(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -1345,7 +1384,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                                      Keine Einheit gefunden
                                    </div>
                                  )}
-                                 {bundleUnitSearchTerm && !UNITS.includes(bundleUnitSearchTerm) && (
+                                 {bundleUnitSearchTerm && !getFilteredBundleUnits().some(u => u.toLowerCase() === bundleUnitSearchTerm.toLowerCase()) && (
                                    <div
                                      className="px-3 py-2 cursor-pointer"
                                      onClick={() => handleBundleUnitSelect(bundleUnitSearchTerm)}
@@ -1630,7 +1669,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                                     Keine Einheit gefunden
                                   </div>
                                 )}
-                                {contentUnitSearchTerm && !UNITS.includes(contentUnitSearchTerm) && (
+                                {contentUnitSearchTerm && !getFilteredContentUnits().some(u => u.toLowerCase() === contentUnitSearchTerm.toLowerCase()) && (
                                   <div
                                     className="px-3 py-2 cursor-pointer"
                                     onClick={() => handleContentUnitSelect(contentUnitSearchTerm)}
@@ -2634,7 +2673,17 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                   onClick={() => document.getElementById('article-image-input')?.click()}
                   title="Klicken Sie, um ein Bild auszuwählen"
                 >
-                  {articleImage ? (
+                  {isImageLoading ? (
+                    <div className="d-flex align-items-center justify-content-center h-100">
+                      <FaSpinner className="fa-spin" style={{ fontSize: '2rem', color: colors.accent }} />
+                      <span className="ms-2 form-label-themed">Bild wird geladen...</span>
+                    </div>
+                  ) : isImageSaving ? (
+                    <div className="d-flex align-items-center justify-content-center h-100">
+                      <FaSpinner className="fa-spin" style={{ fontSize: '2rem', color: colors.accent }} />
+                      <span className="ms-2 form-label-themed">Bild wird gespeichert...</span>
+                    </div>
+                  ) : articleImage ? (
                     <div className="position-relative w-100 h-100">
                       <img
                         src={articleImage}
@@ -2693,6 +2742,7 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                 type="button"
                 className="btn-outline-secondary px-4 py-2 rounded"
                 onClick={handleRemoveImage}
+                disabled={isImageSaving || isImageLoading || !articleImage}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
               >
                 <FaTrash />
@@ -2759,11 +2809,22 @@ const Artikelformular: React.FC<ArtikelformularProps> = ({
                 console.log(`✅ Open Food Facts Code gespeichert: ${code}`);
                 setArticleForm(prev => ({ ...prev, openFoodFactsCode: code }));
               }}
-              onImageDownloaded={(success) => {
+              onImageDownloaded={async (success) => {
                 if (success) {
                   console.log('✅ Produktbild erfolgreich heruntergeladen und gespeichert!');
-                  // Artikel-Bild neu laden
-                  loadArticleImage();
+                  // Artikel-Bild im Modal neu laden, falls Modal geöffnet ist
+                  if (showImageModal && currentArticleIdInModal) {
+                    try {
+                      const imagePath = `pictures/articles/${currentArticleIdInModal}`;
+                      const imageData = await storageLayer.loadImage(imagePath);
+                      if (imageData) {
+                        setArticleImage(imageData.url);
+                        console.log('📷 Artikelbild im Modal aktualisiert');
+                      }
+                    } catch (error) {
+                      console.error('❌ Fehler beim Aktualisieren des Artikelbildes:', error);
+                    }
+                  }
                 } else {
                   console.warn('⚠️ Produktbild konnte nicht heruntergeladen werden');
                 }

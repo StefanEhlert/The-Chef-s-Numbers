@@ -1,5 +1,5 @@
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-11-17T23:03:58.540Z
+-- Generiert am: 2026-01-09T13:47:35.240Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -54,16 +54,17 @@ CREATE INDEX IF NOT EXISTS idx_accountingaccounts_created_at ON accountingaccoun
 CREATE INDEX IF NOT EXISTS idx_accountingaccounts_updated_at ON accountingaccounts(updated_at);
 
 -- ========================================
--- Tabelle: accountingsettingss (Interface: AccountingSettings)
+-- Tabelle: accountingsettings (Interface: AccountingSettings)
 -- ========================================
 
--- Erstelle Tabelle: accountingsettingss (Interface: AccountingSettings)
-CREATE TABLE IF NOT EXISTS accountingsettingss (
+-- Erstelle Tabelle: accountingsettings (Interface: AccountingSettings)
+CREATE TABLE IF NOT EXISTS accountingsettings (
 id UUID NOT NULL,
 db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 selected_chart_id TEXT,
 customizations_enabled BOOLEAN,
 ocr_api_configs TEXT,
+vat_rates TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -74,15 +75,15 @@ updated_by UUID,
 last_modified_by UUID
 );
 
--- Indizes für accountingsettingss
+-- Indizes für accountingsettings
 -- Index für Frontend-ID (id)
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_id ON accountingsettingss(id);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_id ON accountingsettings(id);
 -- Index für Primary Key (db_id)
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_db_id ON accountingsettingss(db_id);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_db_id ON accountingsettings(db_id);
 -- Index für Erstellungsdatum
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_created_at ON accountingsettingss(created_at);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_created_at ON accountingsettings(created_at);
 -- Index für Aktualisierungsdatum
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_updated_at ON accountingsettingss(updated_at);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_updated_at ON accountingsettings(updated_at);
 
 -- ========================================
 -- Tabelle: suppliers (Interface: Supplier)
@@ -99,6 +100,8 @@ website TEXT,
 address JSONB,
 phone_numbers JSONB,
 notes TEXT,
+netto_prices BOOLEAN,
+recognized_names JSONB,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -118,6 +121,66 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_db_id ON suppliers(db_id);
 CREATE INDEX IF NOT EXISTS idx_suppliers_created_at ON suppliers(created_at);
 -- Index für Aktualisierungsdatum
 CREATE INDEX IF NOT EXISTS idx_suppliers_updated_at ON suppliers(updated_at);
+
+-- ========================================
+-- Tabelle: unitentitys (Interface: UnitEntity)
+-- ========================================
+
+-- Erstelle Tabelle: unitentitys (Interface: UnitEntity)
+CREATE TABLE IF NOT EXISTS unitentitys (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+name TEXT NOT NULL,
+description TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für unitentitys
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_unitentitys_id ON unitentitys(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_unitentitys_db_id ON unitentitys(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_unitentitys_created_at ON unitentitys(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_unitentitys_updated_at ON unitentitys(updated_at);
+
+-- ========================================
+-- Tabelle: categoryentitys (Interface: CategoryEntity)
+-- ========================================
+
+-- Erstelle Tabelle: categoryentitys (Interface: CategoryEntity)
+CREATE TABLE IF NOT EXISTS categoryentitys (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+name TEXT NOT NULL,
+description TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für categoryentitys
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_id ON categoryentitys(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_db_id ON categoryentitys(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_created_at ON categoryentitys(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_updated_at ON categoryentitys(updated_at);
 
 -- ========================================
 -- Tabelle: articles (Interface: Article)
@@ -239,6 +302,10 @@ line_item_count DECIMAL,
 accounting TEXT,
 is_completed BOOLEAN,
 notes TEXT,
+ocr_result TEXT,
+ocr_provider TEXT,
+receipt_image_path TEXT,
+processed_ocr_data TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',

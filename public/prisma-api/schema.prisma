@@ -1,6 +1,6 @@
 // Chef Numbers Prisma Schema
 // Frontend-synchronisiertes Schema v2.2.2
-// Automatisch generiert am: 2025-11-17T23:03:58.588Z
+// Automatisch generiert am: 2026-01-09T13:47:35.283Z
 
 generator client {
   provider = "prisma-client-js"
@@ -49,6 +49,7 @@ model AccountingSettings {
   selectedChartId        String? @map("selected_chart_id") @db.Text
   customizationsEnabled  Boolean? @map("customizations_enabled")
   ocrApiConfigs          String? @map("ocr_api_configs") @db.Text
+  vatRates               String? @map("vat_rates") @db.Text
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
@@ -58,7 +59,7 @@ model AccountingSettings {
   updatedBy              String? @map("updated_by") @db.VarChar(36)
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
 
-  @@map("accountingsettingss")
+  @@map("accountingsettings")
 }
 
 // Model: Supplier
@@ -72,6 +73,8 @@ model Supplier {
   address                Json?
   phoneNumbers           Json? @map("phone_numbers")
   notes                  String? @db.Text
+  nettoPrices            Boolean? @map("netto_prices")
+  recognizedNames        Json? @map("recognized_names")
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")
@@ -82,6 +85,42 @@ model Supplier {
   lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
 
   @@map("suppliers")
+}
+
+// Model: UnitEntity
+model UnitEntity {
+  id                     String @db.VarChar(36)
+  db_id                  String @id @default(uuid()) @db.VarChar(36)
+  name                   String @db.Text
+  description            String? @db.Text
+  isDirty                Boolean? @default(false) @map("is_dirty")
+  isNew                  Boolean? @default(false) @map("is_new")
+  syncStatus             String? @default("pending") @map("sync_status")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdBy              String? @map("created_by") @db.VarChar(36)
+  updatedBy              String? @map("updated_by") @db.VarChar(36)
+  lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
+
+  @@map("unitentitys")
+}
+
+// Model: CategoryEntity
+model CategoryEntity {
+  id                     String @db.VarChar(36)
+  db_id                  String @id @default(uuid()) @db.VarChar(36)
+  name                   String @db.Text
+  description            String? @db.Text
+  isDirty                Boolean? @default(false) @map("is_dirty")
+  isNew                  Boolean? @default(false) @map("is_new")
+  syncStatus             String? @default("pending") @map("sync_status")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdBy              String? @map("created_by") @db.VarChar(36)
+  updatedBy              String? @map("updated_by") @db.VarChar(36)
+  lastModifiedBy         String? @map("last_modified_by") @db.VarChar(36)
+
+  @@map("categoryentitys")
 }
 
 // Model: Article
@@ -172,6 +211,10 @@ model Receipt {
   accounting             String? @db.Text
   isCompleted            Boolean? @map("is_completed")
   notes                  String? @db.Text
+  ocrResult              String? @map("ocr_result") @db.Text
+  ocrProvider            String? @map("ocr_provider") @db.Text
+  receiptImagePath       String? @map("receipt_image_path") @db.Text
+  processedOcrData       String? @map("processed_ocr_data") @db.Text
   isDirty                Boolean? @default(false) @map("is_dirty")
   isNew                  Boolean? @default(false) @map("is_new")
   syncStatus             String? @default("pending") @map("sync_status")

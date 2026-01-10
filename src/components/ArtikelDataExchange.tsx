@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaFileUpload, FaDownload, FaTimes, FaFolderOpen, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
-import { UNITS } from '../constants/articleConstants';
 import { suggestCategory, generateArticleNumber } from '../utils/helpers';
 import { categoryManager } from '../utils/categoryManager';
 import { generateId } from '../utils/storageUtils';
 import { UUIDUtils } from '../utils/uuidUtils';
+import { storageLayer } from '../services/storageLayer';
+import { UnitEntity } from '../types';
 
 interface ArtikelDataExchangeProps {
   show: boolean;
@@ -116,6 +117,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<'csv' | 'json' | 'excel' | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [units, setUnits] = useState<string[]>([]);
   const [fieldMappings, setFieldMappings] = useState<{[key: string]: string}>({});
   const [defaultValues, setDefaultValues] = useState<{[key: string]: string}>({});
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -155,6 +157,31 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
     'name', 'category', 'supplierId', 'supplierArticleNumber', 'vatRate', 'bundleUnit', 
     'bundlePrice', 'content', 'contentUnit', 'pricePerUnit', 'ingredients', 'additives', 'allergens', 'nutritionInfo'
   ]);
+
+  // Lade Einheiten beim Öffnen des Modals
+  useEffect(() => {
+    if (show) {
+      const loadUnits = async () => {
+        try {
+          const loadedUnits = await storageLayer.load<UnitEntity>('units');
+          if (loadedUnits) {
+            // Sortiere alphabetisch nach name
+            const sortedUnits = [...loadedUnits]
+              .sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }))
+              .map(unit => unit.name);
+            setUnits(sortedUnits);
+          } else {
+            setUnits([]);
+          }
+        } catch (error) {
+          console.error('Fehler beim Laden der Einheiten:', error);
+          setUnits([]);
+        }
+      };
+      
+      loadUnits();
+    }
+  }, [show]);
   
   // Export-Filter State
   // Hilfsfunktionen für Export-Filter-Speicherung in localOptions
@@ -240,7 +267,9 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
   // Aktualisiere den CategoryManager wenn sich die Artikeldaten ändern
   useEffect(() => {
     if (articles) {
-      categoryManager.updateCategories(articles);
+      categoryManager.updateCategories(articles).catch(err => 
+        console.error('Fehler beim Aktualisieren der Kategorien:', err)
+      );
     }
   }, [articles]);
 
@@ -497,8 +526,8 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
       category: categoryManager.getAllCategories(),
       vatRate: ['0%', '7%', '19%'],
       supplier: suppliers.map(s => s.name),
-    bundleUnit: UNITS,
-    contentUnit: UNITS
+    bundleUnit: units.length > 0 ? units : [],
+    contentUnit: units.length > 0 ? units : []
   };
 
      const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -710,7 +739,7 @@ const ArtikelDataExchange: React.FC<ArtikelDataExchangeProps> = ({
     // Filtere Optionen basierend auf der Eingabe
     if (availableOptions[articleField as keyof typeof availableOptions]) {
       const options = availableOptions[articleField as keyof typeof availableOptions];
-      const filtered = options.filter(option => 
+      const filtered = options.filter((option: string) => 
         option.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredOptions(prev => ({

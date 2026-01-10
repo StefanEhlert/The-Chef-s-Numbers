@@ -1,6 +1,6 @@
 -- Chef Numbers Database Initialization Script (MariaDB)
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-11-17T23:03:58.573Z
+-- Automatisch generiert am: 2026-01-09T13:47:35.268Z
 
 -- Erstelle die Datenbank falls sie nicht existiert
 CREATE DATABASE IF NOT EXISTS chef_numbers CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -43,15 +43,16 @@ CREATE TABLE IF NOT EXISTS accountingaccounts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================
--- Tabelle: accountingsettingss (Interface: AccountingSettings)
+-- Tabelle: accountingsettings (Interface: AccountingSettings)
 -- ========================================
 
-CREATE TABLE IF NOT EXISTS accountingsettingss (
+CREATE TABLE IF NOT EXISTS accountingsettings (
     id CHAR(36) NOT NULL,
     db_id CHAR(36) PRIMARY KEY NOT NULL,
     selected_chart_id TEXT NULL,
     customizations_enabled BOOLEAN NULL,
     ocr_api_configs TEXT NULL,
+    vat_rates TEXT NULL,
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status VARCHAR(20) DEFAULT 'pending' NULL,
@@ -76,6 +77,46 @@ CREATE TABLE IF NOT EXISTS suppliers (
     address JSON NULL,
     phone_numbers JSON NULL,
     notes TEXT NULL,
+    netto_prices BOOLEAN NULL,
+    recognized_names JSON NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status VARCHAR(20) DEFAULT 'pending' NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
+-- Tabelle: unitentitys (Interface: UnitEntity)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS unitentitys (
+    id CHAR(36) NOT NULL,
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    is_dirty BOOLEAN DEFAULT false NULL,
+    is_new BOOLEAN DEFAULT false NULL,
+    sync_status VARCHAR(20) DEFAULT 'pending' NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    created_by CHAR(36) NULL,
+    updated_by CHAR(36) NULL,
+    last_modified_by CHAR(36) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
+-- Tabelle: categoryentitys (Interface: CategoryEntity)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS categoryentitys (
+    id CHAR(36) NOT NULL,
+    db_id CHAR(36) PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NULL,
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status VARCHAR(20) DEFAULT 'pending' NULL,
@@ -179,6 +220,10 @@ CREATE TABLE IF NOT EXISTS receipts (
     accounting TEXT NULL,
     is_completed BOOLEAN NULL,
     notes TEXT NULL,
+    ocr_result TEXT NULL,
+    ocr_provider TEXT NULL,
+    receipt_image_path TEXT NULL,
+    processed_ocr_data TEXT NULL,
     is_dirty BOOLEAN DEFAULT false NULL,
     is_new BOOLEAN DEFAULT false NULL,
     sync_status VARCHAR(20) DEFAULT 'pending' NULL,
@@ -601,17 +646,17 @@ PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Prüfe und füge Spalten für accountingsettingss hinzu
+-- Prüfe und füge Spalten für accountingsettings hinzu
 -- Spalte: id
 SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'id';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NOT NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NOT NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -622,11 +667,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'db_id';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN db_id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN db_id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -637,11 +682,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'selected_chart_id';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN selected_chart_id ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN selected_chart_id ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -652,11 +697,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'customizations_enabled';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN customizations_enabled ', 'BOOLEAN', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN customizations_enabled ', 'BOOLEAN', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -667,11 +712,26 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'ocr_api_configs';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN ocr_api_configs ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN ocr_api_configs ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: vat_rates
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'accountingsettings' 
+  AND column_name = 'vat_rates';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN vat_rates ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -682,11 +742,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'is_dirty';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN is_dirty ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN is_dirty ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -697,11 +757,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'is_new';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN is_new ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN is_new ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -712,11 +772,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'sync_status';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN sync_status ', 'VARCHAR(20)', ' ', 'DEFAULT \'pending\'', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN sync_status ', 'VARCHAR(20)', ' ', 'DEFAULT \'pending\'', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -727,21 +787,21 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'created_at';
 
 SET @col_has_default = 0;
 SELECT COUNT(*) INTO @col_has_default 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'created_at' 
   AND column_default IS NOT NULL;
 
 SET @query = IF(@col_exists = 1 AND @col_has_default = 0, 
-  CONCAT('ALTER TABLE accountingsettingss MODIFY COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
+  CONCAT('ALTER TABLE accountingsettings MODIFY COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
   IF(@col_exists = 0, 
-    CONCAT('ALTER TABLE accountingsettingss ADD COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
+    CONCAT('ALTER TABLE accountingsettings ADD COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
     'SELECT 1'));
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -752,21 +812,21 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'updated_at';
 
 SET @col_has_default = 0;
 SELECT COUNT(*) INTO @col_has_default 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'updated_at' 
   AND column_default IS NOT NULL;
 
 SET @query = IF(@col_exists = 1 AND @col_has_default = 0, 
-  CONCAT('ALTER TABLE accountingsettingss MODIFY COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
+  CONCAT('ALTER TABLE accountingsettings MODIFY COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
   IF(@col_exists = 0, 
-    CONCAT('ALTER TABLE accountingsettingss ADD COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
+    CONCAT('ALTER TABLE accountingsettings ADD COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
     'SELECT 1'));
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -777,11 +837,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'created_by';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN created_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN created_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -792,11 +852,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'updated_by';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN updated_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN updated_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -807,11 +867,11 @@ SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
 FROM information_schema.columns 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
+  AND table_name = 'accountingsettings' 
   AND column_name = 'last_modified_by';
 
 SET @query = IF(@col_exists = 0, 
-  CONCAT('ALTER TABLE accountingsettingss ADD COLUMN last_modified_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  CONCAT('ALTER TABLE accountingsettings ADD COLUMN last_modified_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -953,6 +1013,36 @@ PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- Spalte: netto_prices
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'suppliers' 
+  AND column_name = 'netto_prices';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE suppliers ADD COLUMN netto_prices ', 'BOOLEAN', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: recognized_names
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'suppliers' 
+  AND column_name = 'recognized_names';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE suppliers ADD COLUMN recognized_names ', 'JSON', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- Spalte: is_dirty
 SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
@@ -1088,6 +1178,408 @@ WHERE table_schema = 'chef_numbers'
 
 SET @query = IF(@col_exists = 0, 
   CONCAT('ALTER TABLE suppliers ADD COLUMN last_modified_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Prüfe und füge Spalten für unitentitys hinzu
+-- Spalte: id
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'id';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NOT NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: db_id
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'db_id';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN db_id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: name
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'name';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN name ', 'TEXT', ' ', '', ' ', '', ' ', 'NOT NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: description
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'description';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN description ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: is_dirty
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'is_dirty';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN is_dirty ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: is_new
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'is_new';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN is_new ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: sync_status
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'sync_status';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN sync_status ', 'VARCHAR(20)', ' ', 'DEFAULT \'pending\'', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: created_at
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'created_at';
+
+SET @col_has_default = 0;
+SELECT COUNT(*) INTO @col_has_default 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'created_at' 
+  AND column_default IS NOT NULL;
+
+SET @query = IF(@col_exists = 1 AND @col_has_default = 0, 
+  CONCAT('ALTER TABLE unitentitys MODIFY COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
+  IF(@col_exists = 0, 
+    CONCAT('ALTER TABLE unitentitys ADD COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
+    'SELECT 1'));
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: updated_at
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'updated_at';
+
+SET @col_has_default = 0;
+SELECT COUNT(*) INTO @col_has_default 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'updated_at' 
+  AND column_default IS NOT NULL;
+
+SET @query = IF(@col_exists = 1 AND @col_has_default = 0, 
+  CONCAT('ALTER TABLE unitentitys MODIFY COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
+  IF(@col_exists = 0, 
+    CONCAT('ALTER TABLE unitentitys ADD COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
+    'SELECT 1'));
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: created_by
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'created_by';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN created_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: updated_by
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'updated_by';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN updated_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: last_modified_by
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND column_name = 'last_modified_by';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE unitentitys ADD COLUMN last_modified_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Prüfe und füge Spalten für categoryentitys hinzu
+-- Spalte: id
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'id';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NOT NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: db_id
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'db_id';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN db_id ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: name
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'name';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN name ', 'TEXT', ' ', '', ' ', '', ' ', 'NOT NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: description
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'description';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN description ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: is_dirty
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'is_dirty';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN is_dirty ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: is_new
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'is_new';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN is_new ', 'BOOLEAN', ' ', 'DEFAULT false', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: sync_status
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'sync_status';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN sync_status ', 'VARCHAR(20)', ' ', 'DEFAULT \'pending\'', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: created_at
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'created_at';
+
+SET @col_has_default = 0;
+SELECT COUNT(*) INTO @col_has_default 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'created_at' 
+  AND column_default IS NOT NULL;
+
+SET @query = IF(@col_exists = 1 AND @col_has_default = 0, 
+  CONCAT('ALTER TABLE categoryentitys MODIFY COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
+  IF(@col_exists = 0, 
+    CONCAT('ALTER TABLE categoryentitys ADD COLUMN created_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', '', ' ', 'NOT NULL'), 
+    'SELECT 1'));
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: updated_at
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'updated_at';
+
+SET @col_has_default = 0;
+SELECT COUNT(*) INTO @col_has_default 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'updated_at' 
+  AND column_default IS NOT NULL;
+
+SET @query = IF(@col_exists = 1 AND @col_has_default = 0, 
+  CONCAT('ALTER TABLE categoryentitys MODIFY COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
+  IF(@col_exists = 0, 
+    CONCAT('ALTER TABLE categoryentitys ADD COLUMN updated_at ', 'TIMESTAMP', ' ', 'DEFAULT CURRENT_TIMESTAMP', ' ', 'ON UPDATE CURRENT_TIMESTAMP', ' ', 'NOT NULL'), 
+    'SELECT 1'));
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: created_by
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'created_by';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN created_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: updated_by
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'updated_by';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN updated_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: last_modified_by
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND column_name = 'last_modified_by';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE categoryentitys ADD COLUMN last_modified_by ', 'CHAR(36)', ' ', '', ' ', '', ' ', 'NULL'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -2246,6 +2738,66 @@ PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- Spalte: ocr_result
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'receipts' 
+  AND column_name = 'ocr_result';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE receipts ADD COLUMN ocr_result ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: ocr_provider
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'receipts' 
+  AND column_name = 'ocr_provider';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE receipts ADD COLUMN ocr_provider ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: receipt_image_path
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'receipts' 
+  AND column_name = 'receipt_image_path';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE receipts ADD COLUMN receipt_image_path ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Spalte: processed_ocr_data
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists 
+FROM information_schema.columns 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'receipts' 
+  AND column_name = 'processed_ocr_data';
+
+SET @query = IF(@col_exists = 0, 
+  CONCAT('ALTER TABLE receipts ADD COLUMN processed_ocr_data ', 'TEXT', ' ', '', ' ', '', ' ', 'NULL'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- Spalte: is_dirty
 SET @col_exists = 0;
 SELECT COUNT(*) INTO @col_exists 
@@ -2437,46 +2989,46 @@ PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Index: idx_accountingsettingss_id
+-- Index: idx_accountingsettings_id
 SET @idx_exists = 0;
 SELECT COUNT(*) INTO @idx_exists 
 FROM information_schema.statistics 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
-  AND index_name = 'idx_accountingsettingss_id';
+  AND table_name = 'accountingsettings' 
+  AND index_name = 'idx_accountingsettings_id';
 
 SET @query = IF(@idx_exists = 0, 
-  CONCAT('CREATE INDEX idx_accountingsettingss_id ON accountingsettingss(', 'id', ')'), 
+  CONCAT('CREATE INDEX idx_accountingsettings_id ON accountingsettings(', 'id', ')'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Index: idx_accountingsettingss_created_at
+-- Index: idx_accountingsettings_created_at
 SET @idx_exists = 0;
 SELECT COUNT(*) INTO @idx_exists 
 FROM information_schema.statistics 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
-  AND index_name = 'idx_accountingsettingss_created_at';
+  AND table_name = 'accountingsettings' 
+  AND index_name = 'idx_accountingsettings_created_at';
 
 SET @query = IF(@idx_exists = 0, 
-  CONCAT('CREATE INDEX idx_accountingsettingss_created_at ON accountingsettingss(', 'created_at', ')'), 
+  CONCAT('CREATE INDEX idx_accountingsettings_created_at ON accountingsettings(', 'created_at', ')'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Index: idx_accountingsettingss_updated_at
+-- Index: idx_accountingsettings_updated_at
 SET @idx_exists = 0;
 SELECT COUNT(*) INTO @idx_exists 
 FROM information_schema.statistics 
 WHERE table_schema = 'chef_numbers' 
-  AND table_name = 'accountingsettingss' 
-  AND index_name = 'idx_accountingsettingss_updated_at';
+  AND table_name = 'accountingsettings' 
+  AND index_name = 'idx_accountingsettings_updated_at';
 
 SET @query = IF(@idx_exists = 0, 
-  CONCAT('CREATE INDEX idx_accountingsettingss_updated_at ON accountingsettingss(', 'updated_at', ')'), 
+  CONCAT('CREATE INDEX idx_accountingsettings_updated_at ON accountingsettings(', 'updated_at', ')'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;
@@ -2522,6 +3074,96 @@ WHERE table_schema = 'chef_numbers'
 
 SET @query = IF(@idx_exists = 0, 
   CONCAT('CREATE INDEX idx_suppliers_updated_at ON suppliers(', 'updated_at', ')'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Index: idx_unitentitys_id
+SET @idx_exists = 0;
+SELECT COUNT(*) INTO @idx_exists 
+FROM information_schema.statistics 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND index_name = 'idx_unitentitys_id';
+
+SET @query = IF(@idx_exists = 0, 
+  CONCAT('CREATE INDEX idx_unitentitys_id ON unitentitys(', 'id', ')'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Index: idx_unitentitys_created_at
+SET @idx_exists = 0;
+SELECT COUNT(*) INTO @idx_exists 
+FROM information_schema.statistics 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND index_name = 'idx_unitentitys_created_at';
+
+SET @query = IF(@idx_exists = 0, 
+  CONCAT('CREATE INDEX idx_unitentitys_created_at ON unitentitys(', 'created_at', ')'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Index: idx_unitentitys_updated_at
+SET @idx_exists = 0;
+SELECT COUNT(*) INTO @idx_exists 
+FROM information_schema.statistics 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'unitentitys' 
+  AND index_name = 'idx_unitentitys_updated_at';
+
+SET @query = IF(@idx_exists = 0, 
+  CONCAT('CREATE INDEX idx_unitentitys_updated_at ON unitentitys(', 'updated_at', ')'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Index: idx_categoryentitys_id
+SET @idx_exists = 0;
+SELECT COUNT(*) INTO @idx_exists 
+FROM information_schema.statistics 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND index_name = 'idx_categoryentitys_id';
+
+SET @query = IF(@idx_exists = 0, 
+  CONCAT('CREATE INDEX idx_categoryentitys_id ON categoryentitys(', 'id', ')'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Index: idx_categoryentitys_created_at
+SET @idx_exists = 0;
+SELECT COUNT(*) INTO @idx_exists 
+FROM information_schema.statistics 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND index_name = 'idx_categoryentitys_created_at';
+
+SET @query = IF(@idx_exists = 0, 
+  CONCAT('CREATE INDEX idx_categoryentitys_created_at ON categoryentitys(', 'created_at', ')'), 
+  'SELECT 1');
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Index: idx_categoryentitys_updated_at
+SET @idx_exists = 0;
+SELECT COUNT(*) INTO @idx_exists 
+FROM information_schema.statistics 
+WHERE table_schema = 'chef_numbers' 
+  AND table_name = 'categoryentitys' 
+  AND index_name = 'idx_categoryentitys_updated_at';
+
+SET @query = IF(@idx_exists = 0, 
+  CONCAT('CREATE INDEX idx_categoryentitys_updated_at ON categoryentitys(', 'updated_at', ')'), 
   'SELECT 1');
 PREPARE stmt FROM @query;
 EXECUTE stmt;

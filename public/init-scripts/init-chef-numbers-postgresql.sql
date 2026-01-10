@@ -1,7 +1,7 @@
 -- Chef Numbers Database Initialization Script (PostgreSQL)
 -- Wird beim ersten Start der PostgreSQL-Datenbank ausgeführt
 -- Frontend-synchronisiertes Schema v2.2.2
--- Automatisch generiert am: 2025-11-17T23:03:58.565Z
+-- Automatisch generiert am: 2026-01-09T13:47:35.260Z
 
 -- Erstelle Rollen für PostgreSQL
 DO $$
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS system_info (
 -- ========================================
 
 -- Automatisch generierte SQL-Befehle aus TypeScript-Interfaces
--- Generiert am: 2025-11-17T23:03:58.565Z
+-- Generiert am: 2026-01-09T13:47:35.260Z
 -- Automatische Schema-Generierung mit ts-morph
 
 -- ========================================
@@ -149,16 +149,17 @@ CREATE INDEX IF NOT EXISTS idx_accountingaccounts_created_at ON accountingaccoun
 CREATE INDEX IF NOT EXISTS idx_accountingaccounts_updated_at ON accountingaccounts(updated_at);
 
 -- ========================================
--- Tabelle: accountingsettingss (Interface: AccountingSettings)
+-- Tabelle: accountingsettings (Interface: AccountingSettings)
 -- ========================================
 
--- Erstelle Tabelle: accountingsettingss (Interface: AccountingSettings)
-CREATE TABLE IF NOT EXISTS accountingsettingss (
+-- Erstelle Tabelle: accountingsettings (Interface: AccountingSettings)
+CREATE TABLE IF NOT EXISTS accountingsettings (
 id UUID NOT NULL,
 db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 selected_chart_id TEXT,
 customizations_enabled BOOLEAN,
 ocr_api_configs TEXT,
+vat_rates TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -169,15 +170,15 @@ updated_by UUID,
 last_modified_by UUID
 );
 
--- Indizes für accountingsettingss
+-- Indizes für accountingsettings
 -- Index für Frontend-ID (id)
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_id ON accountingsettingss(id);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_id ON accountingsettings(id);
 -- Index für Primary Key (db_id)
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_db_id ON accountingsettingss(db_id);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_db_id ON accountingsettings(db_id);
 -- Index für Erstellungsdatum
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_created_at ON accountingsettingss(created_at);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_created_at ON accountingsettings(created_at);
 -- Index für Aktualisierungsdatum
-CREATE INDEX IF NOT EXISTS idx_accountingsettingss_updated_at ON accountingsettingss(updated_at);
+CREATE INDEX IF NOT EXISTS idx_accountingsettings_updated_at ON accountingsettings(updated_at);
 
 -- ========================================
 -- Tabelle: suppliers (Interface: Supplier)
@@ -194,6 +195,8 @@ website TEXT,
 address JSONB,
 phone_numbers JSONB,
 notes TEXT,
+netto_prices BOOLEAN,
+recognized_names JSONB,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -213,6 +216,66 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_db_id ON suppliers(db_id);
 CREATE INDEX IF NOT EXISTS idx_suppliers_created_at ON suppliers(created_at);
 -- Index für Aktualisierungsdatum
 CREATE INDEX IF NOT EXISTS idx_suppliers_updated_at ON suppliers(updated_at);
+
+-- ========================================
+-- Tabelle: unitentitys (Interface: UnitEntity)
+-- ========================================
+
+-- Erstelle Tabelle: unitentitys (Interface: UnitEntity)
+CREATE TABLE IF NOT EXISTS unitentitys (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+name TEXT NOT NULL,
+description TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für unitentitys
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_unitentitys_id ON unitentitys(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_unitentitys_db_id ON unitentitys(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_unitentitys_created_at ON unitentitys(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_unitentitys_updated_at ON unitentitys(updated_at);
+
+-- ========================================
+-- Tabelle: categoryentitys (Interface: CategoryEntity)
+-- ========================================
+
+-- Erstelle Tabelle: categoryentitys (Interface: CategoryEntity)
+CREATE TABLE IF NOT EXISTS categoryentitys (
+id UUID NOT NULL,
+db_id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+name TEXT NOT NULL,
+description TEXT,
+is_dirty BOOLEAN DEFAULT false,
+is_new BOOLEAN DEFAULT false,
+sync_status sync_status_enum DEFAULT 'pending',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+created_by UUID,
+updated_by UUID,
+last_modified_by UUID
+);
+
+-- Indizes für categoryentitys
+-- Index für Frontend-ID (id)
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_id ON categoryentitys(id);
+-- Index für Primary Key (db_id)
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_db_id ON categoryentitys(db_id);
+-- Index für Erstellungsdatum
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_created_at ON categoryentitys(created_at);
+-- Index für Aktualisierungsdatum
+CREATE INDEX IF NOT EXISTS idx_categoryentitys_updated_at ON categoryentitys(updated_at);
 
 -- ========================================
 -- Tabelle: articles (Interface: Article)
@@ -334,6 +397,10 @@ line_item_count DECIMAL,
 accounting TEXT,
 is_completed BOOLEAN,
 notes TEXT,
+ocr_result TEXT,
+ocr_provider TEXT,
+receipt_image_path TEXT,
+processed_ocr_data TEXT,
 is_dirty BOOLEAN DEFAULT false,
 is_new BOOLEAN DEFAULT false,
 sync_status sync_status_enum DEFAULT 'pending',
@@ -725,150 +792,161 @@ BEGIN
 
 END $$;
 
--- Prüfe und füge Spalten für accountingsettingss hinzu
+-- Prüfe und füge Spalten für accountingsettings hinzu
 DO $$
 BEGIN
     -- Spalte: id
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'id'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN id UUID  NOT NULL;
-        RAISE NOTICE '✅ Spalte id zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte id zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: db_id
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'db_id'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
-        RAISE NOTICE '✅ Spalte db_id zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
+        RAISE NOTICE '✅ Spalte db_id zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: selected_chart_id
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'selected_chart_id'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN selected_chart_id TEXT  NULL;
-        RAISE NOTICE '✅ Spalte selected_chart_id zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN selected_chart_id TEXT  NULL;
+        RAISE NOTICE '✅ Spalte selected_chart_id zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: customizations_enabled
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'customizations_enabled'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN customizations_enabled BOOLEAN  NULL;
-        RAISE NOTICE '✅ Spalte customizations_enabled zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN customizations_enabled BOOLEAN  NULL;
+        RAISE NOTICE '✅ Spalte customizations_enabled zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: ocr_api_configs
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'ocr_api_configs'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN ocr_api_configs TEXT  NULL;
-        RAISE NOTICE '✅ Spalte ocr_api_configs zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN ocr_api_configs TEXT  NULL;
+        RAISE NOTICE '✅ Spalte ocr_api_configs zu accountingsettings hinzugefügt';
+    END IF;
+
+    -- Spalte: vat_rates
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'accountingsettings' 
+        AND column_name = 'vat_rates'
+    ) THEN
+        ALTER TABLE accountingsettings ADD COLUMN vat_rates TEXT  NULL;
+        RAISE NOTICE '✅ Spalte vat_rates zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: is_dirty
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'is_dirty'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
-        RAISE NOTICE '✅ Spalte is_dirty zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_dirty zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: is_new
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'is_new'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
-        RAISE NOTICE '✅ Spalte is_new zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_new zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: sync_status
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'sync_status'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
-        RAISE NOTICE '✅ Spalte sync_status zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
+        RAISE NOTICE '✅ Spalte sync_status zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: created_at
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'created_at'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
-        RAISE NOTICE '✅ Spalte created_at zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte created_at zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: updated_at
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'updated_at'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
-        RAISE NOTICE '✅ Spalte updated_at zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte updated_at zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: created_by
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'created_by'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN created_by UUID  NULL;
-        RAISE NOTICE '✅ Spalte created_by zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN created_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte created_by zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: updated_by
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'updated_by'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN updated_by UUID  NULL;
-        RAISE NOTICE '✅ Spalte updated_by zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN updated_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte updated_by zu accountingsettings hinzugefügt';
     END IF;
 
     -- Spalte: last_modified_by
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'accountingsettingss' 
+        AND table_name = 'accountingsettings' 
         AND column_name = 'last_modified_by'
     ) THEN
-        ALTER TABLE accountingsettingss ADD COLUMN last_modified_by UUID  NULL;
-        RAISE NOTICE '✅ Spalte last_modified_by zu accountingsettingss hinzugefügt';
+        ALTER TABLE accountingsettings ADD COLUMN last_modified_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte last_modified_by zu accountingsettings hinzugefügt';
     END IF;
 
 END $$;
@@ -975,6 +1053,28 @@ BEGIN
         RAISE NOTICE '✅ Spalte notes zu suppliers hinzugefügt';
     END IF;
 
+    -- Spalte: netto_prices
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'netto_prices'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN netto_prices BOOLEAN  NULL;
+        RAISE NOTICE '✅ Spalte netto_prices zu suppliers hinzugefügt';
+    END IF;
+
+    -- Spalte: recognized_names
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'suppliers' 
+        AND column_name = 'recognized_names'
+    ) THEN
+        ALTER TABLE suppliers ADD COLUMN recognized_names JSONB  NULL;
+        RAISE NOTICE '✅ Spalte recognized_names zu suppliers hinzugefügt';
+    END IF;
+
     -- Spalte: is_dirty
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
@@ -1061,6 +1161,280 @@ BEGIN
     ) THEN
         ALTER TABLE suppliers ADD COLUMN last_modified_by UUID  NULL;
         RAISE NOTICE '✅ Spalte last_modified_by zu suppliers hinzugefügt';
+    END IF;
+
+END $$;
+
+-- Prüfe und füge Spalten für unitentitys hinzu
+DO $$
+BEGIN
+    -- Spalte: id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'id'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte id zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: db_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'db_id'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
+        RAISE NOTICE '✅ Spalte db_id zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: name
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'name'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN name TEXT  NOT NULL;
+        RAISE NOTICE '✅ Spalte name zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: description
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'description'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN description TEXT  NULL;
+        RAISE NOTICE '✅ Spalte description zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: is_dirty
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'is_dirty'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_dirty zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: is_new
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'is_new'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_new zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: sync_status
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'sync_status'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
+        RAISE NOTICE '✅ Spalte sync_status zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: created_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte created_at zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte updated_at zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: created_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'created_by'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN created_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte created_by zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'updated_by'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN updated_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte updated_by zu unitentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: last_modified_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unitentitys' 
+        AND column_name = 'last_modified_by'
+    ) THEN
+        ALTER TABLE unitentitys ADD COLUMN last_modified_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte last_modified_by zu unitentitys hinzugefügt';
+    END IF;
+
+END $$;
+
+-- Prüfe und füge Spalten für categoryentitys hinzu
+DO $$
+BEGIN
+    -- Spalte: id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'id'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN id UUID  NOT NULL;
+        RAISE NOTICE '✅ Spalte id zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: db_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'db_id'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN db_id UUID DEFAULT gen_random_uuid() NOT NULL;
+        RAISE NOTICE '✅ Spalte db_id zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: name
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'name'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN name TEXT  NOT NULL;
+        RAISE NOTICE '✅ Spalte name zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: description
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'description'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN description TEXT  NULL;
+        RAISE NOTICE '✅ Spalte description zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: is_dirty
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'is_dirty'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN is_dirty BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_dirty zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: is_new
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'is_new'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN is_new BOOLEAN DEFAULT false NULL;
+        RAISE NOTICE '✅ Spalte is_new zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: sync_status
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'sync_status'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN sync_status sync_status_enum DEFAULT 'pending' NULL;
+        RAISE NOTICE '✅ Spalte sync_status zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: created_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte created_at zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
+        RAISE NOTICE '✅ Spalte updated_at zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: created_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'created_by'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN created_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte created_by zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: updated_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'updated_by'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN updated_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte updated_by zu categoryentitys hinzugefügt';
+    END IF;
+
+    -- Spalte: last_modified_by
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'categoryentitys' 
+        AND column_name = 'last_modified_by'
+    ) THEN
+        ALTER TABLE categoryentitys ADD COLUMN last_modified_by UUID  NULL;
+        RAISE NOTICE '✅ Spalte last_modified_by zu categoryentitys hinzugefügt';
     END IF;
 
 END $$;
@@ -1892,6 +2266,50 @@ BEGIN
         RAISE NOTICE '✅ Spalte notes zu receipts hinzugefügt';
     END IF;
 
+    -- Spalte: ocr_result
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'receipts' 
+        AND column_name = 'ocr_result'
+    ) THEN
+        ALTER TABLE receipts ADD COLUMN ocr_result TEXT  NULL;
+        RAISE NOTICE '✅ Spalte ocr_result zu receipts hinzugefügt';
+    END IF;
+
+    -- Spalte: ocr_provider
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'receipts' 
+        AND column_name = 'ocr_provider'
+    ) THEN
+        ALTER TABLE receipts ADD COLUMN ocr_provider TEXT  NULL;
+        RAISE NOTICE '✅ Spalte ocr_provider zu receipts hinzugefügt';
+    END IF;
+
+    -- Spalte: receipt_image_path
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'receipts' 
+        AND column_name = 'receipt_image_path'
+    ) THEN
+        ALTER TABLE receipts ADD COLUMN receipt_image_path TEXT  NULL;
+        RAISE NOTICE '✅ Spalte receipt_image_path zu receipts hinzugefügt';
+    END IF;
+
+    -- Spalte: processed_ocr_data
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'receipts' 
+        AND column_name = 'processed_ocr_data'
+    ) THEN
+        ALTER TABLE receipts ADD COLUMN processed_ocr_data TEXT  NULL;
+        RAISE NOTICE '✅ Spalte processed_ocr_data zu receipts hinzugefügt';
+    END IF;
+
     -- Spalte: is_dirty
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
@@ -2017,11 +2435,11 @@ END $$;
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_accountingsettingss_updated_at') THEN
-        CREATE TRIGGER update_accountingsettingss_updated_at BEFORE UPDATE ON accountingsettingss FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        RAISE NOTICE '✅ Trigger update_accountingsettingss_updated_at erstellt';
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_accountingsettings_updated_at') THEN
+        CREATE TRIGGER update_accountingsettings_updated_at BEFORE UPDATE ON accountingsettings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_accountingsettings_updated_at erstellt';
     ELSE
-        RAISE NOTICE '✓ Trigger update_accountingsettingss_updated_at existiert bereits';
+        RAISE NOTICE '✓ Trigger update_accountingsettings_updated_at existiert bereits';
     END IF;
 END $$;
 
@@ -2032,6 +2450,26 @@ BEGIN
         RAISE NOTICE '✅ Trigger update_suppliers_updated_at erstellt';
     ELSE
         RAISE NOTICE '✓ Trigger update_suppliers_updated_at existiert bereits';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_unitentitys_updated_at') THEN
+        CREATE TRIGGER update_unitentitys_updated_at BEFORE UPDATE ON unitentitys FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_unitentitys_updated_at erstellt';
+    ELSE
+        RAISE NOTICE '✓ Trigger update_unitentitys_updated_at existiert bereits';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_categoryentitys_updated_at') THEN
+        CREATE TRIGGER update_categoryentitys_updated_at BEFORE UPDATE ON categoryentitys FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE '✅ Trigger update_categoryentitys_updated_at erstellt';
+    ELSE
+        RAISE NOTICE '✓ Trigger update_categoryentitys_updated_at existiert bereits';
     END IF;
 END $$;
 
@@ -2081,8 +2519,10 @@ END $$;
 
 -- Aktiviere Row Level Security für alle generierten Tabellen
 ALTER TABLE accountingaccounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE accountingsettingss ENABLE ROW LEVEL SECURITY;
+ALTER TABLE accountingsettings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE unitentitys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categoryentitys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
@@ -2103,14 +2543,14 @@ BEGIN
     END IF;
 END $$;
 
--- RLS Policy für accountingsettingss (Idempotent)
+-- RLS Policy für accountingsettings (Idempotent)
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'accountingsettingss' AND policyname = 'Enable all operations for all users') THEN
-        CREATE POLICY "Enable all operations for all users" ON accountingsettingss FOR ALL USING (true);
-        RAISE NOTICE '✅ RLS Policy für accountingsettingss erstellt';
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'accountingsettings' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON accountingsettings FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für accountingsettings erstellt';
     ELSE
-        RAISE NOTICE '✓ RLS Policy für accountingsettingss existiert bereits';
+        RAISE NOTICE '✓ RLS Policy für accountingsettings existiert bereits';
     END IF;
 END $$;
 
@@ -2122,6 +2562,28 @@ BEGIN
         RAISE NOTICE '✅ RLS Policy für suppliers erstellt';
     ELSE
         RAISE NOTICE '✓ RLS Policy für suppliers existiert bereits';
+    END IF;
+END $$;
+
+-- RLS Policy für unitentitys (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'unitentitys' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON unitentitys FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für unitentitys erstellt';
+    ELSE
+        RAISE NOTICE '✓ RLS Policy für unitentitys existiert bereits';
+    END IF;
+END $$;
+
+-- RLS Policy für categoryentitys (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'categoryentitys' AND policyname = 'Enable all operations for all users') THEN
+        CREATE POLICY "Enable all operations for all users" ON categoryentitys FOR ALL USING (true);
+        RAISE NOTICE '✅ RLS Policy für categoryentitys erstellt';
+    ELSE
+        RAISE NOTICE '✓ RLS Policy für categoryentitys existiert bereits';
     END IF;
 END $$;
 

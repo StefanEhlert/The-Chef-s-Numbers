@@ -174,7 +174,9 @@ export const useArticleHandlers = (
           : [...prev, newArticle];
         
         // Aktualisiere den CategoryManager mit den neuen Artikeldaten
-        categoryManager.updateCategories(updatedArticles);
+        categoryManager.updateCategories(updatedArticles).catch(err => 
+          console.error('Fehler beim Aktualisieren der Kategorien:', err)
+        );
         
         // Speichere die aktualisierten Artikel im LocalStorage
         saveAppData({ articles: updatedArticles });

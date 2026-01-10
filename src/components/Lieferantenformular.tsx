@@ -1,11 +1,18 @@
 import React from 'react';
-import { FaTimes as FaClose, FaSave, FaArrowLeft, FaPlus, FaGlobe, FaSearch } from 'react-icons/fa';
+import ReactDOM from 'react-dom';
+import { FaTimes as FaClose, FaSave, FaArrowLeft, FaPlus, FaGlobe, FaSearch, FaSpinner, FaBrain } from 'react-icons/fa';
 import { useSupplierForm } from '../hooks/useSupplierForm';
 import { useAppContext } from '../contexts/AppContext';
 import { storageLayer } from '../services/storageLayer';
 import { Supplier, PhoneType } from '../types';
 import { UUIDUtils } from '../utils/uuidUtils';
 import { extractContactsFromHtml, combineExtractionResults } from '../services/contactExtractionService';
+import { 
+  searchCompaniesWithGemini, 
+  fetchSupplierDataFromGemini, 
+  convertGeminiDataToSupplierForm,
+  GeminiCompanySearchResult 
+} from '../services/geminiSupplierService';
 
 interface LieferantenformularProps {
   suppliers: Supplier[];
@@ -31,6 +38,14 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   const [isSearching, setIsSearching] = React.useState(false);
   const [shouldEvaluateClipboard, setShouldEvaluateClipboard] = React.useState(false);
   const [isEvaluatingClipboard, setIsEvaluatingClipboard] = React.useState(false);
+  const [showNameDropdown, setShowNameDropdown] = React.useState(false);
+  const [nameSearchTerm, setNameSearchTerm] = React.useState<string>('');
+  
+  // Gemini-Integration States
+  const [isLoadingGemini, setIsLoadingGemini] = React.useState(false);
+  const [geminiError, setGeminiError] = React.useState<string | null>(null);
+  const [showCompanySelectionModal, setShowCompanySelectionModal] = React.useState(false);
+  const [companySearchResults, setCompanySearchResults] = React.useState<GeminiCompanySearchResult[]>([]);
   
   // Resize-Funktionalität
   const [formWidth, setFormWidth] = React.useState<number | null>(null);
@@ -49,7 +64,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
         const localOptions = JSON.parse(localOptionsStr);
         if (localOptions?.formWidth?.supplierFormWidth) {
           const width = parseFloat(localOptions.formWidth.supplierFormWidth);
-          if (!isNaN(width) && width >= 40 && width <= 90) {
+        if (!isNaN(width) && width >= 40 && width <= 90) {
             return width;
           }
         }
@@ -130,6 +145,9 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   // Wenn das Formular geöffnet wird, setze editingSupplier basierend auf editingSupplierId
   React.useEffect(() => {
     if (showSupplierForm) {
+      // Setze nameSearchTerm zurück, damit keine alten Werte angezeigt werden
+      setNameSearchTerm('');
+      
       if (editingSupplierId) {
         // Lieferant bearbeiten - finde den Lieferanten anhand der ID
         const supplierToEdit = suppliers.find(s => s.id === editingSupplierId);
@@ -269,6 +287,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
     }
   };
 
+  // Alte Funktion: Google-Suche + Zwischenablage-Auswertung
   const handleSearchCompany = () => {
     console.log('🔍 handleSearchCompany aufgerufen, Firmenname:', supplierForm.name);
     
@@ -282,6 +301,85 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
       setShouldEvaluateClipboard(true);
     } else {
       console.log('⚠️ Kein Firmenname eingegeben');
+    }
+  };
+
+  // Gemini-Suche
+  const handleGeminiSearch = async () => {
+    console.log('🔍 Gemini: Starte Suche nach Firmenname:', supplierForm.name);
+    
+    if (!supplierForm.name.trim()) {
+      setGeminiError('Bitte geben Sie einen Firmennamen ein');
+      // Fehler nach 5 Sekunden automatisch entfernen
+      setTimeout(() => setGeminiError(null), 5000);
+      return;
+    }
+    
+    try {
+      setIsLoadingGemini(true);
+      setGeminiError(null);
+      
+      // Suche nach Unternehmen
+      const results = await searchCompaniesWithGemini(supplierForm.name.trim());
+      
+      if (results.length === 0) {
+        setGeminiError('Keine Unternehmen gefunden');
+        setTimeout(() => setGeminiError(null), 5000);
+        setIsLoadingGemini(false);
+        return;
+      }
+      
+      if (results.length === 1) {
+        // Nur ein Treffer - direkt laden
+        console.log('✅ Gemini: Nur ein Treffer gefunden, lade Details...');
+        await loadCompanyDetails(results[0]);
+      } else {
+        // Mehrere Treffer - Liste anzeigen
+        console.log(`✅ Gemini: ${results.length} Treffer gefunden, zeige Auswahl...`);
+        setCompanySearchResults(results);
+        setShowCompanySelectionModal(true);
+      }
+    } catch (error: any) {
+      console.error('❌ Gemini Fehler:', error);
+      setGeminiError(error.message || 'Fehler bei der Gemini-Suche');
+      // Fehler nach 5 Sekunden automatisch entfernen
+      setTimeout(() => setGeminiError(null), 5000);
+    } finally {
+      setIsLoadingGemini(false);
+    }
+  };
+
+  // Lade detaillierte Daten für ein ausgewähltes Unternehmen
+  const loadCompanyDetails = async (company: GeminiCompanySearchResult) => {
+    try {
+      setIsLoadingGemini(true);
+      setGeminiError(null);
+      setShowCompanySelectionModal(false);
+      
+      console.log('🤖 Gemini: Lade Details für:', company.name);
+      
+      const supplierData = await fetchSupplierDataFromGemini(
+        company.name,
+        company.location,
+        company.description
+      );
+      
+      if (!supplierData) {
+        throw new Error('Keine Daten von Gemini erhalten');
+      }
+      
+      // Konvertiere und übernehme ins Formular
+      const updatedForm = convertGeminiDataToSupplierForm(supplierData, supplierForm);
+      setSupplierForm(updatedForm);
+      
+      console.log('✅ Gemini: Daten erfolgreich ins Formular übernommen');
+    } catch (error: any) {
+      console.error('❌ Gemini Fehler beim Laden der Details:', error);
+      setGeminiError(error.message || 'Fehler beim Laden der Firmendaten');
+      // Fehler nach 5 Sekunden automatisch entfernen
+      setTimeout(() => setGeminiError(null), 5000);
+    } finally {
+      setIsLoadingGemini(false);
     }
   };
 
@@ -1132,20 +1230,107 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
   };
 
   // Event-Handler für Fokus auf das Formular
-  const handleFormFocus = () => {
-    console.log('🎯 handleFormFocus aufgerufen, shouldEvaluateClipboard:', shouldEvaluateClipboard);
+  const handleFormFocus = (e: React.FocusEvent) => {
+    console.log('🎯 handleFormFocus aufgerufen, shouldEvaluateClipboard:', shouldEvaluateClipboard, 'target:', e.target);
     
-    // Nur auswerten, wenn der Button gedrückt wurde
-    if (shouldEvaluateClipboard) {
-      console.log('📋 Zwischenablage-Auswertung aktiviert, starte in 500ms...');
-      // Verzögerung für bessere UX und um sicherzustellen, dass der Fokus vollständig ist
-      setTimeout(() => {
-        evaluateClipboardContent();
-      }, 500);
+    // Wenn der Fokus auf das Firmenname-Input geht, nicht die Zwischenablage auswerten
+    const target = e.target as HTMLInputElement;
+    // Prüfe, ob es das Firmenname-Input ist (kann durch id, name oder position identifiziert werden)
+    const isNameInput = target && (
+      target.id === 'supplier-name' || 
+      target.name === 'name' ||
+      (target.type === 'text' && target.placeholder === '' && !target.closest('.input-group')?.querySelector('button[title*="suchen"]'))
+    );
+    
+    if (!isNameInput) {
+      // Nur auswerten, wenn der Button gedrückt wurde
+      if (shouldEvaluateClipboard) {
+        console.log('📋 Zwischenablage-Auswertung aktiviert, starte in 500ms...');
+        // Verzögerung für bessere UX und um sicherzustellen, dass der Fokus vollständig ist
+        setTimeout(() => {
+          evaluateClipboardContent();
+        }, 500);
+      } else {
+        console.log('📋 Zwischenablage-Auswertung nicht aktiviert');
+      }
     } else {
-      console.log('📋 Zwischenablage-Auswertung nicht aktiviert');
+      console.log('🎯 handleFormFocus: Fokus auf Firmenname-Input, überspringe Zwischenablage-Auswertung');
     }
   };
+
+  // State für Dropdown-Position
+  const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Funktion zum Prüfen, ob recognizedNames-Dropdown angezeigt werden soll
+  const shouldShowNameDropdown = React.useMemo(() => {
+    if (!showNameDropdown) {
+      console.log('🔍 [Lieferantenformular] shouldShowNameDropdown: showNameDropdown ist false');
+      return false;
+    }
+    
+    const supplier = editingSupplier || (suppliers.find(s => s.id === editingSupplierId));
+    if (!supplier) {
+      console.log('🔍 [Lieferantenformular] shouldShowNameDropdown: Kein Supplier gefunden');
+      return false;
+    }
+    
+    if (!supplier.recognizedNames) {
+      console.log('🔍 [Lieferantenformular] shouldShowNameDropdown: Keine recognizedNames');
+      return false;
+    }
+    
+    // Stelle sicher, dass recognizedNames ein Array ist
+    let recognizedNamesArray: string[] = [];
+    if (Array.isArray(supplier.recognizedNames)) {
+      recognizedNamesArray = supplier.recognizedNames;
+    } else if (typeof supplier.recognizedNames === 'string') {
+      try {
+        recognizedNamesArray = JSON.parse(supplier.recognizedNames);
+      } catch (e) {
+        console.log('🔍 [Lieferantenformular] shouldShowNameDropdown: Fehler beim Parsen:', e);
+        return false;
+      }
+    }
+    
+    // Filtere aktuellen Namen heraus
+    const filteredNames = recognizedNamesArray.filter((name: string) => name !== supplier.name);
+    
+    console.log('🔍 [Lieferantenformular] shouldShowNameDropdown:', {
+      recognizedNamesArray,
+      supplierName: supplier.name,
+      filteredNames,
+      shouldShow: filteredNames.length > 0
+    });
+    
+    return filteredNames.length > 0;
+  }, [showNameDropdown, editingSupplier, editingSupplierId, suppliers]);
+
+  // Aktualisiere Dropdown-Position wenn es geöffnet wird
+  React.useEffect(() => {
+    if (shouldShowNameDropdown) {
+      const inputElement = document.getElementById('supplier-name');
+      if (inputElement) {
+        const updatePosition = () => {
+          const rect = inputElement.getBoundingClientRect();
+          setDropdownPosition({
+            top: rect.bottom + 2,
+            left: rect.left,
+            width: rect.width
+          });
+        };
+        updatePosition();
+        // Aktualisiere Position bei Scroll oder Resize
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+        return () => {
+          window.removeEventListener('scroll', updatePosition, true);
+          window.removeEventListener('resize', updatePosition);
+        };
+      }
+    } else {
+      setDropdownPosition(null);
+    }
+  }, [shouldShowNameDropdown]);
 
   if (!showSupplierForm) {
     return null;
@@ -1198,6 +1383,20 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                       <small className="form-label-themed">Zwischenablage-Auswertung aktiviert</small>
                     </div>
                   )}
+                  {isLoadingGemini && (
+                    <div className="ml-3 flex items-center">
+                      <div className="spinner-border spinner-border-sm mr-2" style={{ color: colors.accent }}></div>
+                      <small className="form-label-themed">Gemini: Suche Firmendaten...</small>
+                    </div>
+                  )}
+                  {geminiError && (
+                    <div className="ml-3 flex items-center">
+                      <div className="badge bg-danger mr-2">
+                        <small style={{ color: 'white' }}>⚠️</small>
+                      </div>
+                      <small className="form-label-themed" style={{ color: '#dc3545' }}>{geminiError}</small>
+                    </div>
+                  )}
                 </div>
                 <button
                   className="btn btn-link p-0"
@@ -1210,7 +1409,8 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
               <div 
                 className="card-body" 
                 style={{ 
-                  overflowY: 'auto', 
+                  overflowY: shouldShowNameDropdown ? 'visible' : 'auto', // overflow: visible wenn Dropdown offen
+                  overflowX: 'visible', // Stelle sicher, dass horizontales Overflow sichtbar ist
                   maxHeight: 'calc(100vh - 180px)',
                   paddingBottom: '0',
                   borderBottom: 'none'
@@ -1229,12 +1429,86 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                         <label className="form-label form-label-themed">
                           Firmenname *
                         </label>
-                        <div className="input-group">
+                        <div className="input-group" style={{ position: 'relative', zIndex: 10001 }}>
                           <input
                             type="text"
+                            id="supplier-name"
+                            name="name"
                             className="form-control form-control-themed"
-                            value={supplierForm.name}
-                            onChange={(e) => setSupplierForm(prev => ({ ...prev, name: e.target.value }))}
+                            value={nameSearchTerm !== '' ? nameSearchTerm : supplierForm.name}
+                            onChange={(e) => {
+                              setNameSearchTerm(e.target.value);
+                              setSupplierForm(prev => ({ ...prev, name: e.target.value }));
+                              if (e.target.value.length >= 0) {
+                                setShowNameDropdown(true);
+                              }
+                            }}
+                            onFocus={(e) => {
+                              e.stopPropagation(); // Verhindere, dass handleFormFocus ausgelöst wird
+                              // Setze nameSearchTerm zurück, damit alle recognizedNames angezeigt werden
+                              setNameSearchTerm('');
+                              // Prüfe, ob recognizedNames vorhanden sind
+                              const supplier = editingSupplier || (suppliers.find(s => s.id === editingSupplierId));
+                              const hasRecognizedNames = supplier?.recognizedNames && 
+                                (Array.isArray(supplier.recognizedNames) ? supplier.recognizedNames.length > 0 : true);
+                              console.log('🔍 [Lieferantenformular] Input-Fokus:', {
+                                editingSupplier: !!editingSupplier,
+                                editingSupplierId,
+                                supplier: !!supplier,
+                                recognizedNames: supplier?.recognizedNames,
+                                recognizedNamesType: typeof supplier?.recognizedNames,
+                                recognizedNamesIsArray: Array.isArray(supplier?.recognizedNames),
+                                recognizedNamesLength: Array.isArray(supplier?.recognizedNames) ? supplier.recognizedNames.length : 0,
+                                hasRecognizedNames
+                              });
+                              if (hasRecognizedNames) {
+                                console.log('🔍 [Lieferantenformular] Setze showNameDropdown auf true');
+                                // Verwende setTimeout, um sicherzustellen, dass der State gesetzt wird, bevor onBlur ausgelöst wird
+                                setTimeout(() => {
+                                  setShowNameDropdown(true);
+                                }, 0);
+                              } else {
+                                console.log('🔍 [Lieferantenformular] Keine recognizedNames, setze showNameDropdown auf false');
+                                setShowNameDropdown(false);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Verzögerung, um sicherzustellen, dass onFocus vollständig verarbeitet wurde
+                              // Erhöhe die Verzögerung, damit das Dropdown Zeit hat, gerendert zu werden
+                              setTimeout(() => {
+                                // Prüfe, ob der Fokus auf ein Element im Dropdown geht
+                                const activeElement = document.activeElement as HTMLElement;
+                                if (activeElement) {
+                                  // Prüfe, ob der Fokus ins Dropdown geht (wichtig: Dropdown ist jetzt im body via Portal)
+                                  if (activeElement.closest('.dropdown-menu')) {
+                                    console.log('🔍 [Lieferantenformular] onBlur: Fokus geht ins Dropdown, behalte offen');
+                                    return;
+                                  }
+                                  // Prüfe, ob der Fokus noch auf dem Input-Feld ist
+                                  if (activeElement === e.currentTarget || activeElement.id === 'supplier-name') {
+                                    console.log('🔍 [Lieferantenformular] onBlur: Fokus ist noch auf Input, behalte offen');
+                                    return;
+                                  }
+                                }
+                                // Prüfe relatedTarget
+                                const relatedTarget = e.relatedTarget as HTMLElement;
+                                if (relatedTarget) {
+                                  // Prüfe, ob der Fokus ins Dropdown geht
+                                  if (relatedTarget.closest('.dropdown-menu')) {
+                                    console.log('🔍 [Lieferantenformular] onBlur: relatedTarget ist im Dropdown, behalte offen');
+                                    return;
+                                  }
+                                  // Prüfe, ob der Fokus noch auf dem Input-Feld ist
+                                  if (relatedTarget === e.currentTarget || relatedTarget.id === 'supplier-name') {
+                                    console.log('🔍 [Lieferantenformular] onBlur: relatedTarget ist noch auf Input, behalte offen');
+                                    return;
+                                  }
+                                }
+                                // Fokus ist wirklich weg - schließe das Dropdown
+                                console.log('🔍 [Lieferantenformular] onBlur: Fokus ist wirklich weg, setze showNameDropdown auf false');
+                                setShowNameDropdown(false);
+                              }, 200); // Verzögerung, damit Klicks im Dropdown funktionieren
+                            }}
                             required
                           />
                           <button
@@ -1242,10 +1516,150 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                             className="btn btn-outline-input"
                             onClick={handleSearchCompany}
                             disabled={!supplierForm.name.trim()}
-                            title="Firmenname im Web suchen"
+                            title="Firmenname im Web suchen (Google + Zwischenablage-Auswertung)"
                           >
                             <FaSearch />
                           </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline-input"
+                            onClick={handleGeminiSearch}
+                            disabled={!supplierForm.name.trim() || isLoadingGemini}
+                            title="Firmendaten automatisch mit Gemini erfassen"
+                          >
+                            {isLoadingGemini ? (
+                              <FaSpinner className="fa-spin" />
+                            ) : (
+                              <FaBrain />
+                            )}
+                          </button>
+                          {/* Dropdown für recognizedNames - verwende Portal, um overflow-Probleme zu vermeiden */}
+                          {shouldShowNameDropdown && (() => {
+                            console.log('🔍 [Lieferantenformular] Rendere Dropdown - shouldShowNameDropdown ist true');
+                            
+                            // Finde die Position des Input-Feldes
+                            const inputElement = document.getElementById('supplier-name');
+                            if (!inputElement) {
+                              console.warn('⚠️ [Lieferantenformular] Input-Element nicht gefunden');
+                              return null;
+                            }
+                            
+                            const inputRect = inputElement.getBoundingClientRect();
+                            console.log('🔍 [Lieferantenformular] Input-Position:', {
+                              top: inputRect.top,
+                              bottom: inputRect.bottom,
+                              left: inputRect.left,
+                              width: inputRect.width,
+                              height: inputRect.height
+                            });
+                            
+                            const dropdownStyle: React.CSSProperties = {
+                              position: 'fixed', // fixed statt absolute, damit es nicht von overflow betroffen ist
+                              top: `${inputRect.bottom + 2}px`, // Direkt unter dem Input
+                              left: `${inputRect.left}px`,
+                              width: `${inputRect.width}px`,
+                              zIndex: 10001, // Sehr hoher z-index, damit es über allem liegt
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              backgroundColor: colors.card || '#ffffff', // Fallback-Farbe
+                              border: `1px solid ${colors.cardBorder || '#dee2e6'}`,
+                              borderRadius: '4px',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                              display: 'block', // Stelle sicher, dass es angezeigt wird
+                              visibility: 'visible', // Explizit sichtbar machen
+                              opacity: 1, // Explizit opak machen
+                              pointerEvents: 'auto', // Stelle sicher, dass Maus-Events funktionieren
+                              minHeight: '50px' // Mindesthöhe, damit es sichtbar ist
+                            };
+                            
+                            const dropdownContent = (
+                              <div
+                                className="dropdown-menu show"
+                                style={dropdownStyle}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                {(() => {
+                                // Prüfe sowohl editingSupplier als auch suppliers-Liste
+                                const supplier = editingSupplier || (suppliers.find(s => s.id === editingSupplierId));
+                                if (!supplier) return null;
+                                
+                                // Stelle sicher, dass recognizedNames ein Array ist
+                                let recognizedNamesArray: string[] = [];
+                                if (supplier.recognizedNames) {
+                                  if (Array.isArray(supplier.recognizedNames)) {
+                                    recognizedNamesArray = supplier.recognizedNames;
+                                  } else if (typeof supplier.recognizedNames === 'string') {
+                                    try {
+                                      recognizedNamesArray = JSON.parse(supplier.recognizedNames);
+                                    } catch (e) {
+                                      console.warn('⚠️ [Lieferantenformular] Fehler beim Parsen von recognizedNames:', e);
+                                      return null;
+                                    }
+                                  }
+                                }
+                                
+                                // Filtere recognizedNames: entferne aktuellen Namen und filtere nach Suchbegriff
+                                const filteredNames = recognizedNamesArray
+                                  .filter((name: string) => name !== supplier.name) // Entferne aktuellen Namen
+                                  .filter((name: string) => 
+                                    nameSearchTerm
+                                      ? name.toLowerCase().includes(nameSearchTerm.toLowerCase())
+                                      : true
+                                  );
+                                
+                                if (filteredNames.length === 0) {
+                                  return (
+                                    <div className="px-3 py-2" style={{ color: colors.text, fontStyle: 'italic' }}>
+                                      Kein erkanntes Name gefunden
+                                    </div>
+                                  );
+                                }
+                                
+                                return filteredNames.map((name: string, index: number) => (
+                                  <div
+                                    key={`recognized-${index}`}
+                                    className="px-3 py-2 cursor-pointer"
+                                    onClick={() => {
+                                      setSupplierForm(prev => ({ ...prev, name }));
+                                      setNameSearchTerm('');
+                                      setShowNameDropdown(false);
+                                    }}
+                                    style={{
+                                      color: colors.text,
+                                      borderBottom: index < filteredNames.length - 1 ? `1px solid ${colors.cardBorder}` : 'none',
+                                      cursor: 'pointer',
+                                      backgroundColor: nameSearchTerm === name ? (colors.accent || colors.primary) + '20' : 'transparent'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (nameSearchTerm !== name) {
+                                        e.currentTarget.style.backgroundColor = colors.secondary;
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (nameSearchTerm !== name) {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                      }
+                                    }}
+                                  >
+                                    <div>{name}</div>
+                                    <small style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
+                                      Erkannter Name
+                                    </small>
+                                  </div>
+                                ));
+                              })()}
+                              </div>
+                            );
+                            
+                            // Rendere das Dropdown mit einem Portal direkt in den body
+                            return ReactDOM.createPortal(dropdownContent, document.body);
+                          })()}
                         </div>
                       </div>
                       <div className="w-full md:w-1/3 px-2 mb-3">
@@ -1393,6 +1807,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                             ...prev,
                             address: { ...prev.address, street: e.target.value }
                           }))}
+                          autoComplete="off"
                         />
                       </div>
                       <div className="w-full md:w-1/3 px-2 mb-3">
@@ -1407,6 +1822,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                             ...prev,
                             address: { ...prev.address, zipCode: e.target.value }
                           }))}
+                          autoComplete="off"
                         />
                       </div>
                       <div className="w-full md:w-1/3 px-2 mb-3">
@@ -1421,6 +1837,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                             ...prev,
                             address: { ...prev.address, city: e.target.value }
                           }))}
+                          autoComplete="off"
                         />
                       </div>
                       <div className="w-full md:w-1/3 px-2 mb-3">
@@ -1435,6 +1852,7 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
                             ...prev,
                             address: { ...prev.address, country: e.target.value }
                           }))}
+                          autoComplete="off"
                         />
                       </div>
                     </div>
@@ -1526,6 +1944,116 @@ const Lieferantenformular: React.FC<LieferantenformularProps> = ({
           </div>
         </div>
       </div>
+      
+      {/* Modal für Firmenauswahl (mehrere Treffer) */}
+      {showCompanySelectionModal && (
+        <div 
+          className="fixed top-0 left-0 w-full h-full" 
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 4000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setShowCompanySelectionModal(false)}
+        >
+          <div 
+            className="card"
+            style={{ 
+              backgroundColor: colors.card,
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="card-header flex justify-between items-center" style={{ backgroundColor: colors.secondary }}>
+              <h5 className="mb-0 form-label-themed">
+                Mehrere Unternehmen gefunden - bitte wählen Sie aus:
+              </h5>
+              <button
+                className="btn btn-link p-0"
+                onClick={() => {
+                  setShowCompanySelectionModal(false);
+                  setGeminiError(null);
+                }}
+                style={{ color: colors.text, textDecoration: 'none' }}
+              >
+                <FaClose />
+              </button>
+            </div>
+            <div 
+              className="card-body"
+              style={{ 
+                overflowY: 'auto',
+                padding: '1rem'
+              }}
+            >
+              {companySearchResults.map((company, index) => (
+                <div
+                  key={index}
+                  onClick={() => loadCompanyDetails(company)}
+                  style={{
+                    padding: '12px',
+                    marginBottom: '8px',
+                    backgroundColor: colors.inputBackground || colors.card,
+                    border: `1px solid ${colors.cardBorder}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.accent + '20';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.inputBackground || colors.card;
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', color: colors.textPrimary, marginBottom: '4px' }}>
+                    {company.name}
+                  </div>
+                  {company.location && (
+                    <div style={{ fontSize: '0.9rem', color: colors.textSecondary, marginTop: '4px' }}>
+                      📍 {company.location}
+                    </div>
+                  )}
+                  {company.description && (
+                    <div style={{ fontSize: '0.85rem', color: colors.textSecondary, marginTop: '4px' }}>
+                      {company.description}
+                    </div>
+                  )}
+                  {company.confidence !== undefined && (
+                    <div style={{ fontSize: '0.8rem', color: colors.textSecondary, marginTop: '4px' }}>
+                      Übereinstimmung: {Math.round(company.confidence * 100)}%
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div 
+              className="card-footer flex justify-end" 
+              style={{ 
+                backgroundColor: colors.secondary,
+                borderTop: `1px solid ${colors.cardBorder}`
+              }}
+            >
+              <button
+                className="btn btn-outline-secondary"
+                onClick={() => {
+                  setShowCompanySelectionModal(false);
+                  setGeminiError(null);
+                }}
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
