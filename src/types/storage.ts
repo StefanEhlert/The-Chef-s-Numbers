@@ -16,6 +16,7 @@ export type StorageData =
 // Bild-Speicher-Services
 export type StoragePicture = 
   | 'LocalPath' 
+  | 'FileSystem'
   | 'MinIO' 
   | 'Supabase' 
   | 'Firebase';
@@ -106,7 +107,7 @@ export const isValidStorageConfig = (config: Partial<StorageConfig>): config is 
     config.picture !== undefined &&
     ['local', 'cloud'].includes(config.mode) &&
     ['PostgreSQL', 'MariaDB', 'MySQL', 'CouchDB', 'Supabase', 'Firebase', 'SQLite'].includes(config.data) &&
-    ['LocalPath', 'MinIO', 'Supabase', 'Firebase'].includes(config.picture)
+    ['LocalPath', 'FileSystem', 'MinIO', 'Supabase', 'Firebase'].includes(config.picture)
   );
 };
 
@@ -130,7 +131,7 @@ export const getCompatibleServices = (mode: StorageMode): { data: StorageData[];
     case 'local':
       return {
         data: ['SQLite'],
-        picture: ['LocalPath']
+        picture: ['LocalPath', 'FileSystem']
       };
     case 'cloud':
       return {

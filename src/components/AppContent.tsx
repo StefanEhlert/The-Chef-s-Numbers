@@ -4,6 +4,7 @@ import Dashboard from './Dashboard';
 import Kalkulation from './Kalkulation';
 import { ColorProvider } from '../contexts/ColorContext';
 import ErrorBoundary from './ui/ErrorBoundary';
+import MessageBox from './ui/MessageBox';
 import { useStorage } from '../hooks/useStorage';
 import { StorageMode, CloudStorageType, storageLayer } from '../services/storageLayer';
 import LoadingSpinner from './ui/LoadingSpinner';
@@ -123,6 +124,23 @@ const saveDesign = (design: string) => {
 function AppContent() {
   const { state, dispatch } = useAppContext();
   const { loadAppData, saveAppData, isLoading, lastSync, storageInfo, storageMode, cloudType } = useStorage();
+  
+  // State für MessageBox
+  const [messageBox, setMessageBox] = useState<{
+    show: boolean;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+  }>({
+    show: false,
+    type: 'info',
+    title: '',
+    message: ''
+  });
+  
+  // Ref um sicherzustellen, dass QuotaExceeded-Meldung nur einmal pro Beleg-ID angezeigt wird
+  // Map von Beleg-ID zu Boolean - verhindert mehrfache Anzeige für denselben Beleg
+  const quotaErrorShownForReceiptRef = useRef<Map<string, boolean>>(new Map());
   
   // Import/Export-System wird jetzt über den useImportExport Hook verwaltet
   const importExport = useImportExport();
@@ -769,13 +787,14 @@ function AppContent() {
     }
   };
 
-  const handleUpdateReceipt = async (updatedReceipt: Receipt) => {
+  const handleUpdateReceipt = async (updatedReceipt: Receipt, options?: { suppressQuotaError?: boolean }) => {
     try {
       console.log('💾 [RECEIPT] Speichere Beleg:', {
         id: updatedReceipt.id,
         receiptImagePath: updatedReceipt.receiptImagePath,
         hasOcrResult: !!updatedReceipt.ocrResult,
-        hasProcessedOcrData: !!updatedReceipt.processedOcrData
+        hasProcessedOcrData: !!updatedReceipt.processedOcrData,
+        suppressQuotaError: options?.suppressQuotaError
       });
       
       const receiptWithMeta: Receipt = {
@@ -784,33 +803,147 @@ function AppContent() {
         updatedAt: new Date()
       };
 
-      const success = await storageLayer.save('receipts', [receiptWithMeta]);
-      if (success) {
-        console.log('✅ [RECEIPT] Beleg erfolgreich gespeichert:', {
-          id: receiptWithMeta.id,
-          receiptImagePath: receiptWithMeta.receiptImagePath
-        });
-        
-        // Prüfe ob Receipt bereits existiert
-        const existingReceipt = state.receipts.find(r => r.id === receiptWithMeta.id);
-        if (existingReceipt) {
-          // Update bestehenden Receipt
-        dispatch({
-          type: 'UPDATE_RECEIPT',
-          payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
-        });
-        } else {
-          // Füge neuen Receipt hinzu
-          dispatch({
-            type: 'ADD_RECEIPT',
-            payload: receiptWithMeta
+      // Prüfe ob Receipt bereits existiert
+      const existingReceipt = state.receipts.find(r => r.id === receiptWithMeta.id);
+      const isNewReceipt = !existingReceipt;
+      
+      // Prüfe ob ein Bild vorhanden ist
+      // (Das Bild wurde bereits beim ersten Speichern nach OCR gespeichert - nur einmal!)
+      // WICHTIG: Bei späteren Speichervorgängen wird das Bild NICHT nochmal gespeichert
+      const hasImage = !!receiptWithMeta.receiptImagePath;
+
+      try {
+        // Versuche zu speichern (nur Beleg-Daten, Bild wurde bereits gespeichert)
+        const success = await storageLayer.save('receipts', [receiptWithMeta]);
+        if (success) {
+          console.log('✅ [RECEIPT] Beleg erfolgreich gespeichert:', {
+            id: receiptWithMeta.id,
+            receiptImagePath: receiptWithMeta.receiptImagePath
           });
+          
+          // Update State nur bei erfolgreichem Speichern
+          if (existingReceipt) {
+            // Update bestehenden Receipt
+            dispatch({
+              type: 'UPDATE_RECEIPT',
+              payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
+            });
+          } else {
+            // Füge neuen Receipt hinzu
+            dispatch({
+              type: 'ADD_RECEIPT',
+              payload: receiptWithMeta
+            });
+          }
+        } else {
+          console.warn('⚠️ [RECEIPT] Beleg konnte nicht gespeichert werden (save returned false)');
+          // Update State trotzdem, damit der Beleg lokal sichtbar ist
+          if (isNewReceipt) {
+            dispatch({
+              type: 'ADD_RECEIPT',
+              payload: receiptWithMeta
+            });
+          } else {
+            dispatch({
+              type: 'UPDATE_RECEIPT',
+              payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
+            });
+          }
+          throw new Error('Speicherung fehlgeschlagen');
         }
-      } else {
-        console.warn('⚠️ [RECEIPT] Beleg konnte nicht gespeichert werden (save returned false)');
+      } catch (storageError: any) {
+        // Prüfe auf QuotaExceededError
+        if (storageError?.code === 'QUOTA_EXCEEDED') {
+          // Prüfe, ob der Beleg erfolgreich gespeichert wurde (auch wenn reduziert)
+          const wasSaved = storageError?.reducedSize === true || storageError?.minimalOnly === true;
+          
+          // Update State mit vollständigen Daten (auch wenn reduziert gespeichert wurde)
+          // Die reduzierten Daten sind bereits persistent gespeichert, aber im State behalten wir die vollständigen Daten
+          if (isNewReceipt) {
+            dispatch({
+              type: 'ADD_RECEIPT',
+              payload: receiptWithMeta
+            });
+          } else {
+            dispatch({
+              type: 'UPDATE_RECEIPT',
+              payload: { id: receiptWithMeta.id, receipt: receiptWithMeta }
+            });
+          }
+          
+          if (wasSaved) {
+            console.log('✅ [RECEIPT] Beleg erfolgreich gespeichert (reduziert/minimal, bleibt nach Neustart erhalten):', {
+              id: receiptWithMeta.id,
+              reducedSize: storageError?.reducedSize,
+              minimalOnly: storageError?.minimalOnly
+            });
+          } else {
+            console.warn('⚠️ [RECEIPT] Beleg konnte nicht persistent gespeichert werden, nur lokal im State');
+          }
+          
+          // Zeige Meldung nur beim finalen Speichern (nicht beim Laden oder Zwischenspeichern):
+          // 1. Nicht unterdrückt (beim ersten Speichern nach OCR wird es unterdrückt)
+          // 2. Ein Bild vorhanden ist (zeigt, dass der Beleg ein Bild hat, das gespeichert wurde)
+          // 3. Die Meldung noch nicht für diesen Beleg angezeigt wurde
+          const receiptId = receiptWithMeta.id;
+          const alreadyShownForReceipt = quotaErrorShownForReceiptRef.current.get(receiptId) || false;
+          const shouldShowError = !options?.suppressQuotaError && hasImage && !alreadyShownForReceipt;
+          
+          if (shouldShowError) {
+            // Markiere, dass die Meldung für diesen Beleg angezeigt wurde
+            quotaErrorShownForReceiptRef.current.set(receiptId, true);
+            
+            const itemCount = storageError?.itemCount || 0;
+            const dataSizeMB = ((storageError?.dataSize || 0) / (1024 * 1024)).toFixed(2);
+            let message = storageError.message || 
+              `Der LocalStorage ist voll! Die Beleg-Daten (${itemCount} Einträge, ${dataSizeMB} MB) konnten nicht gespeichert werden.\n\n`;
+            
+            if (wasSaved) {
+              const keptProcessedOcrData = storageError?.keptProcessedOcrData === true;
+              if (keptProcessedOcrData) {
+                message += `Der Beleg wurde ohne ocrResult gespeichert, aber processedOcrData wurde beibehalten. ` +
+                  `Der Beleg bleibt nach einem Neustart erhalten und kann normal bearbeitet werden. ` +
+                  `Bitte wechseln Sie zu einer anderen Speicherart (z.B. Supabase, PostgreSQL) in den Einstellungen oder bereinigen Sie den LocalStorage.`;
+              } else {
+                message += `Der Beleg wurde ohne OCR-Daten gespeichert und bleibt nach einem Neustart erhalten. ` +
+                  `Bitte wechseln Sie zu einer anderen Speicherart (z.B. Supabase, PostgreSQL) in den Einstellungen oder bereinigen Sie den LocalStorage.`;
+              }
+            } else {
+              message += `Der Original-Beleg wurde temporär gespeichert, aber nicht persistent. ` +
+                `Bitte wechseln Sie zu einer anderen Speicherart (z.B. Supabase, PostgreSQL) in den Einstellungen oder bereinigen Sie den LocalStorage.`;
+            }
+            
+            setMessageBox({
+              show: true,
+              type: 'warning',
+              title: 'Speicher voll!',
+              message: message
+            });
+            
+            // Reset nach 5 Sekunden für diesen spezifischen Beleg, damit bei neuen Fehlern die Meldung wieder angezeigt werden kann
+            setTimeout(() => {
+              quotaErrorShownForReceiptRef.current.delete(receiptId);
+            }, 5000);
+          }
+          // Fehler wird hier nicht weitergeworfen - Beleg ist (evtl. reduziert) gespeichert
+        } else {
+          // Andere Fehler - werfe weiter
+          throw storageError;
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [RECEIPT] Fehler beim Aktualisieren des Belegs:', error);
+      
+      // Andere Fehler (nicht QuotaExceededError)
+      if (error?.code !== 'QUOTA_EXCEEDED') {
+        const errorMessage = error?.message || 'Unbekannter Fehler beim Speichern des Belegs';
+        setMessageBox({
+          show: true,
+          type: 'error',
+          title: '❌ Fehler beim Speichern',
+          message: errorMessage
+        });
+      }
     }
   };
 
@@ -2010,6 +2143,16 @@ function AppContent() {
               }}
             />
         </div>
+        
+        {/* MessageBox für Fehlermeldungen */}
+        <MessageBox
+          show={messageBox.show}
+          type={messageBox.type}
+          title={messageBox.title}
+          message={messageBox.message}
+          onClose={() => setMessageBox({ ...messageBox, show: false })}
+          colors={getCurrentColors()}
+        />
       </ColorProvider>
     </ErrorBoundary>
   );

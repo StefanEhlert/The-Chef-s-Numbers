@@ -1,6 +1,6 @@
 import { StorageConfig, StorageData, StoragePicture } from '../types/storage';
 // AWS SDK Import - Standard-Pfad
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 
 // AWS SDK Typen werden jetzt direkt importiert
 
@@ -79,14 +79,36 @@ export class LocalStorageAdapter implements StorageAdapter {
           newItem = updatePriceHistory(existingItem, newItem, isUpdate);
         }
         
+        // Für Receipts: OCR-Daten in IndexedDB speichern und aus dem Objekt entfernen
+        if (key === 'receipts') {
+          const receipt = newItem as any;
+          const ocrResult = receipt.ocrResult;
+          const processedOcrData = receipt.processedOcrData;
+          
+          // Speichere OCR-Daten in IndexedDB (falls vorhanden)
+          if (ocrResult || processedOcrData) {
+            try {
+              await this.saveReceiptOcrData(receipt.id, ocrResult, processedOcrData);
+            } catch (ocrError) {
+              console.error(`❌ Fehler beim Speichern der OCR-Daten für Receipt ${receipt.id}:`, ocrError);
+              // Fehler beim Speichern der OCR-Daten sollte das Speichern des Receipts nicht verhindern
+            }
+            
+            // Entferne OCR-Daten aus dem Receipt-Objekt (werden in IndexedDB gespeichert)
+            newItem = { ...receipt };
+            delete (newItem as any).ocrResult;
+            delete (newItem as any).processedOcrData;
+          }
+        }
+        
         if (isUpdate) {
           // Ersetze bestehenden Eintrag
           mergedData[existingIndex] = newItem;
-          console.log(`💾 LocalStorage: Artikel ${newItem.id} aktualisiert`);
+          console.log(`💾 LocalStorage: ${key === 'receipts' ? 'Receipt' : 'Artikel'} ${newItem.id} aktualisiert`);
         } else {
           // Füge neuen Eintrag hinzu
           mergedData.push(newItem);
-          console.log(`💾 LocalStorage: Artikel ${newItem.id} hinzugefügt`);
+          console.log(`💾 LocalStorage: ${key === 'receipts' ? 'Receipt' : 'Artikel'} ${newItem.id} hinzugefügt`);
         }
         
         // Kleine Verzögerung für sichtbaren Fortschritt (nur bei vielen Items)
@@ -100,11 +122,129 @@ export class LocalStorageAdapter implements StorageAdapter {
         onProgress(data.length, data.length);
       }
       
+      // Berechne Größe der Daten vor dem Speichern (für Diagnose)
+      const serializedData = JSON.stringify(mergedData);
+      const dataSizeBytes = new Blob([serializedData]).size;
+      const dataSizeKB = (dataSizeBytes / 1024).toFixed(2);
+      const dataSizeMB = (dataSizeBytes / (1024 * 1024)).toFixed(2);
+      
+      // Detailliertes Logging für Receipts
+      if (key === 'receipts') {
+        console.log(`📊 [DIAGNOSE] Receipt-Daten Größenanalyse:`);
+        console.log(`   - Anzahl Einträge: ${mergedData.length}`);
+        console.log(`   - Gesamtgröße: ${dataSizeBytes} Bytes (${dataSizeKB} KB, ${dataSizeMB} MB)`);
+        
+        // Analysiere jeden Receipt einzeln (verwende das modifizierte Objekt aus mergedData, nicht das originale)
+        if (data.length > 0) {
+          const originalReceipt = data[0] as any;
+          // Finde das entsprechende modifizierte Objekt aus mergedData (ohne OCR-Daten)
+          const modifiedReceipt = mergedData.find(item => item.id === originalReceipt.id) as any;
+          
+          if (modifiedReceipt) {
+            const modifiedReceiptSerialized = JSON.stringify(modifiedReceipt);
+            const modifiedReceiptSize = new Blob([modifiedReceiptSerialized]).size;
+            const modifiedReceiptSizeKB = (modifiedReceiptSize / 1024).toFixed(2);
+            
+            console.log(`   - Neuer/Update Receipt (${modifiedReceipt.id}):`);
+            console.log(`     * Größe (ohne OCR-Daten): ${modifiedReceiptSize} Bytes (${modifiedReceiptSizeKB} KB)`);
+            
+            // Zeige OCR-Daten-Info nur wenn sie im ORIGINAL vorhanden waren (aber jetzt in IndexedDB sind)
+            if (originalReceipt.processedOcrData || originalReceipt.ocrResult) {
+              const originalSize = new Blob([JSON.stringify(originalReceipt)]).size;
+              const originalSizeKB = (originalSize / 1024).toFixed(2);
+              const ocrDataSize = originalSize - modifiedReceiptSize;
+              const ocrDataSizeKB = (ocrDataSize / 1024).toFixed(2);
+              console.log(`     * OCR-Daten (in IndexedDB): ${ocrDataSize} Bytes (${ocrDataSizeKB} KB)`);
+              console.log(`     * Original-Größe (mit OCR-Daten): ${originalSize} Bytes (${originalSizeKB} KB)`);
+            }
+          } else {
+            // Fallback: Verwende originales Objekt, wenn modifiziertes nicht gefunden wurde
+            const newReceipt = originalReceipt;
+            const newReceiptSerialized = JSON.stringify(newReceipt);
+            const newReceiptSize = new Blob([newReceiptSerialized]).size;
+            const newReceiptSizeKB = (newReceiptSize / 1024).toFixed(2);
+            
+            console.log(`   - Neuer/Update Receipt (${newReceipt.id}):`);
+            console.log(`     * Größe: ${newReceiptSize} Bytes (${newReceiptSizeKB} KB)`);
+            
+            if (newReceipt.processedOcrData) {
+              const processedOcrDataSize = new Blob([JSON.stringify(newReceipt.processedOcrData)]).size;
+              const processedOcrDataSizeKB = (processedOcrDataSize / 1024).toFixed(2);
+              console.log(`     * processedOcrData: ${processedOcrDataSize} Bytes (${processedOcrDataSizeKB} KB)`);
+              if (newReceipt.processedOcrData.articles) {
+                console.log(`       - Artikel-Anzahl: ${newReceipt.processedOcrData.articles.length}`);
+              }
+            }
+            
+            if (newReceipt.ocrResult) {
+              const ocrResultSize = new Blob([JSON.stringify(newReceipt.ocrResult)]).size;
+              const ocrResultSizeKB = (ocrResultSize / 1024).toFixed(2);
+              console.log(`     * ocrResult: ${ocrResultSize} Bytes (${ocrResultSizeKB} KB)`);
+              if (newReceipt.ocrResult.rawResponse) {
+                const rawResponseSize = new Blob([newReceipt.ocrResult.rawResponse]).size;
+                const rawResponseSizeKB = (rawResponseSize / 1024).toFixed(2);
+                console.log(`       - rawResponse: ${rawResponseSize} Bytes (${rawResponseSizeKB} KB)`);
+              }
+            }
+          }
+        }
+        
+        // Prüfe bestehende Daten-Größe (wenn vorhanden)
+        if (existingData.length > 0) {
+          const existingDataSerialized = JSON.stringify(existingData);
+          const existingDataSize = new Blob([existingDataSerialized]).size;
+          const existingDataSizeKB = (existingDataSize / 1024).toFixed(2);
+          const existingDataSizeMB = (existingDataSize / (1024 * 1024)).toFixed(2);
+          console.log(`   - Bestehende Receipts-Größe: ${existingDataSize} Bytes (${existingDataSizeKB} KB, ${existingDataSizeMB} MB)`);
+        }
+      } else {
+        // Für andere Entity-Typen: Einfaches Logging
+        console.log(`💾 LocalStorage: ${key} - Größe: ${dataSizeBytes} Bytes (${dataSizeKB} KB, ${dataSizeMB} MB)`);
+      }
+      
       // Speichere die zusammengeführten Daten
-      localStorage.setItem(`chef_${key}`, JSON.stringify(mergedData));
-      console.log(`💾 LocalStorage: ${key} gespeichert (${mergedData.length} Einträge total)`);
-      return true;
-    } catch (error) {
+      try {
+        localStorage.setItem(`chef_${key}`, JSON.stringify(mergedData));
+        console.log(`💾 LocalStorage: ${key} gespeichert (${mergedData.length} Einträge total)`);
+        return true;
+      } catch (storageError: any) {
+        // Spezielle Behandlung für QuotaExceededError
+        if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
+          console.error(`❌ LocalStorage Speicher voll (QuotaExceededError) beim Speichern von ${key}`);
+          
+          // Zeige benutzerfreundliche Fehlermeldung
+          const entityName = key === 'receipts' ? 'Belege' : 
+                            key === 'articles' ? 'Artikel' :
+                            key === 'recipes' ? 'Rezepte' :
+                            key === 'suppliers' ? 'Lieferanten' :
+                            key === 'einkaufsListe' ? 'Einkaufslisten' :
+                            key === 'inventurListe' ? 'Inventurlisten' : key;
+          
+          const message = `⚠️ Lokaler Speicher voll!\n\n` +
+            `Die ${entityName} (${dataSizeMB} MB) konnten nicht gespeichert werden, da der lokale Browser-Speicher voll ist.\n\n` +
+            `Die lokale Speicherung ist nur für gelegentliche Nutzung oder Tests gedacht. ` +
+            `Für eine produktive Nutzung empfehlen wir dringend, zu einer Datenbanklösung zu wechseln:\n\n` +
+            `• PostgreSQL / MariaDB / MySQL (selbst gehostet)\n` +
+            `• Supabase (Cloud-Datenbank)\n` +
+            `• Firebase (Cloud-Datenbank)\n\n` +
+            `Sie können die Speicherkonfiguration in den Einstellungen ändern.`;
+          
+          alert(message);
+          
+          // Werfe Fehler weiter, damit die aufrufende Komponente entsprechend reagieren kann
+          throw new Error(`QuotaExceededError: Der lokale Speicher ist voll. Bitte wechseln Sie zu einer Datenbanklösung.`);
+        }
+        
+        // Für andere Fehler: normal weiterwerfen
+        throw storageError;
+      }
+    } catch (error: any) {
+      // Fehler wurde bereits behandelt (QuotaExceededError) oder ist ein anderer Fehler
+      if (error.message && error.message.includes('QuotaExceededError')) {
+        // Fehler wurde bereits behandelt, nur weiterwerfen
+        throw error;
+      }
+      
       console.error(`❌ LocalStorage Fehler beim Speichern von ${key}:`, error);
       return false;
     }
@@ -117,7 +257,34 @@ export class LocalStorageAdapter implements StorageAdapter {
         return [];
       }
       const parsedData = JSON.parse(data);
-      return Array.isArray(parsedData) ? parsedData as T[] : [];
+      const items = Array.isArray(parsedData) ? parsedData as T[] : [];
+      
+      // Für Receipts: Lade OCR-Daten aus IndexedDB und füge sie wieder hinzu
+      if (key === 'receipts' && items.length > 0) {
+        console.log(`📦 IndexedDB: Lade OCR-Daten für ${items.length} Receipts...`);
+        const receiptsWithOcrData = await Promise.all(
+          items.map(async (receipt) => {
+            const receiptId = (receipt as any).id;
+            const ocrData = await this.loadReceiptOcrData(receiptId);
+            
+            if (ocrData) {
+              // Füge OCR-Daten wieder zum Receipt hinzu
+              return {
+                ...receipt,
+                ...(ocrData.ocrResult && { ocrResult: ocrData.ocrResult }),
+                ...(ocrData.processedOcrData && { processedOcrData: ocrData.processedOcrData })
+              } as T;
+            }
+            
+            return receipt;
+          })
+        );
+        
+        console.log(`✅ IndexedDB: OCR-Daten für ${receiptsWithOcrData.length} Receipts geladen`);
+        return receiptsWithOcrData;
+      }
+      
+      return items;
     } catch (error) {
       console.error(`❌ LocalStorage Fehler beim Laden von ${key}:`, error);
       return null;
@@ -128,6 +295,16 @@ export class LocalStorageAdapter implements StorageAdapter {
     try {
       const data = await this.load<T>(key);
       if (!data) return false;
+      
+      // Für Receipts: Lösche auch OCR-Daten aus IndexedDB
+      if (key === 'receipts') {
+        try {
+          await this.deleteReceiptOcrData(id);
+        } catch (ocrError) {
+          console.warn(`⚠️ Fehler beim Löschen der OCR-Daten für Receipt ${id}:`, ocrError);
+          // Fehler sollte das Löschen des Receipts nicht verhindern
+        }
+      }
       
       const filteredData = data.filter(item => item.id !== id);
       
@@ -296,24 +473,126 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   /**
-   * Öffnet IndexedDB für Bildspeicherung
+   * Öffnet IndexedDB für Bildspeicherung und Receipt-OCR-Daten
    */
   private async openIndexedDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('chef_images_db', 1);
+      const request = indexedDB.open('chef_images_db', 2); // Version 2: Füge receiptOcrData hinzu
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
       
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        
+        // Erstelle images Object Store (Version 1)
         if (!db.objectStoreNames.contains('images')) {
           const objectStore = db.createObjectStore('images', { keyPath: 'path' });
           objectStore.createIndex('entityType', 'entityType', { unique: false });
           objectStore.createIndex('entityId', 'entityId', { unique: false });
         }
+        
+        // Erstelle receiptOcrData Object Store (Version 2)
+        if (!db.objectStoreNames.contains('receiptOcrData')) {
+          const receiptStore = db.createObjectStore('receiptOcrData', { keyPath: 'receiptId' });
+          receiptStore.createIndex('receiptId', 'receiptId', { unique: true });
+          console.log('📦 IndexedDB: receiptOcrData Object Store erstellt');
+        }
       };
     });
+  }
+
+  /**
+   * Speichert OCR-Daten für einen Receipt in IndexedDB
+   */
+  private async saveReceiptOcrData(receiptId: string, ocrResult: any, processedOcrData: any): Promise<void> {
+    try {
+      const db = await this.openIndexedDB();
+      const transaction = db.transaction(['receiptOcrData'], 'readwrite');
+      const store = transaction.objectStore('receiptOcrData');
+      
+      await new Promise<void>((resolve, reject) => {
+        const request = store.put({
+          receiptId: receiptId,
+          ocrResult: ocrResult,
+          processedOcrData: processedOcrData,
+          timestamp: new Date().toISOString()
+        });
+        
+        request.onsuccess = () => {
+          console.log(`📦 IndexedDB: OCR-Daten für Receipt ${receiptId} gespeichert`);
+          resolve();
+        };
+        request.onerror = () => {
+          console.error(`❌ IndexedDB Fehler beim Speichern der OCR-Daten für Receipt ${receiptId}:`, request.error);
+          reject(request.error);
+        };
+      });
+    } catch (error) {
+      console.error(`❌ IndexedDB Fehler beim Speichern der OCR-Daten für Receipt ${receiptId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lädt OCR-Daten für einen Receipt aus IndexedDB
+   */
+  private async loadReceiptOcrData(receiptId: string): Promise<{ ocrResult?: any; processedOcrData?: any } | null> {
+    try {
+      const db = await this.openIndexedDB();
+      const transaction = db.transaction(['receiptOcrData'], 'readonly');
+      const store = transaction.objectStore('receiptOcrData');
+      const request = store.get(receiptId);
+      
+      return new Promise((resolve) => {
+        request.onsuccess = () => {
+          const result = request.result;
+          if (result) {
+            console.log(`📦 IndexedDB: OCR-Daten für Receipt ${receiptId} geladen`);
+            resolve({
+              ocrResult: result.ocrResult,
+              processedOcrData: result.processedOcrData
+            });
+          } else {
+            resolve(null);
+          }
+        };
+        request.onerror = () => {
+          console.warn(`⚠️ IndexedDB Fehler beim Laden der OCR-Daten für Receipt ${receiptId}:`, request.error);
+          resolve(null);
+        };
+      });
+    } catch (error) {
+      console.warn(`⚠️ IndexedDB Fehler beim Laden der OCR-Daten für Receipt ${receiptId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Löscht OCR-Daten für einen Receipt aus IndexedDB
+   */
+  private async deleteReceiptOcrData(receiptId: string): Promise<void> {
+    try {
+      const db = await this.openIndexedDB();
+      const transaction = db.transaction(['receiptOcrData'], 'readwrite');
+      const store = transaction.objectStore('receiptOcrData');
+      
+      await new Promise<void>((resolve, reject) => {
+        const request = store.delete(receiptId);
+        
+        request.onsuccess = () => {
+          console.log(`📦 IndexedDB: OCR-Daten für Receipt ${receiptId} gelöscht`);
+          resolve();
+        };
+        request.onerror = () => {
+          console.warn(`⚠️ IndexedDB Fehler beim Löschen der OCR-Daten für Receipt ${receiptId}:`, request.error);
+          resolve(); // Nicht kritisch, resolve trotzdem
+        };
+      });
+    } catch (error) {
+      console.warn(`⚠️ IndexedDB Fehler beim Löschen der OCR-Daten für Receipt ${receiptId}:`, error);
+      // Nicht kritisch, Fehler ignorieren
+    }
   }
 
   /**
@@ -553,6 +832,487 @@ export class LocalStorageAdapter implements StorageAdapter {
       console.error('❌ LocalStorage Fehler beim Laden der Bilder-Struktur:', error);
       return {};
     }
+  }
+}
+
+// File System Access API Adapter
+class FileSystemAdapter implements StorageAdapter {
+  name = 'FileSystemAdapter';
+  type = 'filesystem';
+  private rootDirectoryHandle: FileSystemDirectoryHandle | null = null;
+  private basePath: string = '';
+  private readonly STORAGE_KEY = 'filesystem_directory_handle';
+
+  constructor(connectionData?: { rootDirectoryHandle?: FileSystemDirectoryHandle; basePath?: string }) {
+    if (connectionData?.rootDirectoryHandle) {
+      this.rootDirectoryHandle = connectionData.rootDirectoryHandle;
+      this.basePath = connectionData.basePath || this.getDefaultPath();
+      console.log('📁 FileSystemAdapter erstellt mit Verzeichnis:', this.basePath);
+      // Speichere Handle für zukünftige Verwendung (async, aber nicht await - läuft im Hintergrund)
+      this.saveDirectoryHandle(connectionData.rootDirectoryHandle).catch(err => 
+        console.error('❌ Fehler beim Speichern des Directory Handles:', err)
+      );
+    } else {
+      this.basePath = connectionData?.basePath || this.getDefaultPath();
+      console.log('📁 FileSystemAdapter erstellt mit Standardpfad:', this.basePath);
+      // Versuche gespeichertes Handle zu laden (async, läuft im Hintergrund)
+      // Wird beim ersten Zugriff auf getOrCreateRootDirectory geladen
+    }
+  }
+
+  /**
+   * Speichert das Directory Handle im IndexedDB
+   */
+  private async saveDirectoryHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+    try {
+      // IndexedDB kann FileSystemDirectoryHandle über Structured Clone Algorithm speichern
+      const db = await this.openIndexedDB();
+      const tx = db.transaction(['filesystem'], 'readwrite');
+      const store = tx.objectStore('filesystem');
+      
+      return new Promise((resolve, reject) => {
+        const request = store.put(handle, this.STORAGE_KEY);
+        request.onsuccess = () => {
+          console.log('✅ Directory Handle in IndexedDB gespeichert');
+          resolve();
+        };
+        request.onerror = () => {
+          console.error('❌ Fehler beim Speichern des Directory Handles:', request.error);
+          reject(request.error);
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (error) {
+      console.error('❌ Fehler beim Speichern des Directory Handles:', error);
+    }
+  }
+
+  /**
+   * Lädt das Directory Handle aus dem IndexedDB
+   */
+  private async loadDirectoryHandle(): Promise<void> {
+    try {
+      const db = await this.openIndexedDB();
+      const tx = db.transaction(['filesystem'], 'readonly');
+      const store = tx.objectStore('filesystem');
+      
+      return new Promise<void>((resolve) => {
+        const request = store.get(this.STORAGE_KEY);
+        request.onsuccess = async () => {
+          const handle = request.result as FileSystemDirectoryHandle | undefined;
+          
+          if (handle) {
+            // Prüfe ob das Handle noch gültig ist, indem wir versuchen, auf eine Eigenschaft zuzugreifen
+            try {
+              // Versuche auf name zuzugreifen (prüft ob Handle noch gültig ist)
+              const handleName = handle.name;
+              this.rootDirectoryHandle = handle;
+              this.basePath = handleName || this.getDefaultPath();
+              console.log('✅ Directory Handle aus IndexedDB geladen:', this.basePath);
+            } catch (error) {
+              console.warn('⚠️ Gespeichertes Directory Handle ist nicht mehr gültig:', error);
+              // Lösche ungültiges Handle
+              await this.deleteDirectoryHandle();
+            }
+          }
+          resolve();
+        };
+        request.onerror = () => {
+          console.warn('⚠️ Kein gespeichertes Directory Handle gefunden oder Fehler beim Laden:', request.error);
+          resolve();
+        };
+        tx.onerror = () => {
+          console.warn('⚠️ Fehler beim Zugriff auf IndexedDB:', tx.error);
+          resolve();
+        };
+      });
+    } catch (error) {
+      console.warn('⚠️ Kein gespeichertes Directory Handle gefunden oder Fehler beim Laden:', error);
+    }
+  }
+
+  /**
+   * Löscht das gespeicherte Directory Handle
+   */
+  private async deleteDirectoryHandle(): Promise<void> {
+    try {
+      const db = await this.openIndexedDB();
+      const tx = db.transaction(['filesystem'], 'readwrite');
+      const store = tx.objectStore('filesystem');
+      
+      return new Promise<void>((resolve, reject) => {
+        const request = store.delete(this.STORAGE_KEY);
+        request.onsuccess = () => {
+          console.log('🗑️ Directory Handle aus IndexedDB gelöscht');
+          resolve();
+        };
+        request.onerror = () => {
+          console.error('❌ Fehler beim Löschen des Directory Handles:', request.error);
+          reject(request.error);
+        };
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (error) {
+      console.error('❌ Fehler beim Löschen des Directory Handles:', error);
+    }
+  }
+
+  /**
+   * Öffnet IndexedDB-Datenbank für FileSystem-Handles
+   */
+  private async openIndexedDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('chef_filesystem', 1);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+      
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains('filesystem')) {
+          db.createObjectStore('filesystem');
+        }
+      };
+    });
+  }
+
+  /**
+   * Ermittelt den Standardpfad für das Betriebssystem
+   */
+  private getDefaultPath(): string {
+    // Versuche den Standard-Dokumenten-Ordner zu ermitteln
+    // Windows: "Eigene Dateien" = "Documents"
+    // Linux/Mac: "Documents"
+    if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+      // File System Access API ist verfügbar
+      // Standardpfad wird als relativer Pfad verwendet
+      return "The Chef's Numbers";
+    }
+    return "The Chef's Numbers";
+  }
+
+  /**
+   * Öffnet Verzeichnis-Auswahl-Dialog
+   * Speichert das Handle automatisch im IndexedDB
+   */
+  async requestDirectoryAccess(): Promise<FileSystemDirectoryHandle | null> {
+    try {
+      if (!('showDirectoryPicker' in window)) {
+        throw new Error('File System Access API wird von diesem Browser nicht unterstützt');
+      }
+
+      const handle = await (window as any).showDirectoryPicker({
+        mode: 'readwrite',
+        startIn: 'documents' // Versuche in Documents zu starten
+      });
+
+      this.rootDirectoryHandle = handle;
+      // basePath wird nur für Anzeige verwendet, nicht für Pfad-Erstellung
+      // Das rootHandle IST bereits das ausgewählte Verzeichnis
+      this.basePath = handle.name || this.getDefaultPath();
+      
+      // Speichere Handle für zukünftige Verwendung
+      await this.saveDirectoryHandle(handle);
+      
+      console.log('✅ Verzeichnis ausgewählt und gespeichert:', this.basePath);
+      return handle;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('❌ Benutzer hat Verzeichnis-Auswahl abgebrochen');
+      } else {
+        console.error('❌ Fehler beim Auswählen des Verzeichnisses:', error);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Holt oder erstellt das Root-Verzeichnis
+   * Lädt zuerst gespeichertes Handle, fragt nur bei Bedarf nach
+   */
+  private async getOrCreateRootDirectory(): Promise<FileSystemDirectoryHandle | null> {
+    if (this.rootDirectoryHandle) {
+      return this.rootDirectoryHandle;
+    }
+
+    // Versuche zuerst gespeichertes Handle zu laden (asynchron)
+    await this.loadDirectoryHandle();
+    
+    if (this.rootDirectoryHandle) {
+      return this.rootDirectoryHandle;
+    }
+
+    // Falls kein gespeichertes Handle vorhanden ist, frage nach
+    return await this.requestDirectoryAccess();
+  }
+
+  /**
+   * Holt oder erstellt ein Unterverzeichnis
+   */
+  private async getOrCreateSubDirectory(rootHandle: FileSystemDirectoryHandle, subPath: string[]): Promise<FileSystemDirectoryHandle> {
+    let currentHandle = rootHandle;
+    
+    for (const dirName of subPath) {
+      try {
+        currentHandle = await currentHandle.getDirectoryHandle(dirName, { create: true });
+      } catch (error) {
+        console.error(`❌ Fehler beim Erstellen/Öffnen von Verzeichnis ${dirName}:`, error);
+        throw error;
+      }
+    }
+    
+    return currentHandle;
+  }
+
+  // Dummy-Implementierungen für StorageAdapter (werden für Bilder nicht benötigt)
+  async save<T extends StorageEntity>(key: string, data: T[]): Promise<boolean> {
+    // FileSystemAdapter wird nur für Bilder verwendet
+    return false;
+  }
+
+  async load<T extends StorageEntity>(key: string): Promise<T[] | null> {
+    return null;
+  }
+
+  async delete<T extends StorageEntity>(key: string, id: string): Promise<boolean> {
+    return false;
+  }
+
+  /**
+   * Speichert ein Bild im Dateisystem
+   */
+  async saveImage(imagePath: string, file: File): Promise<boolean> {
+    try {
+      const rootHandle = await this.getOrCreateRootDirectory();
+      if (!rootHandle) {
+        throw new Error('Kein Verzeichnis-Zugriff vorhanden');
+      }
+
+      // Parse imagePath: "pictures/recipes/{recipeId}", "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}"
+      const pathParts = imagePath.split('/');
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+        const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
+        let entityId = pathParts[2]; // ID (ohne Extension)
+
+        // Entferne Dateiendung aus entityId falls vorhanden (um doppelte Extensions zu vermeiden)
+        const lastDotIndex = entityId.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          if (validExtensions.includes(possibleExt)) {
+            entityId = entityId.substring(0, lastDotIndex);
+            console.log(`📁 FileSystem: Entferne Extension aus entityId beim Speichern, verwende: ${entityId}`);
+          }
+        }
+
+        // Erstelle Verzeichnisstruktur: root/"The Chef's Numbers"/pictures/{entityType}/
+        // Das rootHandle ist das ausgewählte Verzeichnis (z.B. "Documents")
+        const subPath = ["The Chef's Numbers", 'pictures', entityType];
+        const dirHandle = await this.getOrCreateSubDirectory(rootHandle, subPath);
+
+        // Extrahiere Dateiendung aus MIME-Type oder Dateiname
+        const mimeTypeMap: { [key: string]: string } = {
+          'image/jpeg': 'jpg',
+          'image/jpg': 'jpg',
+          'image/png': 'png',
+          'image/gif': 'gif',
+          'image/webp': 'webp',
+          'application/pdf': 'pdf'
+        };
+        const fileExtension = mimeTypeMap[file.type] || file.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `${entityId}.${fileExtension}`;
+
+        // Speichere Datei
+        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+        // TypeScript-Typen für File System Access API erweitern
+        const writable = await (fileHandle as any).createWritable();
+        await writable.write(file);
+        await writable.close();
+
+        console.log(`✅ FileSystem: Bild erfolgreich gespeichert: ${subPath.join('/')}/${fileName}`);
+        return true;
+      } else {
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}`);
+      }
+    } catch (error) {
+      console.error(`❌ FileSystem Fehler beim Speichern des Bildes ${imagePath}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Lädt ein Bild aus dem Dateisystem
+   * Gibt { url, extension } zurück für Konsistenz mit anderen Adaptern
+   */
+  async loadImage(imagePath: string): Promise<{ url: string; extension: string } | null> {
+    try {
+      const rootHandle = await this.getOrCreateRootDirectory();
+      if (!rootHandle) {
+        throw new Error('Kein Verzeichnis-Zugriff vorhanden');
+      }
+
+      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/receipts/{receiptId}.pdf"
+      const pathParts = imagePath.split('/');
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+        const entityType = pathParts[1];
+        let entityId = pathParts[2];
+
+        // Entferne Dateiendung aus entityId falls vorhanden
+        const lastDotIndex = entityId.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          if (validExtensions.includes(possibleExt)) {
+            entityId = entityId.substring(0, lastDotIndex);
+            console.log(`📁 FileSystem: Entferne Extension aus entityId, verwende: ${entityId}`);
+          }
+        }
+
+        // Erstelle Verzeichnisstruktur: root/"The Chef's Numbers"/pictures/{entityType}/
+        // Das rootHandle ist das ausgewählte Verzeichnis (z.B. "Documents")
+        const subPath = ["The Chef's Numbers", 'pictures', entityType];
+        const dirHandle = await this.getOrCreateSubDirectory(rootHandle, subPath);
+
+        // Versuche verschiedene Dateiendungen
+        const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+        for (const ext of extensions) {
+          try {
+            const fileName = `${entityId}.${ext}`;
+            const fileHandle = await dirHandle.getFileHandle(fileName);
+            const file = await fileHandle.getFile();
+            
+            // Konvertiere zu Data URL und extrahiere Extension
+            const extension = ext;
+            if (file.type === 'application/pdf') {
+              // Für PDFs: Erstelle Blob URL
+              const blobUrl = URL.createObjectURL(file);
+              console.log(`✅ FileSystem: PDF erfolgreich geladen: ${subPath.join('/')}/${fileName}`);
+              return { url: blobUrl, extension };
+            } else {
+              // Für Bilder: Konvertiere zu Data URL
+              const reader = new FileReader();
+              return new Promise((resolve, reject) => {
+                reader.onload = () => {
+                  console.log(`✅ FileSystem: Bild erfolgreich geladen: ${subPath.join('/')}/${fileName}`);
+                  resolve({ url: reader.result as string, extension });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+            }
+          } catch (error) {
+            // Datei mit dieser Extension nicht gefunden, versuche nächste
+            continue;
+          }
+        }
+
+        console.log(`⚠️ FileSystem: Kein Bild gefunden für ${imagePath} (entityId nach Extension-Entfernung: ${entityId})`);
+        console.log(`📁 FileSystem: Versuchte Extensions: ${extensions.join(', ')}`);
+        console.log(`📁 FileSystem: Verzeichnis: ${subPath.join('/')}`);
+        return null;
+      } else {
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}`);
+      }
+    } catch (error) {
+      console.error(`❌ FileSystem Fehler beim Laden des Bildes ${imagePath}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Löscht ein Bild aus dem Dateisystem
+   */
+  async deleteImage(imagePath: string): Promise<boolean> {
+    try {
+      const rootHandle = await this.getOrCreateRootDirectory();
+      if (!rootHandle) {
+        throw new Error('Kein Verzeichnis-Zugriff vorhanden');
+      }
+
+      // Parse imagePath: "pictures/recipes/{recipeId}" oder "pictures/receipts/{receiptId}.pdf"
+      const pathParts = imagePath.split('/');
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+        const entityType = pathParts[1];
+        let entityId = pathParts[2];
+
+        // Entferne Dateiendung aus entityId falls vorhanden
+        const lastDotIndex = entityId.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          if (validExtensions.includes(possibleExt)) {
+            entityId = entityId.substring(0, lastDotIndex);
+            console.log(`📁 FileSystem: Entferne Extension aus entityId beim Löschen, verwende: ${entityId}`);
+          }
+        }
+
+        // Erstelle Verzeichnisstruktur: root/"The Chef's Numbers"/pictures/{entityType}/
+        // Das rootHandle ist das ausgewählte Verzeichnis (z.B. "Documents")
+        const subPath = ["The Chef's Numbers", 'pictures', entityType];
+        const dirHandle = await this.getOrCreateSubDirectory(rootHandle, subPath);
+
+        // OPTIMIERT: Liste alle Dateien im Verzeichnis auf und finde die passenden
+        // Anstatt für jede Extension einzeln zu versuchen, listen wir das Verzeichnis einmal auf
+        const prefix = `${entityId}.`;
+        let deleted = false;
+        
+        try {
+          // Iteriere über alle Einträge im Verzeichnis
+          // Type-Cast für FileSystemDirectoryHandle.values() - TypeScript-Definitionen sind unvollständig
+          const entries = (dirHandle as any).values();
+          for await (const entry of entries) {
+            // Nur Dateien (keine Verzeichnisse) und nur solche, die mit entityId. beginnen
+            if (entry.kind === 'file' && entry.name.startsWith(prefix)) {
+              try {
+                await dirHandle.removeEntry(entry.name);
+                console.log(`✅ FileSystem: Bild erfolgreich gelöscht: ${subPath.join('/')}/${entry.name}`);
+                deleted = true;
+              } catch (error) {
+                // Datei kann nicht gelöscht werden (z.B. Berechtigung), aber weiter mit anderen
+                console.warn(`⚠️ FileSystem: Konnte ${entry.name} nicht löschen:`, error);
+              }
+            }
+          }
+        } catch (error) {
+          // Falls das Auflisten des Verzeichnisses fehlschlägt, Fallback auf altes Verhalten
+          console.warn(`⚠️ FileSystem: Fehler beim Auflisten des Verzeichnisses, verwende Fallback:`, error);
+          
+          // Fallback: Versuche bekannte Extensions
+          const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          for (const ext of extensions) {
+            try {
+              const fileName = `${entityId}.${ext}`;
+              await dirHandle.removeEntry(fileName);
+              console.log(`✅ FileSystem: Bild erfolgreich gelöscht (Fallback): ${subPath.join('/')}/${fileName}`);
+              deleted = true;
+              break; // Nur eine Datei sollte existieren
+            } catch (error) {
+              // Datei existiert nicht oder kann nicht gelöscht werden
+              continue;
+            }
+          }
+        }
+
+        // Gebe true zurück, auch wenn nichts gefunden wurde (wie gewünscht)
+        return true;
+      } else {
+        throw new Error(`Ungültiger Bildpfad: ${imagePath}`);
+      }
+    } catch (error) {
+      console.error(`❌ FileSystem Fehler beim Löschen des Bildes ${imagePath}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Gibt den aktuellen Pfad zurück
+   */
+  getCurrentPath(): string {
+    if (this.rootDirectoryHandle) {
+      return this.rootDirectoryHandle.name || this.basePath;
+    }
+    return this.basePath;
   }
 }
 
@@ -3413,13 +4173,98 @@ class SupabaseAdapter implements StorageAdapter {
       
       // Stelle sicher, dass der Pfad keine führenden Schrägstriche hat
       let cleanPath = path.startsWith('/') ? path.slice(1) : path;
+
+      // Parse imagePath: "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}.pdf"
+      const pathParts = cleanPath.split('/');
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+        const folder = pathParts[1]; // 'articles', 'recipes' oder 'receipts'
+        let entityId = pathParts[2]; // ID
+
+        // Entferne Dateiendung aus entityId falls vorhanden
+        const lastDotIndex = entityId.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          if (validExtensions.includes(possibleExt)) {
+            entityId = entityId.substring(0, lastDotIndex);
+          }
+        }
+
+        // OPTIMIERT: Verwende List-API wie in loadImage, um alle Dateien mit entityId-Präfix zu finden
+        try {
+          const supabase = await this.getSupabaseClient();
+          const folderPath = `pictures/${folder}/`;
+          
+          // Liste alle Dateien im Ordner auf
+          const { data: files, error: listError } = await supabase.storage
+            .from('chef-numbers-images')
+            .list(folderPath, {
+              limit: 1000,
+              sortBy: { column: 'name', order: 'asc' }
+            });
+
+          if (listError) {
+            console.warn(`⚠️ Supabase List-API Fehler, verwende Fallback:`, listError);
+            // Fallback auf altes Verhalten (versuche verschiedene Extensions)
+            return await this.deleteImageWithFallback(cleanPath, entityId);
+          }
+
+          if (!files || files.length === 0) {
+            // Keine Dateien gefunden - das ist OK, geben wir true zurück
+            console.log(`📷 SUPABASE Storage: Keine Dateien im Ordner ${folderPath} gefunden`);
+            return true;
+          }
+
+          // Finde alle Dateien, die mit entityId. beginnen
+          const prefix = `${entityId}.`;
+          const matchingFiles = files.filter((file: any) => 
+            file.name.startsWith(prefix) && file.name.length > prefix.length
+          );
+
+          if (matchingFiles.length === 0) {
+            // Keine passende Datei gefunden - das ist OK
+            console.log(`📷 SUPABASE Storage: Keine passende Datei für ${entityId} in ${folderPath} gefunden`);
+            return true;
+          }
+
+          // Lösche alle gefundenen Dateien auf einmal mit remove()
+          const filePaths = matchingFiles.map((file: any) => `${folderPath}${file.name}`);
+          const { error: deleteError } = await supabase.storage
+            .from('chef-numbers-images')
+            .remove(filePaths);
+
+          if (deleteError) {
+            console.error(`❌ SUPABASE Storage: Fehler beim Löschen:`, deleteError);
+            // Bei Fehler: Fallback versuchen
+            return await this.deleteImageWithFallback(cleanPath, entityId);
+          }
+
+          console.log(`✅ SUPABASE Storage: ${matchingFiles.length} Bild(er) erfolgreich gelöscht`);
+          return true;
+        } catch (error) {
+          console.warn(`⚠️ Fehler bei Supabase Client, verwende Fallback:`, error);
+          return await this.deleteImageWithFallback(cleanPath, entityId);
+        }
+      } else {
+        // Ungültiger Pfad-Format
+        console.error(`❌ SUPABASE Storage: Ungültiger Pfad-Format: ${cleanPath}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`❌ SUPABASE Storage Fehler beim Löschen:`, error);
+      return false;
+    }
+  }
+
+  // Fallback-Methode: Probiere verschiedene Endungen (für Kompatibilität)
+  private async deleteImageWithFallback(cleanPath: string, entityId: string): Promise<boolean> {
+    const possibleExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
+    
+    for (const ext of possibleExtensions) {
+      const pathWithExtension = `${cleanPath}.${ext}`;
+      const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${pathWithExtension}`;
       
-      // Prüfe ob Pfad bereits eine Dateiendung hat
-      const hasExtension = cleanPath.includes('.') && cleanPath.split('.').pop()?.length && cleanPath.split('.').pop()!.length <= 5;
-      
-      if (hasExtension) {
-        // Pfad hat bereits eine Endung, versuche direkt zu löschen
-        const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${cleanPath}`;
+      try {
         const response = await fetch(storageUrl, {
           method: 'DELETE',
           headers: {
@@ -3428,60 +4273,22 @@ class SupabaseAdapter implements StorageAdapter {
           }
         });
 
-        if (response.ok || response.status === 404) {
-          console.log(`✅ SUPABASE Storage: Bild gelöscht (${response.status === 404 ? 'nicht gefunden' : 'erfolgreich'})`);
-          return true;
-        } else if (response.status !== 404) {
-          // Bei anderen Fehlern: probiere verschiedene Endungen
-          console.warn(`⚠️ Direkter Löschversuch fehlgeschlagen (${response.status}), probiere verschiedene Endungen...`);
-        }
-      }
-      
-      // Pfad hat keine Endung oder direkter Versuch fehlgeschlagen - probiere verschiedene Endungen
-      const possibleExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
-      let deleted = false;
-      
-      for (const ext of possibleExtensions) {
-        const pathWithExtension = `${cleanPath}.${ext}`;
-        const storageUrl = `${this.connectionData.url}/storage/v1/object/chef-numbers-images/${pathWithExtension}`;
-        
-        try {
-          const response = await fetch(storageUrl, {
-            method: 'DELETE',
-            headers: {
-              'apikey': this.connectionData.serviceRoleKey,
-              'Authorization': `Bearer ${this.connectionData.serviceRoleKey}`
-            }
-          });
-
-          if (response.ok) {
-            console.log(`✅ SUPABASE Storage: Bild gelöscht mit Endung .${ext}`);
-            deleted = true;
-            break; // Datei gefunden und gelöscht, keine weiteren Versuche nötig
-          } else if (response.status === 404) {
-            // Datei mit dieser Endung existiert nicht, probiere nächste
-            continue;
-          } else {
-            // Anderer Fehler, logge aber probiere weiter
-            console.warn(`⚠️ Fehler beim Löschen mit Endung .${ext}: ${response.status}`);
-          }
-        } catch (error) {
-          // Weiter mit nächster Endung
+        if (response.ok) {
+          console.log(`✅ SUPABASE Storage: Bild gelöscht mit Endung .${ext} (Fallback)`);
+          return true; // Erfolgreich gelöscht
+        } else if (response.status === 404) {
+          // Datei existiert nicht, probiere nächste
           continue;
         }
+      } catch (error) {
+        // Fehler, probiere nächste
+        continue;
       }
-      
-      if (deleted) {
-        return true;
-      } else {
-        console.log(`⚠️ Bild nicht gefunden zum Löschen: ${path} (mit allen probierten Endungen)`);
-        // Gebe true zurück, da die Datei möglicherweise bereits gelöscht war
-        return true;
-      }
-    } catch (error) {
-      console.error(`❌ SUPABASE Storage Fehler beim Löschen:`, error);
-      return false;
     }
+    
+    // Keine Datei gefunden - das ist OK, geben wir true zurück
+    console.log(`📷 SUPABASE Storage: Keine Datei zum Löschen gefunden (Fallback)`);
+    return true;
   }
 }
 
@@ -3813,17 +4620,106 @@ class FirebaseAdapter implements StorageAdapter {
       
       console.log(`📷 FIREBASE Storage: Lösche Bild: ${path}`);
       
-      const { ref, deleteObject } = await import('firebase/storage');
+      const { ref, listAll, deleteObject } = await import('firebase/storage');
 
-      const storageRef = ref(this.storage, `images/${path}`);
-      await deleteObject(storageRef);
+      // Parse imagePath: "pictures/articles/{articleId}" oder "pictures/receipts/{receiptId}.pdf"
+      const pathParts = path.split('/');
+      if (pathParts.length >= 3 && pathParts[0] === 'pictures') {
+        const folder = pathParts[1]; // 'articles', 'recipes' oder 'receipts'
+        let entityId = pathParts[2]; // ID
 
-      console.log(`✅ FIREBASE Storage: Bild gelöscht`);
-      return true;
-    } catch (error) {
+        // Entferne Dateiendung aus entityId falls vorhanden
+        const lastDotIndex = entityId.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          if (validExtensions.includes(possibleExt)) {
+            entityId = entityId.substring(0, lastDotIndex);
+          }
+        }
+
+        // OPTIMIERT: Liste alle Dateien im Ordner auf und finde die passenden
+        const folderPath = `images/pictures/${folder}/`;
+        const folderRef = ref(this.storage, folderPath);
+        
+        try {
+          const listResult = await listAll(folderRef);
+          
+          if (!listResult.items || listResult.items.length === 0) {
+            console.log(`📷 FIREBASE Storage: Keine Dateien im Ordner ${folderPath} gefunden`);
+            return true; // Keine Dateien = OK
+          }
+
+          // Finde alle Dateien, die mit entityId. beginnen
+          const prefix = `${entityId}.`;
+          const matchingItems = listResult.items.filter((itemRef) => {
+            const fileName = itemRef.name;
+            return fileName.startsWith(prefix) && fileName.length > prefix.length;
+          });
+
+          if (matchingItems.length === 0) {
+            console.log(`📷 FIREBASE Storage: Keine passende Datei für ${entityId} in ${folderPath} gefunden`);
+            return true; // Keine passende Datei = OK
+          }
+
+          // Lösche alle gefundenen Dateien
+          const deletePromises = matchingItems.map(async (itemRef) => {
+            try {
+              await deleteObject(itemRef);
+              console.log(`✅ FIREBASE Storage: Bild gelöscht: ${itemRef.name}`);
+              return true;
+            } catch (error: any) {
+              // Nicht gefunden ist kein Fehler
+              if (error?.code === 'storage/object-not-found') {
+                console.log(`⚠️ FIREBASE Storage: ${itemRef.name} existiert nicht`);
+                return true;
+              }
+              console.warn(`⚠️ FIREBASE Storage: Fehler beim Löschen von ${itemRef.name}:`, error);
+              return false;
+            }
+          });
+
+          await Promise.all(deletePromises);
+          console.log(`✅ FIREBASE Storage: ${matchingItems.length} Bild(er) erfolgreich gelöscht`);
+          return true;
+        } catch (listError: any) {
+          // Falls listAll fehlschlägt, versuche direktes Löschen (Fallback)
+          console.warn(`⚠️ FIREBASE Storage: Fehler beim Auflisten, verwende Fallback:`, listError);
+          
+          try {
+            const storageRef = ref(this.storage, `images/${path}`);
+            await deleteObject(storageRef);
+            console.log(`✅ FIREBASE Storage: Bild gelöscht (Fallback)`);
+            return true;
+          } catch (deleteError: any) {
+            // Nicht gefunden ist kein Fehler
+            if (deleteError?.code === 'storage/object-not-found') {
+              console.log(`⚠️ FIREBASE Storage: Bild existiert nicht (Fallback)`);
+              return true;
+            }
+            throw deleteError;
+          }
+        }
+      } else {
+        // Ungültiger Pfad-Format, versuche direktes Löschen
+        try {
+          const storageRef = ref(this.storage, `images/${path}`);
+          await deleteObject(storageRef);
+          console.log(`✅ FIREBASE Storage: Bild gelöscht`);
+          return true;
+        } catch (deleteError: any) {
+          // Nicht gefunden ist kein Fehler
+          if (deleteError?.code === 'storage/object-not-found') {
+            console.log(`⚠️ FIREBASE Storage: Bild existiert nicht`);
+            return true;
+          }
+          throw deleteError;
+        }
+      }
+    } catch (error: any) {
       // Nicht gefunden ist kein Fehler
-      if ((error as any)?.code === 'storage/object-not-found') {
-        console.log(`⚠️ Bild existiert nicht: ${path}`);
+      if (error?.code === 'storage/object-not-found') {
+        console.log(`⚠️ FIREBASE Storage: Bild existiert nicht: ${path}`);
         return true;
       }
       
@@ -4558,46 +5454,102 @@ class MinIOAdapter implements StorageAdapter {
       const pathParts = imagePath.split('/');
       if (pathParts.length >= 3 && pathParts[0] === 'pictures' && (pathParts[1] === 'recipes' || pathParts[1] === 'articles' || pathParts[1] === 'receipts')) {
         const entityType = pathParts[1]; // 'recipes', 'articles' oder 'receipts'
-        const entityId = pathParts[2];
+        let entityId = pathParts[2]; // ID
         const bucket = this.connectionData?.bucket || 'chefnumbers';
         
-        // Versuche verschiedene Dateierweiterungen zu löschen
-        const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        let deleted = false;
-        
-        for (const ext of extensions) {
-          const fileName = `${entityType}/${entityId}.${ext}`;
-          
-          try {
-            console.log(`📦 MinIO: Versuche ${fileName} zu löschen aus Bucket ${bucket}...`);
-            
-            // AWS SDK DeleteObjectCommand
-            const deleteCommand = new DeleteObjectCommand({
-              Bucket: bucket,
-              Key: fileName
-            });
-            
-            const result = await this.s3Client.send(deleteCommand);
-            console.log(`✅ MinIO: Bild erfolgreich gelöscht: ${fileName}`, result);
-            deleted = true;
-            // Nicht break - lösche alle Varianten falls mehrere existieren
-          } catch (e: any) {
-            // Prüfe ob es ein "Not Found" Fehler ist
-            if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
-              console.log(`📦 MinIO: ${fileName} existiert nicht, überspringe`);
-              continue;
-            }
-            console.warn(`⚠️ MinIO: Fehler beim Löschen von ${fileName}:`, e.message);
-            continue;
+        // Entferne Dateiendung aus entityId falls vorhanden
+        const lastDotIndex = entityId.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          if (validExtensions.includes(possibleExt)) {
+            entityId = entityId.substring(0, lastDotIndex);
           }
         }
+
+        // OPTIMIERT: Verwende ListObjectsV2Command um alle Objekte mit Präfix zu finden
+        const prefix = `${entityType}/${entityId}.`;
         
-        if (!deleted) {
-          console.log(`📦 MinIO: Kein Bild gefunden zum Löschen für ${imagePath}`);
-          return false;
+        try {
+          // Liste alle Objekte mit dem Präfix auf
+          const listCommand = new ListObjectsV2Command({
+            Bucket: bucket,
+            Prefix: prefix,
+            MaxKeys: 1000 // Ausreichend für einen Artikel
+          });
+          
+          const listResult = await this.s3Client.send(listCommand);
+          
+          if (!listResult.Contents || listResult.Contents.length === 0) {
+            console.log(`📦 MinIO: Keine Dateien mit Präfix ${prefix} gefunden`);
+            return true; // Keine Dateien = OK
+          }
+
+          // Lösche alle gefundenen Objekte in Batches (max 1000 pro Request)
+          const objectsToDelete = listResult.Contents.map(obj => ({ Key: obj.Key! }));
+          const batchSize = 1000;
+          
+          for (let i = 0; i < objectsToDelete.length; i += batchSize) {
+            const batch = objectsToDelete.slice(i, i + batchSize);
+            
+            const deleteCommand = new DeleteObjectsCommand({
+              Bucket: bucket,
+              Delete: {
+                Objects: batch,
+                Quiet: true // Unterdrücke Fehlermeldungen für nicht existierende Objekte
+              }
+            });
+            
+            try {
+              const deleteResult = await this.s3Client.send(deleteCommand);
+              console.log(`✅ MinIO: ${batch.length} Bild(er) erfolgreich gelöscht (Batch ${Math.floor(i / batchSize) + 1})`);
+              
+              // Logge eventuelle Fehler (falls vorhanden)
+              if (deleteResult.Errors && deleteResult.Errors.length > 0) {
+                console.warn(`⚠️ MinIO: ${deleteResult.Errors.length} Fehler beim Löschen:`, deleteResult.Errors);
+              }
+            } catch (deleteError: any) {
+              console.warn(`⚠️ MinIO: Fehler beim Batch-Löschen:`, deleteError);
+              // Weiter mit nächstem Batch
+            }
+          }
+          
+          console.log(`✅ MinIO: ${objectsToDelete.length} Bild(er) erfolgreich gelöscht`);
+          return true;
+        } catch (listError: any) {
+          // Falls ListObjectsV2Command fehlschlägt, Fallback auf altes Verhalten
+          console.warn(`⚠️ MinIO: Fehler beim Auflisten, verwende Fallback:`, listError);
+          
+          // Fallback: Versuche bekannte Extensions
+          const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          let deleted = false;
+          
+          for (const ext of extensions) {
+            const fileName = `${entityType}/${entityId}.${ext}`;
+            
+            try {
+              const deleteCommand = new DeleteObjectCommand({
+                Bucket: bucket,
+                Key: fileName
+              });
+              
+              await this.s3Client.send(deleteCommand);
+              console.log(`✅ MinIO: Bild erfolgreich gelöscht (Fallback): ${fileName}`);
+              deleted = true;
+              // Nicht break - lösche alle Varianten falls mehrere existieren
+            } catch (e: any) {
+              // Prüfe ob es ein "Not Found" Fehler ist
+              if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
+                continue;
+              }
+              console.warn(`⚠️ MinIO: Fehler beim Löschen von ${fileName}:`, e.message);
+              continue;
+            }
+          }
+          
+          // Gebe true zurück, auch wenn nichts gefunden wurde (wie gewünscht)
+          return true;
         }
-        
-        return true;
       } else {
         throw new Error(`Ungültiger Bildpfad: ${imagePath}. Erwartet: pictures/recipes/{recipeId}, pictures/articles/{articleId} oder pictures/receipts/{receiptId}`);
       }
@@ -4823,8 +5775,14 @@ export class StorageLayer {
       // Initialize data adapter based on mode
       if (storageConfig.mode === 'local') {
         this.dataAdapter = new LocalStorageAdapter();
-        this.pictureAdapter = new LocalStorageAdapter(); // For now, use LocalStorage for pictures too
-        console.log('📱 Lokaler Modus: LocalStorage für Daten und Bilder');
+        // Initialize picture adapter based on currentPictureStorage
+        if (storageConfig.picture === 'FileSystem') {
+          this.pictureAdapter = await this.createPictureAdapter('FileSystem', connections?.filesystem);
+          console.log('📱 Lokaler Modus: LocalStorage für Daten, FileSystem für Bilder');
+        } else {
+          this.pictureAdapter = new LocalStorageAdapter();
+          console.log('📱 Lokaler Modus: LocalStorage für Daten und Bilder');
+        }
       } else if (storageConfig.mode === 'cloud') {
         // Initialize data adapter based on currentDataStorage
         this.dataAdapter = await this.createDataAdapter(storageConfig.data, connections);
@@ -4921,6 +5879,10 @@ export class StorageLayer {
       case 'LocalPath':
         return new LocalStorageAdapter();
       
+      case 'FileSystem':
+        console.log(`📁 FileSystem ConnectionData:`, connectionData?.filesystem);
+        return new FileSystemAdapter(connectionData?.filesystem);
+      
       default:
         throw new Error(`Unbekannter Bild-Speicher-Typ: ${storageType}`);
     }
@@ -5015,18 +5977,45 @@ export class StorageLayer {
     try {
       // 1. Lösche das zugehörige Bild (falls vorhanden) für Artikel, Rezepte und Belege
       if (key === 'articles' || key === 'recipes' || key === 'receipts') {
-        const imagePath = `pictures/${key}/${id}`;
         try {
+          // Für Belege: Lade zuerst den Beleg, um den tatsächlichen receiptImagePath zu erhalten
+          let imagePath: string | null = null;
+          
+          if (key === 'receipts') {
+            // Lade den Beleg, um receiptImagePath zu erhalten
+            const receipts = await this.load<any>('receipts');
+            const receipt = receipts?.find((r: any) => r.id === id);
+            if (receipt && receipt.receiptImagePath) {
+              imagePath = receipt.receiptImagePath;
+              console.log(`🗑️ Gefundener receiptImagePath: ${imagePath}`);
+            }
+          }
+          
+          // Falls kein spezifischer Pfad gefunden wurde, verwende Standard-Pfad
+          if (!imagePath) {
+            imagePath = `pictures/${key}/${id}`;
+          }
+          
           console.log(`🗑️ Versuche zugehöriges Bild zu löschen: ${imagePath}`);
           const imageDeleted = await this.deleteImage(imagePath);
           if (imageDeleted) {
             console.log(`✅ Zugehöriges Bild erfolgreich gelöscht: ${imagePath}`);
           } else {
             console.log(`ℹ️ Kein Bild gefunden für: ${imagePath}`);
+            
+            // Für Belege: Versuche auch ohne Extension, falls ursprünglicher Pfad Extension hatte
+            if (key === 'receipts' && imagePath.includes('.')) {
+              const pathWithoutExt = imagePath.substring(0, imagePath.lastIndexOf('.'));
+              console.log(`🗑️ Versuche auch ohne Extension: ${pathWithoutExt}`);
+              const imageDeletedWithoutExt = await this.deleteImage(pathWithoutExt);
+              if (imageDeletedWithoutExt) {
+                console.log(`✅ Bild ohne Extension erfolgreich gelöscht: ${pathWithoutExt}`);
+              }
+            }
           }
         } catch (imageError) {
           // Fehler beim Bild-Löschen sollten den Datensatz-Löschvorgang nicht stoppen
-          console.warn(`⚠️ Fehler beim Löschen des Bildes ${imagePath}:`, imageError);
+          console.warn(`⚠️ Fehler beim Löschen des Bildes:`, imageError);
         }
       }
       
@@ -5096,8 +6085,15 @@ export class StorageLayer {
       }
       
       // Wenn bereits Objekt, verwende es direkt
-      if (result.url) {
+      if (result && typeof result === 'object' && 'url' in result) {
         return result;
+      }
+      
+      // Wenn String, konvertiere zu Objekt (für Abwärtskompatibilität)
+      if (typeof result === 'string') {
+        // Extrahiere Extension aus Data URL oder Dateiname
+        const extension = imagePath.split('.').pop()?.toLowerCase() || 'jpg';
+        return { url: result, extension };
       }
       
       return null;
@@ -5152,6 +6148,22 @@ export class StorageLayer {
     }
 
     return await this.initialize(config);
+  }
+
+  // Get current file system path (nur für FileSystem-Adapter)
+  public getCurrentFilePath(): string | null {
+    if (this.pictureAdapter && 'getCurrentPath' in this.pictureAdapter) {
+      return (this.pictureAdapter as any).getCurrentPath();
+    }
+    return null;
+  }
+
+  // Request directory access (nur für FileSystem-Adapter)
+  public async requestDirectoryAccess(): Promise<FileSystemDirectoryHandle | null> {
+    if (this.pictureAdapter && 'requestDirectoryAccess' in this.pictureAdapter) {
+      return await (this.pictureAdapter as any).requestDirectoryAccess();
+    }
+    return null;
   }
 
   // Reset instance (for testing)

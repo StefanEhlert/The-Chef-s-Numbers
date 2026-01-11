@@ -2,13 +2,27 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { FaDatabase, FaCloud, FaServer, FaSync, FaDownload, FaCog, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaKey, FaWifi, FaSpinner, FaEye, FaEyeSlash, FaShieldAlt, FaCheck, FaTimes, FaNetworkWired, FaExternalLinkAlt, FaTrash, FaFolder, FaFlask, FaDocker } from 'react-icons/fa';
 import { StorageMode, CloudStorageType } from '../services/storageLayer';
 import { StorageConfig, StorageData, StoragePicture, DEFAULT_STORAGE_CONFIGS } from '../types/storage';
+import type { StoragePicture as StoragePictureType } from '../types/storage';
 import { StorageLayer } from '../services/storageLayer';
 import { useAppContext } from '../contexts/AppContext';
 import DockerSetupModal from './DockerSetupModal';
+import AppKeysModal from './AppKeysModal';
 // StorageContext wird nicht mehr benötigt - StorageLayer lädt Konfiguration direkt
 import { designTemplates } from '../constants/designTemplates';
 import { SignJWT } from 'jose';
 import { setComponentColors } from '../utils/cssVariables';
+import { getBackupEntityTypes, getEntityNameGerman, getEntityTypesWithImages, getImagePathForEntity } from '../utils/backupHelpers';
+import { 
+  createZipBackup, 
+  createMultiPartZipBackup, 
+  extractZipBackup,
+  determineBackupFormat,
+  estimateBackupSize,
+  BACKUP_SIZE_LIMITS,
+  dataURLToBlob,
+  urlToBlob
+} from '../utils/zipBackupHelpers';
+import { BackupDataV2, BackupResult, BackupProgress, RestoreResult } from '../types/backup';
 
 // Interfaces
 interface CloudStorageTypeConfig {
@@ -26,7 +40,7 @@ interface StorageManagement {
     currentStorageMode: 'local' | 'cloud';
     currentCloudType: 'docker' | 'supabase' | 'firebase' | 'none';
     currentDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'CouchDB' | 'Supabase' | 'Firebase' | 'SQLite';
-    currentPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath';
+    currentPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath' | 'FileSystem';
     isActive: boolean; // bestätigt funktionierende Verbindung
     activeConnections?: any; // Snapshot der aktiven Connection-Daten (für Sicherheit!)
   };
@@ -36,7 +50,7 @@ interface StorageManagement {
     selectedStorageMode: 'local' | 'cloud';
     selectedCloudType: 'docker' | 'supabase' | 'firebase' | 'none';
     selectedDataStorage: 'PostgreSQL' | 'MariaDB' | 'MySQL' | 'CouchDB' | 'Supabase' | 'Firebase' | 'SQLite' | undefined;
-    selectedPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath' | undefined;
+    selectedPictureStorage: 'MinIO' | 'Supabase' | 'Firebase' | 'LocalPath' | 'FileSystem' | undefined;
     isTested: boolean; // wurde getestet und funktioniert
   };
 
@@ -268,12 +282,21 @@ const StorageManagement: React.FC = () => {
     return detected;
   });
 
+  // State für FileSystem-Verzeichnis und aktuellen Pfad
+  const [fileSystemDirectoryHandle, setFileSystemDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
+
   // Hauptzustand - neue StorageManagement-Struktur
   const [storageManagement, setStorageManagement] = useState<StorageManagement>(() => {
     const savedManagement = localStorage.getItem('storageManagement');
     if (savedManagement) {
       try {
         const parsed = JSON.parse(savedManagement);
+        
+        // Stelle sicher, dass connections existiert
+        if (!parsed.connections) {
+          parsed.connections = {};
+        }
         
         // Migration: Füge CouchDB-Konfiguration hinzu, falls nicht vorhanden
         if (!parsed.connections.couchdb) {
@@ -317,6 +340,35 @@ const StorageManagement: React.FC = () => {
           if (!parsed.connections.frontend.hasOwnProperty('connectionStatus')) {
             parsed.connections.frontend.connectionStatus = false;
           }
+        }
+        
+        // Stelle sicher, dass alle erforderlichen Felder vorhanden sind
+        if (!parsed.selectedStorage) {
+          console.log('🔄 Migration: Füge selectedStorage hinzu');
+          parsed.selectedStorage = {
+            selectedStorageMode: 'local',
+            selectedCloudType: 'none',
+            selectedDataStorage: 'SQLite',
+            selectedPictureStorage: 'LocalPath',
+            isTested: true
+          };
+        }
+        
+        if (!parsed.currentStorage) {
+          console.log('🔄 Migration: Füge currentStorage hinzu');
+          parsed.currentStorage = {
+            currentStorageMode: 'local',
+            currentCloudType: 'none',
+            currentDataStorage: 'SQLite',
+            currentPictureStorage: 'LocalPath',
+            isActive: true,
+            activeConnections: {}
+          };
+        }
+        
+        if (!parsed.connections) {
+          console.log('🔄 Migration: Füge connections hinzu');
+          parsed.connections = {};
         }
         
         return parsed;
@@ -426,6 +478,7 @@ const StorageManagement: React.FC = () => {
   const [showDataMergeModal, setShowDataMergeModal] = useState(false);
   const [showTransferProgressModal, setShowTransferProgressModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showAppKeysModal, setShowAppKeysModal] = useState(false);
   const [backupMode, setBackupMode] = useState<'backup' | 'restore'>('backup');
   const [mergeStrategy, setMergeStrategy] = useState<'overwrite' | 'merge'>('merge');
   const [conflictResolution, setConflictResolution] = useState<'keep_existing' | 'overwrite_with_new'>('keep_existing');
@@ -475,6 +528,14 @@ const StorageManagement: React.FC = () => {
   } | null>(null);
   const [backupCompleted, setBackupCompleted] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
+  const [storageCompatibilityInfo, setStorageCompatibilityInfo] = useState<{
+    compatible: boolean;
+    backupStorageType: string;
+    currentStorageType: string;
+    requiresStorageChange: boolean;
+    showModal: boolean;
+    backupStorageManagement?: string; // Backup-Daten für currentStorage-Wiederherstellung
+  } | null>(null);
   const [showSupabaseSetupModal, setShowSupabaseSetupModal] = useState(false);
   const [showFirebaseSetupModal, setShowFirebaseSetupModal] = useState(false);
   const [supabaseSetupData, setSupabaseSetupData] = useState({
@@ -517,13 +578,13 @@ const StorageManagement: React.FC = () => {
 
   // Hilfsfunktion: Prüft ob ein gültiger Cloud-Typ gewählt ist
   const isCloudTypeValid = (): boolean => {
-    const selectedCloudType = storageManagement.selectedStorage.selectedCloudType;
+    const selectedCloudType = storageManagement?.selectedStorage?.selectedCloudType;
     return selectedCloudType && selectedCloudType !== 'none';
   };
 
   // Animation-Logik für Cloud-Speicher-Typ Bereich
   useEffect(() => {
-    const shouldShowCloud = storageManagement.selectedStorage.selectedStorageMode === 'cloud';
+    const shouldShowCloud = storageManagement?.selectedStorage?.selectedStorageMode === 'cloud';
 
     if (shouldShowCloud && !cloudSectionVisible) {
       // Einblenden
@@ -537,12 +598,12 @@ const StorageManagement: React.FC = () => {
         setCloudSectionAnimating(false);
       }, 300); // Animation-Dauer
     }
-  }, [storageManagement.selectedStorage.selectedStorageMode, cloudSectionVisible]);
+  }, [storageManagement?.selectedStorage?.selectedStorageMode, cloudSectionVisible]);
 
   // Animation-Logik für Datenbank-Konfiguration Bereich
   useEffect(() => {
-    const shouldShowDatabase = storageManagement.selectedStorage.selectedStorageMode !== 'local' &&
-      storageManagement.selectedStorage.selectedCloudType === 'docker';
+    const shouldShowDatabase = storageManagement?.selectedStorage?.selectedStorageMode !== 'local' &&
+      storageManagement?.selectedStorage?.selectedCloudType === 'docker';
 
     if (shouldShowDatabase && !databaseSectionVisible) {
       // Einblenden
@@ -556,12 +617,12 @@ const StorageManagement: React.FC = () => {
         setDatabaseSectionAnimating(false);
       }, 300); // Animation-Dauer
     }
-  }, [storageManagement.selectedStorage.selectedStorageMode, storageManagement.selectedStorage.selectedCloudType, databaseSectionVisible]);
+  }, [storageManagement?.selectedStorage?.selectedStorageMode, storageManagement?.selectedStorage?.selectedCloudType, databaseSectionVisible]);
 
   // Animation-Logik für Cloud-abhängige Bereiche basierend auf gewähltem Cloud-Typ
   useEffect(() => {
-    const selectedCloudType = storageManagement.selectedStorage.selectedCloudType;
-    const selectedDataStorage = storageManagement.selectedStorage.selectedDataStorage;
+    const selectedCloudType = storageManagement?.selectedStorage?.selectedCloudType;
+    const selectedDataStorage = storageManagement?.selectedStorage?.selectedDataStorage;
     const cloudTypeValid = isCloudTypeValid();
 
     // PostgreSQL-Bereich (nur bei Docker + PostgreSQL)
@@ -661,7 +722,7 @@ const StorageManagement: React.FC = () => {
         setFirebaseSectionAnimating(false);
       }, 300);
     }
-  }, [storageManagement.selectedStorage.selectedCloudType, storageManagement.selectedStorage.selectedDataStorage, postgresSectionVisible, mariadbSectionVisible, mysqlSectionVisible, couchdbSectionVisible, minioSectionVisible, supabaseSectionVisible, firebaseSectionVisible]);
+  }, [storageManagement?.selectedStorage?.selectedCloudType, storageManagement?.selectedStorage?.selectedDataStorage, postgresSectionVisible, mariadbSectionVisible, mysqlSectionVisible, couchdbSectionVisible, minioSectionVisible, supabaseSectionVisible, firebaseSectionVisible]);
 
   // Prüfe beim Start, ob JWT-Token erstellt werden muss
   useEffect(() => {
@@ -730,6 +791,12 @@ const StorageManagement: React.FC = () => {
   // Storage Management Update Handler
   const handleStorageManagementUpdate = (updates: Partial<StorageManagement>) => {
     // Deep merge für nested objects (selectedStorage, currentStorage, connections)
+    // Stelle sicher, dass storageManagement vollständig ist
+    if (!storageManagement?.selectedStorage || !storageManagement?.currentStorage || !storageManagement?.connections) {
+      console.error('❌ storageManagement ist nicht vollständig initialisiert');
+      return;
+    }
+    
     const newManagement = {
       ...storageManagement,
       currentStorage: updates.currentStorage ? { ...storageManagement.currentStorage, ...updates.currentStorage } : storageManagement.currentStorage,
@@ -830,6 +897,14 @@ const StorageManagement: React.FC = () => {
       } else if (selectedPictureStorage === 'LocalPath') {
         // Lokaler Pfad ist immer "verbunden"
         pictureStorageConnected = true;
+      } else if (selectedPictureStorage === 'FileSystem') {
+        // FileSystem ist verbunden wenn ein Verzeichnis ausgewählt wurde
+        // Prüfe ob ein FileSystem-Verzeichnis in activeConnections gespeichert ist
+        // Oder ob ein DirectoryHandle im State vorhanden ist
+        const filesystemConn = newManagement.currentStorage.activeConnections?.filesystem;
+        const hasDirectoryHandle = fileSystemDirectoryHandle !== null;
+        const hasBasePath = !!filesystemConn?.basePath;
+        pictureStorageConnected = hasDirectoryHandle || hasBasePath;
       }
 
       // Setze isTested basierend auf beide Verbindungsstatus
@@ -842,6 +917,44 @@ const StorageManagement: React.FC = () => {
     localStorage.setItem('storageManagement', JSON.stringify(newManagement));
     console.log('✅ StorageManagement aktualisiert:', newManagement);
   };
+
+  // Lade aktuellen Pfad beim Start und wenn FileSystem aktiv ist
+  useEffect(() => {
+    const loadCurrentFilePath = async () => {
+      if (storageManagement.currentStorage.currentPictureStorage === 'FileSystem') {
+        try {
+          const { storageLayer } = await import('../services/storageLayer');
+          // Prüfe zuerst ob StorageLayer bereits initialisiert ist
+          if (storageLayer.isReady()) {
+            try {
+              const path = (storageLayer as any).getCurrentFilePath();
+              if (path) {
+                setCurrentFilePath(path);
+                return;
+              }
+            } catch (e) {
+              // Methode existiert möglicherweise nicht - verwende Fallback
+            }
+          }
+          
+          // Fallback: Verwende gespeicherten Pfad aus activeConnections
+          if (storageManagement.currentStorage.activeConnections?.filesystem?.basePath) {
+            setCurrentFilePath(storageManagement.currentStorage.activeConnections.filesystem.basePath);
+          } else {
+            setCurrentFilePath("The Chef's Numbers");
+          }
+        } catch (error) {
+          console.error('❌ Fehler beim Laden des aktuellen Pfades:', error);
+          // Fallback auf Standardpfad
+          setCurrentFilePath("The Chef's Numbers");
+        }
+      } else {
+        setCurrentFilePath(null);
+      }
+    };
+
+    loadCurrentFilePath();
+  }, [storageManagement.currentStorage.currentPictureStorage, storageManagement.currentStorage.activeConnections?.filesystem]);
 
   // Connection Update Handler
   const updateConnection = (connectionType: keyof StorageManagement['connections'], updates: any) => {
@@ -1010,7 +1123,7 @@ const StorageManagement: React.FC = () => {
 
   // Helper Functions
   const getCurrentDatabaseType = () => {
-    return storageManagement.selectedStorage.selectedDataStorage?.toLowerCase() || 'undefined';
+    return storageManagement?.selectedStorage?.selectedDataStorage?.toLowerCase() || 'undefined';
   };
 
   // Prüfe ob alle PostgreSQL-Felder gültig sind
@@ -2176,7 +2289,7 @@ const StorageManagement: React.FC = () => {
   };
 
   const getCurrentPictureStorage = () => {
-    return storageManagement.selectedStorage.selectedPictureStorage?.toLowerCase() || 'undefined';
+    return storageManagement?.selectedStorage?.selectedPictureStorage?.toLowerCase() || 'undefined';
   };
 
   // Handler für DockerSetupModal
@@ -2640,7 +2753,15 @@ const StorageManagement: React.FC = () => {
           : undefined,
         firebase: (storageManagement.selectedStorage.selectedDataStorage === 'Firebase' || storageManagement.selectedStorage.selectedPictureStorage === 'Firebase')
           ? { ...storageManagement.connections.firebase }
-          : undefined
+          : undefined,
+        filesystem: (storageManagement.selectedStorage.selectedPictureStorage === 'FileSystem' && fileSystemDirectoryHandle)
+          ? {
+              rootDirectoryHandle: fileSystemDirectoryHandle,
+              basePath: currentFilePath || "The Chef's Numbers"
+            }
+          : (storageManagement.currentStorage.activeConnections?.filesystem)
+            ? storageManagement.currentStorage.activeConnections.filesystem
+            : undefined
       };
 
       console.log('📸 Erstelle Snapshot der aktiven Connection-Daten:', activeConnections);
@@ -2659,10 +2780,16 @@ const StorageManagement: React.FC = () => {
         currentStorage: newCurrentStorage
       });
 
+      // Prüfe ob Bildspeicher geändert wurde (im lokalen Modus)
+      const pictureStorageChanged = 
+        storageManagement.currentStorage.currentPictureStorage !== newCurrentStorage.currentPictureStorage &&
+        storageManagement.currentStorage.currentStorageMode === 'local' &&
+        newCurrentStorage.currentStorageMode === 'local';
+
       // Initialisiere StorageLayer mit der neuen Konfiguration
       console.log('🚀 Initialisiere StorageLayer mit neuer Konfiguration...');
       
-      const { storageLayer } = await import('../services/storageLayer');
+      const { storageLayer, StorageLayer } = await import('../services/storageLayer');
       
       const storageConfig = {
         mode: newCurrentStorage.currentStorageMode,
@@ -2673,7 +2800,104 @@ const StorageManagement: React.FC = () => {
       // WICHTIG: Verwende den Snapshot (activeConnections) statt connections!
       // Dies stellt sicher, dass nur die getesteten und übernommenen Daten verwendet werden
       console.log('🔒 Verwende aktive Connection-Daten aus Snapshot');
+      
+      // Für FileSystem: Das Handle wird automatisch aus IndexedDB geladen, 
+      // daher müssen wir es nicht explizit übergeben
       const connectionData = activeConnections;
+      
+      // Entferne rootDirectoryHandle aus filesystem (wird nicht mehr benötigt, 
+      // da automatisch aus IndexedDB geladen wird)
+      if (connectionData.filesystem && (connectionData.filesystem as any).rootDirectoryHandle) {
+        delete (connectionData.filesystem as any).rootDirectoryHandle;
+      }
+
+      // Wenn Bildspeicher geändert wurde, migriere Bilder
+      if (pictureStorageChanged) {
+        console.log('📷 Bildspeicher geändert - starte Bild-Migration...');
+        try {
+          // Initialisiere Quell-Storage (alter Bildspeicher)
+          const sourceStorageLayer = new (StorageLayer as any)();
+          const sourceConfig = {
+            mode: storageManagement.currentStorage.currentStorageMode,
+            data: storageManagement.currentStorage.currentDataStorage,
+            picture: storageManagement.currentStorage.currentPictureStorage
+          };
+          const sourceConnectionData = storageManagement.currentStorage.activeConnections || {};
+          await sourceStorageLayer.initialize(sourceConfig, sourceConnectionData);
+
+          // Initialisiere Ziel-Storage (neuer Bildspeicher) temporär
+          const targetStorageLayer = new (StorageLayer as any)();
+          await targetStorageLayer.initialize(storageConfig, connectionData);
+
+          // Migriere Bilder für alle Entities mit Bildern
+          const entityTypesWithImages = ['articles', 'recipes', 'receipts'];
+          let totalImagesMigrated = 0;
+          let totalImagesFailed = 0;
+
+          for (const entityType of entityTypesWithImages) {
+            const entities = await sourceStorageLayer.load(entityType);
+            if (!entities || entities.length === 0) continue;
+
+            console.log(`📷 Migriere Bilder für ${entityType} (${entities.length} Einträge)...`);
+
+            for (const entity of entities) {
+              const imagePath = entity.imagePath || entity.receiptImagePath;
+              if (!imagePath) continue;
+
+              try {
+                // Lade Bild vom Quell-Speicher
+                const imageResult = await sourceStorageLayer.loadImage(imagePath);
+                if (!imageResult) continue;
+
+                // Konvertiere zu File
+                let file: File;
+                if (typeof imageResult === 'string') {
+                  // Data URL
+                  const response = await fetch(imageResult);
+                  const blob = await response.blob();
+                  const extension = imagePath.split('.').pop()?.toLowerCase() || 'jpg';
+                  file = new File([blob], `${entity.id}.${extension}`, { type: blob.type });
+                } else {
+                  // Objekt mit url und extension
+                  const response = await fetch(imageResult.url);
+                  const blob = await response.blob();
+                  file = new File([blob], `${entity.id}.${imageResult.extension}`, { type: blob.type });
+                }
+
+                // Speichere Bild im Ziel-Speicher
+                const saved = await targetStorageLayer.saveImage(imagePath, file);
+                if (saved) {
+                  totalImagesMigrated++;
+                  console.log(`✅ Bild migriert: ${entity.name || entity.id}`);
+                } else {
+                  totalImagesFailed++;
+                  console.warn(`⚠️ Bild-Migration fehlgeschlagen: ${entity.name || entity.id}`);
+                }
+              } catch (error) {
+                totalImagesFailed++;
+                console.error(`❌ Fehler beim Migrieren des Bildes für ${entity.name || entity.id}:`, error);
+              }
+            }
+          }
+
+          console.log(`📷 Bild-Migration abgeschlossen: ${totalImagesMigrated} erfolgreich, ${totalImagesFailed} fehlgeschlagen`);
+          
+          if (totalImagesMigrated > 0) {
+            showMessage(
+              'Bilder migriert',
+              `${totalImagesMigrated} Bilder wurden erfolgreich vom ${storageManagement.currentStorage.currentPictureStorage} zum ${newCurrentStorage.currentPictureStorage} migriert.`,
+              'success'
+            );
+          }
+        } catch (migrationError) {
+          console.error('❌ Fehler bei der Bild-Migration:', migrationError);
+          showMessage(
+            'Bild-Migration fehlgeschlagen',
+            `Die Bilder konnten nicht automatisch migriert werden: ${migrationError instanceof Error ? migrationError.message : 'Unbekannter Fehler'}`,
+            'warning'
+          );
+        }
+      }
 
       const initSuccess = await storageLayer.initialize(storageConfig, connectionData);
       
@@ -2713,8 +2937,13 @@ const StorageManagement: React.FC = () => {
 
   // Prüfe ob sich die Konfiguration von der aktuellen unterscheidet (mit useMemo cached)
   const isConfigurationDifferent = useMemo(() => {
-    const current = storageManagement.currentStorage;
-    const selected = storageManagement.selectedStorage;
+    const current = storageManagement?.currentStorage;
+    const selected = storageManagement?.selectedStorage;
+    
+    // Fallback falls storageManagement nicht vollständig ist
+    if (!current || !selected) {
+      return false;
+    }
 
     // Prüfe ob sich die Speicher-Typen geändert haben
     const storageTypesChanged = (
@@ -2743,14 +2972,14 @@ const StorageManagement: React.FC = () => {
 
     return false;
   }, [
-    storageManagement.currentStorage.currentStorageMode,
-    storageManagement.currentStorage.currentDataStorage,
-    storageManagement.currentStorage.currentPictureStorage,
-    storageManagement.currentStorage.isActive,
-    storageManagement.selectedStorage.selectedStorageMode,
-    storageManagement.selectedStorage.selectedDataStorage,
-    storageManagement.selectedStorage.selectedPictureStorage,
-    storageManagement.selectedStorage.isTested
+    storageManagement?.currentStorage?.currentStorageMode,
+    storageManagement?.currentStorage?.currentDataStorage,
+    storageManagement?.currentStorage?.currentPictureStorage,
+    storageManagement?.currentStorage?.isActive,
+    storageManagement?.selectedStorage?.selectedStorageMode,
+    storageManagement?.selectedStorage?.selectedDataStorage,
+    storageManagement?.selectedStorage?.selectedPictureStorage,
+    storageManagement?.selectedStorage?.isTested
   ]);
 
   // Hilfsfunktion: Prüft ob sich Verbindungsdaten geändert haben
@@ -2817,58 +3046,93 @@ const StorageManagement: React.FC = () => {
   // ========================================
 
   /**
-   * Erstellt ein vollständiges Backup aller Daten
+   * Erstellt ein vollständiges Backup aller Daten (Version 2.0.0)
+   * Unterstützt JSON, ZIP und Multi-Part ZIP-Formate
    */
-  const createBackup = async (): Promise<{ success: boolean; data?: any; message: string }> => {
+  const createBackup = async (): Promise<BackupResult> => {
     try {
-      console.log('💾 Starte Backup-Erstellung...');
+      console.log('💾 Starte Backup-Erstellung (Version 2.0.0)...');
       const { storageLayer } = await import('../services/storageLayer');
       
+      // Lade aktuelle Storage-Konfiguration
+      const storageManagementValue = localStorage.getItem('storageManagement');
+      const storageManagement = storageManagementValue ? JSON.parse(storageManagementValue) : null;
+      const currentStorage = storageManagement?.currentStorage || {
+        currentStorageMode: 'local',
+        currentCloudType: 'none',
+        currentDataStorage: 'SQLite',
+        currentPictureStorage: 'LocalPath'
+      };
+
+      // Dynamische Entity-Typen aus Schema
+      const entityTypes = getBackupEntityTypes();
+      const entityTypesWithImages = getEntityTypesWithImages();
+      
       // Berechne Gesamtanzahl der Schritte
-      // State-Entities: suppliers, articles, recipes, receipts (4)
-      // StorageLayer-Entities: accountingAccounts, accountingSettings, units (3)
+      // Entities: dynamisch
       // LocalStorage: 1 Schritt
       // Bilder: 1 Schritt
       // Abschluss: 1 Schritt
-      const totalSteps = 4 + 3 + 1 + 1 + 1; // 10 Schritte
+      const totalSteps = entityTypes.length + 1 + 1 + 1;
       
-      setBackupProgress({ current: 0, total: totalSteps, item: 'Initialisierung', message: 'Backup wird vorbereitet...' });
+      setBackupProgress({ 
+        current: 0, 
+        total: totalSteps, 
+        item: 'Initialisierung', 
+        message: 'Backup wird vorbereitet...' 
+      });
       setBackupCompleted(false);
 
-      const backup: any = {
-        version: '1.0.0',
+      // Erstelle Backup-Objekt (Version 2.0.0)
+      const backup: BackupDataV2 = {
+        version: '2.0.0',
         timestamp: new Date().toISOString(),
-        appVersion: '2.2.2',
+        appVersion: '2.3.0',
+        sourceStorage: {
+          mode: currentStorage.currentStorageMode || 'local',
+          dataStorage: currentStorage.currentDataStorage || 'SQLite',
+          pictureStorage: currentStorage.currentPictureStorage || 'LocalPath',
+          connectionInfo: {
+            dataStorageType: currentStorage.currentDataStorage || 'SQLite',
+            pictureStorageType: currentStorage.currentPictureStorage || 'LocalPath'
+          }
+        },
+        schema: {
+          version: '1.0.0',
+          tables: entityTypes.map(et => {
+            // Konvertiere Entity-Type zu Tabellennamen (vereinfacht)
+            const tableNameMap: Record<string, string> = {
+              'articles': 'articles',
+              'suppliers': 'suppliers',
+              'recipes': 'recipes',
+              'receipts': 'receipts',
+              'accountingAccounts': 'accountingaccounts',
+              'accountingSettings': 'accountingsettings',
+              'units': 'unitentitys',
+              'categories': 'categoryentitys'
+            };
+            return tableNameMap[et] || et;
+          })
+        },
         entities: {},
-        localStorage: {},
-        images: {}
+        localStorage: {
+          localOptions: '',
+          storageManagement: ''
+        },
+        images: {},
+        metadata: {
+          totalEntities: 0,
+          totalImages: 0,
+          totalSize: 0,
+          imageSizes: {}
+        }
       };
 
       let currentStep = 0;
 
-      // 1. Sichere Entitäts-Daten aus dem State
-      const stateEntityTypes = ['suppliers', 'articles', 'recipes', 'receipts'];
-      for (let i = 0; i < stateEntityTypes.length; i++) {
-        const entityType = stateEntityTypes[i];
-        currentStep++;
-        setBackupProgress({
-          current: currentStep,
-          total: totalSteps,
-          item: getEntityNameGerman(entityType),
-          message: `Sichere ${getEntityNameGerman(entityType)}...`
-        });
-
-        const data = appContext.state[entityType as keyof typeof appContext.state];
-        if (Array.isArray(data)) {
-          backup.entities[entityType] = data;
-          console.log(`✅ ${data.length} ${entityType} gesichert`);
-        }
-      }
-
-      // 2. Sichere Entitäts-Daten aus StorageLayer (nicht im State)
-      const storageLayerEntityTypes = ['accountingAccounts', 'accountingSettings', 'units'];
-      for (let i = 0; i < storageLayerEntityTypes.length; i++) {
-        const entityType = storageLayerEntityTypes[i];
+      // 1. Sichere alle Entitäts-Daten über StorageLayer (konsistent aus Datenbank)
+      for (let i = 0; i < entityTypes.length; i++) {
+        const entityType = entityTypes[i];
         currentStep++;
         setBackupProgress({
           current: currentStep,
@@ -2879,8 +3143,9 @@ const StorageManagement: React.FC = () => {
 
         try {
           const data = await storageLayer.load(entityType as any);
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             backup.entities[entityType] = data;
+            backup.metadata.totalEntities += data.length;
             console.log(`✅ ${data.length} ${entityType} gesichert`);
           } else {
             backup.entities[entityType] = [];
@@ -2892,7 +3157,7 @@ const StorageManagement: React.FC = () => {
         }
       }
 
-      // 3. Sichere LocalStorage-Schlüssel
+      // 2. Sichere LocalStorage-Schlüssel
       currentStep++;
       setBackupProgress({
         current: currentStep,
@@ -2901,33 +3166,25 @@ const StorageManagement: React.FC = () => {
         message: 'Sichere LocalStorage-Einstellungen...'
       });
 
-      // Standard LocalStorage-Schlüssel
-      const localStorageKeys = ['localOptions'];
-      for (const key of localStorageKeys) {
-        const value = localStorage.getItem(key);
-        if (value) {
-          backup.localStorage[key] = value;
-          console.log(`✅ LocalStorage-Schlüssel gesichert: ${key}`);
-        }
+      // Sichere localOptions
+      const localOptions = localStorage.getItem('localOptions');
+      if (localOptions) {
+        backup.localStorage.localOptions = localOptions;
+        console.log('✅ localOptions gesichert');
       }
 
-      // Sichere nur connections und selectedStorage aus storageManagement
-      const storageManagementValue = localStorage.getItem('storageManagement');
+      // Sichere storageManagement (VOLLSTÄNDIG: connections, selectedStorage UND currentStorage)
       if (storageManagementValue) {
         try {
-          const storageManagement = JSON.parse(storageManagementValue);
-          const storageManagementBackup = {
-            connections: storageManagement.connections || {},
-            selectedStorage: storageManagement.selectedStorage || {}
-          };
-          backup.localStorage['storageManagement'] = JSON.stringify(storageManagementBackup);
-          console.log('✅ storageManagement (connections & selectedStorage) gesichert');
+          // Sichere vollständiges storageManagement
+          backup.localStorage.storageManagement = storageManagementValue;
+          console.log('✅ storageManagement (vollständig: connections, selectedStorage & currentStorage) gesichert');
         } catch (error) {
           console.warn('⚠️ Fehler beim Sichern von storageManagement:', error);
         }
       }
 
-      // 4. Sichere Bilder
+      // 3. Sichere Bilder
       currentStep++;
       setBackupProgress({
         current: currentStep,
@@ -2935,70 +3192,137 @@ const StorageManagement: React.FC = () => {
         item: 'Bilder',
         message: 'Sichere Bilder...'
       });
+
+      // Bilder als Blob-Map für ZIP (später)
+      const imageBlobs = new Map<string, Blob>();
       
-      // Sichere Artikel-Bilder
-      if (backup.entities.articles) {
-        for (const article of backup.entities.articles) {
+      // Sammle alle Bilder
+      for (const entityType of entityTypesWithImages) {
+        const entities = backup.entities[entityType] || [];
+        
+        for (const entity of entities) {
           try {
-            const imagePath = `pictures/articles/${article.id}`;
-            const imageData = await storageLayer.loadImage(imagePath);
-            if (imageData) {
-              backup.images[imagePath] = imageData.url;
-              console.log(`📷 Artikelbild gesichert: ${article.name}`);
+            let imagePath: string | undefined;
+            
+            if (entityType === 'articles') {
+              imagePath = `pictures/articles/${entity.id}`;
+            } else if (entityType === 'recipes') {
+              imagePath = `pictures/recipes/${entity.id}`;
+            } else if (entityType === 'receipts') {
+              imagePath = entity.receiptImagePath || `pictures/receipts/${entity.id}`;
             }
-          } catch (error) {
-            console.warn(`⚠️ Fehler beim Sichern des Artikelbildes ${article.name}:`, error);
-          }
-        }
-      }
-
-      // Sichere Rezept-Bilder
-      if (backup.entities.recipes) {
-        for (const recipe of backup.entities.recipes) {
-          try {
-            const imagePath = `pictures/recipes/${recipe.id}`;
-            const imageData = await storageLayer.loadImage(imagePath);
-            if (imageData) {
-              backup.images[imagePath] = imageData.url;
-              console.log(`📷 Rezeptbild gesichert: ${recipe.name}`);
-            }
-          } catch (error) {
-            console.warn(`⚠️ Fehler beim Sichern des Rezeptbildes ${recipe.name}:`, error);
-          }
-        }
-      }
-
-      // Sichere Beleg-Bilder
-      if (backup.entities.receipts) {
-        for (const receipt of backup.entities.receipts) {
-          if (receipt.receiptImagePath) {
-            try {
-              const imageData = await storageLayer.loadImage(receipt.receiptImagePath);
+            
+            if (imagePath) {
+              const imageData = await storageLayer.loadImage(imagePath);
               if (imageData) {
-                backup.images[receipt.receiptImagePath] = imageData.url;
-                console.log(`📷 Belegbild gesichert: ${receipt.receiptNumber || receipt.id}`);
+                // Konvertiere URL (Data URL oder Blob URL) zu Blob
+                const blob = await urlToBlob(imageData.url);
+                imageBlobs.set(imagePath, blob);
+                
+                // Speichere Metadaten
+                backup.images[imagePath] = imagePath; // Bei ZIP nur Pfad, bei JSON würde hier Base64 stehen
+                backup.metadata.imageSizes[imagePath] = blob.size;
+                backup.metadata.totalImages++;
+                
+                // Warnung bei großen Bildern
+                if (blob.size > BACKUP_SIZE_LIMITS.LARGE_IMAGE_SIZE) {
+                  console.warn(`⚠️ Großes Bild: ${imagePath} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+                }
               }
-            } catch (error) {
-              console.warn(`⚠️ Fehler beim Sichern des Belegbildes ${receipt.receiptNumber || receipt.id}:`, error);
             }
+          } catch (error) {
+            console.warn(`⚠️ Fehler beim Sichern des Bildes für ${entityType} ${entity.id}:`, error);
           }
         }
       }
 
-      // 5. Abschluss
+      // Berechne geschätzte Größe
+      const estimatedSize = estimateBackupSize(backup.entities, backup.metadata.imageSizes);
+      backup.metadata.totalSize = estimatedSize;
+      
+      // Bestimme Backup-Format
+      const format = determineBackupFormat(estimatedSize);
+      
+      console.log(`📊 Geschätzte Backup-Größe: ${(estimatedSize / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`📦 Backup-Format: ${format}`);
+
+      // 4. Erstelle Backup basierend auf Format
       currentStep++;
       setBackupProgress({
         current: currentStep,
         total: totalSteps,
         item: 'Abschluss',
-        message: 'Backup wird finalisiert...'
+        message: `Backup wird finalisiert (${format})...`
       });
+
+      let backupResult: BackupResult;
+
+      if (format === 'json') {
+        // JSON-Format (Base64-Bilder für Abwärtskompatibilität)
+        // Konvertiere Blobs zu Base64 für JSON
+        const imageBase64: Record<string, string> = {};
+        for (const [path, blob] of Array.from(imageBlobs.entries())) {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          imageBase64[path] = base64;
+        }
+        backup.images = imageBase64;
+        
+        const backupJson = JSON.stringify(backup, null, 2);
+        backupResult = {
+          success: true,
+          data: backup as any,
+          format: 'json',
+          size: new Blob([backupJson]).size,
+          message: `Backup erfolgreich erstellt (JSON, ${(new Blob([backupJson]).size / 1024 / 1024).toFixed(2)} MB)`
+        };
+      } else if (format === 'zip') {
+        // ZIP-Format
+        const zipBlob = await createZipBackup(backup, imageBlobs);
+        backupResult = {
+          success: true,
+          data: zipBlob,
+          format: 'zip',
+          size: zipBlob.size,
+          message: `Backup erfolgreich erstellt (ZIP, ${(zipBlob.size / 1024 / 1024).toFixed(2)} MB)`
+        };
+      } else {
+        // Multi-Part ZIP-Format
+        const dbNameForFile = getDatabaseNameForFilename(currentStorage.currentDataStorage || 'SQLite');
+        const { parts, manifest } = await createMultiPartZipBackup(
+          backup, 
+          imageBlobs,
+          (current, total, part, totalParts) => {
+            setBackupProgress({
+              current: currentStep + (part / totalParts),
+              total: totalSteps,
+              item: `Teil ${part}/${totalParts}`,
+              message: `Erstelle Backup-Teil ${part} von ${totalParts}...`
+            });
+          },
+          dbNameForFile
+        );
+        
+        backupResult = {
+          success: true,
+          data: parts[0], // Erstes Part als primäres Data
+          format: 'multipart-zip',
+          size: manifest.totalSize,
+          parts,
+          manifest,
+          message: `Backup erfolgreich erstellt (Multi-Part ZIP, ${parts.length} Teile, ${(manifest.totalSize / 1024 / 1024).toFixed(2)} MB gesamt)`
+        };
+      }
 
       setBackupCompleted(true);
       setBackupProgress(null);
 
-      console.log('✅ Backup erfolgreich erstellt');
-      return { success: true, data: backup, message: 'Backup erfolgreich erstellt' };
+      console.log('✅ Backup erfolgreich erstellt:', backupResult.message);
+      return backupResult;
 
     } catch (error) {
       setBackupProgress(null);
@@ -3012,11 +3336,14 @@ const StorageManagement: React.FC = () => {
   };
 
   /**
-   * Stellt ein Backup wieder her
+   * Stellt ein Backup wieder her (Version 2.0.0 mit dynamischer Entity-Liste und ZIP-Unterstützung)
    */
-  const restoreBackup = async (backupData: any): Promise<{ success: boolean; message: string }> => {
+  const restoreBackup = async (
+    backupData: any, 
+    imageBlobs?: Map<string, Blob> | null
+  ): Promise<RestoreResult> => {
     try {
-      console.log('♻️ Starte Backup-Wiederherstellung...');
+      console.log('♻️ Starte Backup-Wiederherstellung (Version 2.0.0)...');
       setBackupProgress({ current: 0, total: 5, item: 'Initialisierung', message: 'Backup wird geladen...' });
       setBackupCompleted(false);
 
@@ -3027,18 +3354,28 @@ const StorageManagement: React.FC = () => {
 
       const { storageLayer } = await import('../services/storageLayer');
 
+      // Bestimme Entity-Liste aus Backup oder Schema
+      let entityTypes: string[];
+      if (backupData.version === '2.0.0' && backupData.schema && backupData.schema.tables) {
+        // Version 2.0.0: Verwende Entity-Typen aus Backup
+        entityTypes = Object.keys(backupData.entities);
+        console.log(`📋 Backup-Schema erkannt: ${entityTypes.length} Entity-Typen`);
+      } else {
+        // Version 1.0.0 oder Fallback: Verwende aktuelle Schema-Entity-Typen
+        entityTypes = getBackupEntityTypes();
+        console.log(`📋 Aktuelles Schema verwendet: ${entityTypes.length} Entity-Typen`);
+      }
+
       // Berechne Gesamtanzahl der Schritte
-      // State-Entities: suppliers, articles, recipes, receipts (4)
-      // StorageLayer-Entities: accountingAccounts, accountingSettings, units (3)
+      // Entities: dynamisch
       // LocalStorage: 1 Schritt
       // Bilder: 1 Schritt
-      const totalSteps = 4 + 3 + 1 + 1; // 9 Schritte
+      const totalSteps = entityTypes.length + 1 + 1;
       let currentStep = 0;
 
-      // 1. Stelle Entitäts-Daten wieder her (aus State)
-      const stateEntityTypes = ['suppliers', 'articles', 'recipes', 'receipts'];
-      for (let i = 0; i < stateEntityTypes.length; i++) {
-        const entityType = stateEntityTypes[i];
+      // 1. Stelle alle Entitäts-Daten wieder her (dynamisch)
+      for (let i = 0; i < entityTypes.length; i++) {
+        const entityType = entityTypes[i];
         currentStep++;
         setBackupProgress({
           current: currentStep,
@@ -3050,47 +3387,29 @@ const StorageManagement: React.FC = () => {
         if (backupData.entities[entityType]) {
           const data = backupData.entities[entityType];
           
-          // Speichere über StorageLayer
-          await storageLayer.save(entityType, data);
-          
-          // Aktualisiere AppContext
-          if (entityType === 'suppliers') {
-            appContext.dispatch({ type: 'SET_SUPPLIERS', payload: data });
-          } else if (entityType === 'articles') {
-            appContext.dispatch({ type: 'SET_ARTICLES', payload: data });
-          } else if (entityType === 'recipes') {
-            appContext.dispatch({ type: 'SET_RECIPES', payload: data });
-          } else if (entityType === 'receipts') {
-            appContext.dispatch({ type: 'SET_RECEIPTS', payload: data });
+          if (Array.isArray(data) && data.length > 0) {
+            // Speichere über StorageLayer
+            await storageLayer.save(entityType as any, data);
+            
+            // Aktualisiere AppContext für State-Entities
+            if (entityType === 'suppliers') {
+              appContext.dispatch({ type: 'SET_SUPPLIERS', payload: data });
+            } else if (entityType === 'articles') {
+              appContext.dispatch({ type: 'SET_ARTICLES', payload: data });
+            } else if (entityType === 'recipes') {
+              appContext.dispatch({ type: 'SET_RECIPES', payload: data });
+            } else if (entityType === 'receipts') {
+              appContext.dispatch({ type: 'SET_RECEIPTS', payload: data });
+            }
+            
+            console.log(`✅ ${data.length} ${entityType} wiederhergestellt`);
+          } else {
+            console.log(`✅ ${entityType} wiederhergestellt (leer)`);
           }
-          
-          console.log(`✅ ${data.length} ${entityType} wiederhergestellt`);
         }
       }
 
-      // 2. Stelle Entitäts-Daten wieder her (aus StorageLayer)
-      const storageLayerEntityTypes = ['accountingAccounts', 'accountingSettings', 'units'];
-      for (let i = 0; i < storageLayerEntityTypes.length; i++) {
-        const entityType = storageLayerEntityTypes[i];
-        currentStep++;
-        setBackupProgress({
-          current: currentStep,
-          total: totalSteps,
-          item: getEntityNameGerman(entityType),
-          message: `Stelle ${getEntityNameGerman(entityType)} wieder her...`
-        });
-
-        if (backupData.entities[entityType]) {
-          const data = backupData.entities[entityType];
-          
-          // Speichere über StorageLayer
-          await storageLayer.save(entityType as any, data);
-          
-          console.log(`✅ ${data.length} ${entityType} wiederhergestellt`);
-        }
-      }
-
-      // 3. Stelle LocalStorage-Schlüssel wieder her (außer currentStorage)
+      // 2. Stelle LocalStorage-Schlüssel wieder her
       currentStep++;
       setBackupProgress({
         current: currentStep,
@@ -3100,43 +3419,73 @@ const StorageManagement: React.FC = () => {
       });
 
       if (backupData.localStorage) {
-        for (const [key, value] of Object.entries(backupData.localStorage)) {
-          if (key === 'storageManagement') {
-            // Spezielle Behandlung für storageManagement
-            // Wiederherstelle nur connections und selectedStorage, behalte currentStorage
+        // Version 2.0.0: BackupLocalStorage-Struktur
+        if (backupData.version === '2.0.0' && typeof backupData.localStorage === 'object') {
+          // Sichere localOptions
+          if (backupData.localStorage.localOptions) {
+            localStorage.setItem('localOptions', backupData.localStorage.localOptions);
+            console.log('✅ localOptions wiederhergestellt');
+          }
+          
+          // Sichere storageManagement (VOLLSTÄNDIG: connections, selectedStorage UND currentStorage)
+          if (backupData.localStorage.storageManagement) {
             try {
-              const backupStorageManagement = JSON.parse(value as string);
+              const backupStorageManagement = JSON.parse(backupData.localStorage.storageManagement);
               const currentStorageManagement = JSON.parse(localStorage.getItem('storageManagement') || '{}');
               
-              // Merge: Backup connections & selectedStorage, behalte currentStorage
+              // Merge: Backup connections & selectedStorage, BEHALTE currentStorage (nur wenn kompatibel)
               const restoredStorageManagement = {
-                ...currentStorageManagement, // Behalte alles Aktuelle (insbesondere currentStorage)
+                ...currentStorageManagement, // Behalte aktuelles currentStorage
                 connections: backupStorageManagement.connections || currentStorageManagement.connections || {},
                 selectedStorage: {
                   ...(backupStorageManagement.selectedStorage || {}),
-                  isTested: false // Reset Test-Status, damit Verbindungen erneut getestet werden müssen
+                  isTested: false // Reset Test-Status
                 }
+                // currentStorage wird NICHT überschrieben (bleibt aus currentStorageManagement)
               };
               
               localStorage.setItem('storageManagement', JSON.stringify(restoredStorageManagement));
-              
-              // Aktualisiere auch den State, damit die UI sofort aktualisiert wird
               setStorageManagement(restoredStorageManagement);
               
               console.log('✅ storageManagement wiederhergestellt (connections & selectedStorage)');
-              console.log('✅ currentStorage beibehalten (keine automatische Umstellung der Speichermethode)');
-              console.log('⚠️ Verbindungsstatus zurückgesetzt - bitte Verbindungen erneut testen');
+              console.log('✅ currentStorage beibehalten (aus aktuellem Storage)');
             } catch (error) {
               console.warn('⚠️ Fehler beim Wiederherstellen von storageManagement:', error);
             }
-          } else {
-            localStorage.setItem(key, value as string);
-            console.log(`✅ LocalStorage-Schlüssel wiederhergestellt: ${key}`);
+          }
+        } else {
+          // Version 1.0.0: Legacy-Format (Record<string, string>)
+          for (const [key, value] of Object.entries(backupData.localStorage)) {
+            if (key === 'storageManagement') {
+              // Legacy-Verhalten: Nur connections und selectedStorage
+              try {
+                const backupStorageManagement = JSON.parse(value as string);
+                const currentStorageManagement = JSON.parse(localStorage.getItem('storageManagement') || '{}');
+                
+                const restoredStorageManagement = {
+                  ...currentStorageManagement,
+                  connections: backupStorageManagement.connections || currentStorageManagement.connections || {},
+                  selectedStorage: {
+                    ...(backupStorageManagement.selectedStorage || {}),
+                    isTested: false
+                  }
+                };
+                
+                localStorage.setItem('storageManagement', JSON.stringify(restoredStorageManagement));
+                setStorageManagement(restoredStorageManagement);
+                console.log('✅ storageManagement wiederhergestellt (Legacy-Format)');
+              } catch (error) {
+                console.warn('⚠️ Fehler beim Wiederherstellen von storageManagement:', error);
+              }
+            } else {
+              localStorage.setItem(key, value as string);
+              console.log(`✅ LocalStorage-Schlüssel wiederhergestellt: ${key}`);
+            }
           }
         }
       }
 
-      // 4. Stelle Bilder wieder her
+      // 3. Stelle Bilder wieder her
       currentStep++;
       setBackupProgress({
         current: currentStep,
@@ -3145,25 +3494,77 @@ const StorageManagement: React.FC = () => {
         message: 'Stelle Bilder wieder her...'
       });
 
-      if (backupData.images) {
+      if (imageBlobs && imageBlobs.size > 0) {
+        // ZIP-Format: Bilder bereits als Blobs extrahiert
+        console.log(`📦 Restore aus ZIP: ${imageBlobs.size} Bilder`);
+        for (const [imagePath, blob] of Array.from(imageBlobs.entries())) {
+          try {
+            // Bestimme MIME-Type aus Blob oder Pfad
+            let mimeType = blob.type || 'image/jpeg';
+            const extension = imagePath.split('.').pop()?.toLowerCase() || 'jpg';
+            if (!mimeType || mimeType === 'application/octet-stream') {
+              const mimeMap: Record<string, string> = {
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'webp': 'image/webp',
+                'pdf': 'application/pdf'
+              };
+              mimeType = mimeMap[extension] || 'image/jpeg';
+            }
+            
+            let entityId = imagePath.split('/').pop() || 'image';
+            
+            // Entferne Extension aus entityId falls vorhanden (um doppelte Extensions zu vermeiden)
+            const lastDotIndex = entityId.lastIndexOf('.');
+            if (lastDotIndex > 0) {
+              const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+              const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+              if (validExtensions.includes(possibleExt)) {
+                entityId = entityId.substring(0, lastDotIndex);
+              }
+            }
+            
+            const fileName = `${entityId}.${extension}`;
+            const file = new File([blob], fileName, { type: mimeType });
+            
+            console.log(`📷 Restore Bild (ZIP): imagePath=${imagePath}, entityId=${entityId}, fileName=${fileName}`);
+            await storageLayer.saveImage(imagePath, file);
+            console.log(`✅ Bild wiederhergestellt: ${imagePath}`);
+          } catch (error) {
+            console.warn(`⚠️ Fehler beim Wiederherstellen des Bildes ${imagePath}:`, error);
+          }
+        }
+      } else if (backupData.images) {
+        // JSON-Format: Bilder als Base64 Data URLs
+        console.log(`📄 Restore aus JSON: ${Object.keys(backupData.images).length} Bilder`);
         for (const [imagePath, imageData] of Object.entries(backupData.images)) {
           try {
             // Konvertiere Base64 zurück zu File
             const blob = await fetch(imageData as string).then(r => r.blob());
             
-            // Extrahiere Dateiendung aus dem Base64-String (data:image/jpeg;base64,...)
+            // Extrahiere Dateiendung aus dem Base64-String
             const mimeType = (imageData as string).match(/data:([^;]+);/)?.[1] || 'image/jpeg';
             const extension = mimeType.split('/')[1] || 'jpg';
+            let entityId = imagePath.split('/').pop() || 'image';
             
-            // Extrahiere ID aus imagePath (pictures/recipes/ID oder pictures/articles/ID)
-            const entityId = imagePath.split('/').pop() || 'image';
+            // Entferne Extension aus entityId falls vorhanden (um doppelte Extensions zu vermeiden)
+            const lastDotIndex = entityId.lastIndexOf('.');
+            if (lastDotIndex > 0) {
+              const possibleExt = entityId.substring(lastDotIndex + 1).toLowerCase();
+              const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+              if (validExtensions.includes(possibleExt)) {
+                entityId = entityId.substring(0, lastDotIndex);
+              }
+            }
+            
             const fileName = `${entityId}.${extension}`;
-            
             const file = new File([blob], fileName, { type: mimeType });
             
-            console.log(`📷 Restore Bild: imagePath=${imagePath}, fileName=${fileName}, type=${mimeType}`);
+            console.log(`📷 Restore Bild (JSON): imagePath=${imagePath}, entityId=${entityId}, fileName=${fileName}`);
             await storageLayer.saveImage(imagePath, file);
-            console.log(`✅ Bild wiederhergestellt: ${imagePath} als ${fileName}`);
+            console.log(`✅ Bild wiederhergestellt: ${imagePath}`);
           } catch (error) {
             console.warn(`⚠️ Fehler beim Wiederherstellen des Bildes ${imagePath}:`, error);
           }
@@ -3174,7 +3575,11 @@ const StorageManagement: React.FC = () => {
       setBackupProgress(null);
 
       console.log('✅ Backup erfolgreich wiederhergestellt');
-      return { success: true, message: 'Backup erfolgreich wiederhergestellt' };
+      return { 
+        success: true, 
+        message: 'Backup erfolgreich wiederhergestellt',
+        requiresStorageChange: false
+      };
 
     } catch (error) {
       setBackupProgress(null);
@@ -3182,27 +3587,103 @@ const StorageManagement: React.FC = () => {
       console.error('❌ Fehler beim Wiederherstellen des Backups:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Unbekannter Fehler'
+        message: error instanceof Error ? error.message : 'Unbekannter Fehler',
+        requiresStorageChange: false
       };
     }
   };
 
   /**
-   * Download-Funktion für Backup-Datei
+   * Konvertiert einen Datenbank-Adapter-Namen in einen Dateinamen-kompatiblen String
    */
-  const downloadBackup = (backupData: any) => {
+  const getDatabaseNameForFilename = (dbName: string): string => {
+    // Konvertiere zu Kleinbuchstaben und ersetze Leerzeichen mit Bindestrichen
+    return dbName.toLowerCase().replace(/\s+/g, '-');
+  };
+
+  /**
+   * Download-Funktion für Backup-Datei (unterstützt JSON, ZIP und Multi-Part ZIP)
+   */
+  const downloadBackup = async (backupResult: BackupResult) => {
     try {
-      const jsonString = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `chef-numbers-backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      console.log('✅ Backup-Datei heruntergeladen');
+      if (!backupResult.data) {
+        throw new Error('Keine Backup-Daten vorhanden');
+      }
+
+      // Lade aktuelle Storage-Konfiguration für Datenbank-Namen
+      const storageManagementValue = localStorage.getItem('storageManagement');
+      const storageManagement = storageManagementValue ? JSON.parse(storageManagementValue) : null;
+      const currentStorage = storageManagement?.currentStorage || {
+        currentDataStorage: 'SQLite'
+      };
+      const dbName = getDatabaseNameForFilename(currentStorage.currentDataStorage || 'SQLite');
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      if (backupResult.format === 'json') {
+        // JSON-Format
+        const jsonString = JSON.stringify(backupResult.data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `chef-numbers-backup-${dbName}-${dateStr}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        console.log('✅ Backup-Datei heruntergeladen (JSON)');
+      } else if (backupResult.format === 'zip') {
+        // ZIP-Format
+        const blob = backupResult.data as Blob;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `chef-numbers-backup-${dbName}-${dateStr}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        console.log('✅ Backup-Datei heruntergeladen (ZIP)');
+      } else if (backupResult.format === 'multipart-zip' && backupResult.parts && backupResult.manifest) {
+        // Multi-Part ZIP-Format
+        // Lade alle Parts und Manifest herunter
+        const manifest = backupResult.manifest;
+        
+        // Manifest herunterladen
+        const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        const manifestLink = document.createElement('a');
+        manifestLink.href = manifestUrl;
+        manifestLink.download = `chef-numbers-backup-${dbName}-${dateStr}-manifest.json`;
+        document.body.appendChild(manifestLink);
+        manifestLink.click();
+        document.body.removeChild(manifestLink);
+        URL.revokeObjectURL(manifestUrl);
+        
+        // Alle Parts herunterladen (mit kleiner Verzögerung zwischen Downloads)
+        for (let i = 0; i < backupResult.parts.length; i++) {
+          const part = backupResult.parts[i];
+          const partInfo = manifest.parts[i];
+          
+          await new Promise(resolve => setTimeout(resolve, 500)); // 500ms Verzögerung zwischen Downloads
+          
+          const partUrl = URL.createObjectURL(part);
+          const partLink = document.createElement('a');
+          partLink.href = partUrl;
+          partLink.download = partInfo.filename;
+          document.body.appendChild(partLink);
+          partLink.click();
+          document.body.removeChild(partLink);
+          URL.revokeObjectURL(partUrl);
+          
+          console.log(`✅ Backup-Teil ${i + 1}/${backupResult.parts.length} heruntergeladen`);
+        }
+        
+        console.log('✅ Multi-Part Backup vollständig heruntergeladen');
+        alert(`Multi-Part Backup heruntergeladen:\n- Manifest: chef-numbers-backup-${dbName}-${dateStr}-manifest.json\n- ${backupResult.parts.length} ZIP-Teile\n\nBitte alle Dateien sicher aufbewahren!`);
+      } else {
+        throw new Error('Unbekanntes Backup-Format');
+      }
     } catch (error) {
       console.error('❌ Fehler beim Herunterladen der Backup-Datei:', error);
       setBackupError('Fehler beim Herunterladen der Backup-Datei');
@@ -3218,7 +3699,7 @@ const StorageManagement: React.FC = () => {
     setBackupError(null);
     const result = await createBackup();
     if (result.success && result.data) {
-      downloadBackup(result.data);
+      await downloadBackup(result);
     } else {
       setBackupError(`Fehler beim Erstellen des Backups: ${result.message}`);
       setBackupCompleted(false);
@@ -3227,7 +3708,7 @@ const StorageManagement: React.FC = () => {
   };
 
   /**
-   * Handler für Backup-Wiederherstellung
+   * Handler für Backup-Wiederherstellung (unterstützt JSON, ZIP und Multi-Part ZIP)
    */
   const handleRestoreBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -3235,10 +3716,69 @@ const StorageManagement: React.FC = () => {
 
     try {
       setBackupError(null);
-      const fileContent = await file.text();
-      const backupData = JSON.parse(fileContent);
+      setStorageCompatibilityInfo(null);
       
-      const result = await restoreBackup(backupData);
+      // Prüfe Dateityp
+      let backupData: any;
+      let imageBlobs: Map<string, Blob> | null = null;
+      
+      if (file.name.endsWith('.zip')) {
+        // ZIP-Format
+        console.log('📦 ZIP-Backup erkannt, extrahiere...');
+        const zipBlob = file;
+        const extracted = await extractZipBackup(zipBlob);
+        backupData = extracted.backupData;
+        imageBlobs = extracted.images;
+      } else if (file.name.endsWith('-manifest.json')) {
+        // Multi-Part ZIP - Manifest erkannt
+        setBackupError('Multi-Part ZIP erkannt. Bitte laden Sie zuerst die ZIP-Parts und dann das Manifest.');
+        return;
+      } else {
+        // JSON-Format (abwärtskompatibel)
+        console.log('📄 JSON-Backup erkannt...');
+        const fileContent = await file.text();
+        backupData = JSON.parse(fileContent);
+      }
+      
+      // Validiere Backup-Format
+      if (!backupData || (!backupData.entities && !backupData.version)) {
+        throw new Error('Ungültiges Backup-Format');
+      }
+      
+      // Prüfe Storage-Typ-Kompatibilität
+      const currentStorageManagement = JSON.parse(localStorage.getItem('storageManagement') || '{}');
+      const currentStorageType = currentStorageManagement.currentStorage?.currentDataStorage || 'SQLite';
+      
+      let backupStorageType: string;
+      if (backupData.version === '2.0.0' && backupData.sourceStorage) {
+        backupStorageType = backupData.sourceStorage.dataStorage || 'SQLite';
+      } else {
+        // Version 1.0.0 - keine Storage-Info, nehmen wir SQLite an
+        backupStorageType = 'SQLite';
+      }
+      
+      const compatible = backupStorageType === currentStorageType;
+      
+      if (!compatible) {
+        // Storage-Typ-Inkompatibel - zeige Modal
+        // Speichere backupStorageManagement für spätere Wiederherstellung
+        const backupStorageManagement = backupData.version === '2.0.0' 
+          ? backupData.localStorage?.storageManagement 
+          : backupData.localStorage?.storageManagement;
+        
+        setStorageCompatibilityInfo({
+          compatible: false,
+          backupStorageType,
+          currentStorageType,
+          requiresStorageChange: true,
+          showModal: true,
+          backupStorageManagement: backupStorageManagement || undefined
+        });
+        return; // Stoppe Restore hier
+      }
+      
+      // Storage-Typ kompatibel - fahre mit Restore fort
+      const result = await restoreBackup(backupData, imageBlobs);
       if (!result.success) {
         // Bei Fehler: Zeige Fehler im Modal
         setBackupError(`Fehler beim Wiederherstellen: ${result.message}`);
@@ -3251,6 +3791,54 @@ const StorageManagement: React.FC = () => {
       setBackupError('Fehler beim Lesen der Backup-Datei. Stellen Sie sicher, dass es eine gültige Backup-Datei ist.');
       setBackupCompleted(false);
       setBackupProgress(null);
+    }
+  };
+
+  /**
+   * Stellt currentStorage aus Backup wieder her (mit App-Neustart-Warnung)
+   */
+  const restoreCurrentStorage = async () => {
+    if (!storageCompatibilityInfo || !storageCompatibilityInfo.backupStorageManagement) {
+      alert('⚠️ Backup-Daten nicht verfügbar. Bitte laden Sie die Backup-Datei erneut.');
+      setStorageCompatibilityInfo(null);
+      return;
+    }
+    
+    try {
+      // Parse Backup storageManagement
+      const backupStorageManagement = JSON.parse(storageCompatibilityInfo.backupStorageManagement);
+      
+      // Lade aktuelles storageManagement
+      const storageManagementValue = localStorage.getItem('storageManagement');
+      const currentStorageManagement = JSON.parse(storageManagementValue || '{}');
+      
+      // Stelle currentStorage aus Backup wieder her
+      if (backupStorageManagement.currentStorage) {
+        const restoredStorageManagement = {
+          ...currentStorageManagement,
+          currentStorage: backupStorageManagement.currentStorage, // Stelle currentStorage wieder her
+          connections: backupStorageManagement.connections || currentStorageManagement.connections || {},
+          selectedStorage: backupStorageManagement.selectedStorage || currentStorageManagement.selectedStorage || {}
+        };
+        
+        localStorage.setItem('storageManagement', JSON.stringify(restoredStorageManagement));
+        setStorageManagement(restoredStorageManagement);
+        
+        console.log('✅ currentStorage wiederhergestellt:', backupStorageManagement.currentStorage);
+        console.log('⚠️ App-Neustart erforderlich');
+        
+        // Schließe Modal und zeige Warnung
+        setStorageCompatibilityInfo(null);
+        
+        // Zeige Warnung
+        alert('⚠️ WICHTIG: App-Neustart erforderlich\n\nDer Storage-Typ wurde wiederhergestellt.\n\nBitte:\n1. Starten Sie die App neu\n2. Laden Sie dann die Backup-Datei erneut\n3. Führen Sie das Restore durch');
+      } else {
+        throw new Error('currentStorage nicht im Backup gefunden');
+      }
+    } catch (error) {
+      console.error('❌ Fehler beim Wiederherstellen von currentStorage:', error);
+      setBackupError('Fehler beim Wiederherstellen von currentStorage: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'));
+      setStorageCompatibilityInfo(null);
     }
   };
 
@@ -3889,10 +4477,17 @@ const StorageManagement: React.FC = () => {
   // Auto-Wiederherstellung des Supabase-Status beim App-Start
   useEffect(() => {
     const restoreSupabaseStatus = async () => {
+      // Prüfe ob Supabase als aktiver Storage-Typ verwendet wird
+      const isSupabaseActive = storageManagement.currentStorage?.currentDataStorage === 'Supabase' &&
+                                storageManagement.currentStorage?.isActive === true;
+      
       // Prüfe ob Supabase verbunden ist (connectionStatus === true)
-      if (storageManagement.connections.supabase.connectionStatus && 
-          storageManagement.connections.supabase.url &&
-          storageManagement.connections.supabase.serviceRoleKey) {
+      const hasSupabaseConnection = storageManagement.connections.supabase.connectionStatus && 
+                                    storageManagement.connections.supabase.url &&
+                                    storageManagement.connections.supabase.serviceRoleKey;
+      
+      // Nur ausführen wenn Supabase aktiv ist UND Verbindung besteht
+      if (isSupabaseActive && hasSupabaseConnection) {
         
         console.log('🔄 Stelle Supabase-Status nach Reload wieder her...');
         
@@ -5046,8 +5641,27 @@ const StorageManagement: React.FC = () => {
     needsUpdate?: boolean;
     message: string;
   }> => {
+    // Prüfe ob Supabase als aktiver Storage-Typ verwendet wird
+    const isSupabaseActive = storageManagement.currentStorage?.currentDataStorage === 'Supabase' &&
+                              storageManagement.currentStorage?.isActive === true;
+    
+    if (!isSupabaseActive) {
+      // Supabase ist nicht aktiv - überspringe Prüfung
+      return {
+        exists: false,
+        message: 'Supabase ist nicht aktiv'
+      };
+    }
+    
     const url = storageManagement.connections.supabase.url;
     const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    if (!url || !serviceRoleKey) {
+      return {
+        exists: false,
+        message: 'Supabase-Verbindungsdaten fehlen'
+      };
+    }
 
     try {
       console.log('🔍 Prüfe Supabase Schema-Status...');
@@ -5122,8 +5736,27 @@ const StorageManagement: React.FC = () => {
 
   // Prüfe Supabase Storage Bucket-Status
   const checkSupabaseBucketStatus = async (): Promise<{ exists: boolean; message: string }> => {
+    // Prüfe ob Supabase als aktiver Storage-Typ verwendet wird
+    const isSupabaseActive = storageManagement.currentStorage?.currentDataStorage === 'Supabase' &&
+                              storageManagement.currentStorage?.isActive === true;
+    
+    if (!isSupabaseActive) {
+      // Supabase ist nicht aktiv - überspringe Prüfung
+      return {
+        exists: false,
+        message: 'Supabase ist nicht aktiv'
+      };
+    }
+    
     const url = storageManagement.connections.supabase.url;
     const serviceRoleKey = storageManagement.connections.supabase.serviceRoleKey;
+
+    if (!url || !serviceRoleKey) {
+      return {
+        exists: false,
+        message: 'Supabase-Verbindungsdaten fehlen'
+      };
+    }
 
     try {
       console.log('🪣 Prüfe Supabase Storage Bucket-Status...');
@@ -6799,13 +7432,66 @@ const StorageManagement: React.FC = () => {
 
                   <div className="flex items-center">
                     <strong className="me-3" style={{ color: colors.text, fontWeight: '600' }}>Bildspeicher:</strong>
-                    <span style={{
-                      color: colors.text,
-                      fontSize: '0.95rem',
-                      fontWeight: '500'
-                    }}>
-                      {storageManagement.currentStorage.currentPictureStorage}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        color: colors.text,
+                        fontSize: '0.95rem',
+                        fontWeight: '500'
+                      }}>
+                        {storageManagement.currentStorage.currentPictureStorage}
+                        {storageManagement.currentStorage.currentPictureStorage === 'FileSystem' && currentFilePath && (
+                          <span style={{ fontSize: '0.85rem', color: colors.textSecondary, marginLeft: '8px' }}>
+                            ({currentFilePath})
+                          </span>
+                        )}
+                      </span>
+                      {storageManagement.currentStorage.currentStorageMode === 'local' && (
+                        <button
+                          className="btn btn-sm btn-outline-warning"
+                          onClick={async () => {
+                            if (window.confirm('Möchten Sie wirklich alle Daten aus dem LocalStorage löschen? Dies kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass Sie ein Backup erstellt haben!')) {
+                              try {
+                                // Lade alle wichtigen Schlüssel, die wir behalten wollen
+                                const localOptions = localStorage.getItem('localOptions');
+                                const storageManagement = localStorage.getItem('storageManagement');
+                                const currentDesign = localStorage.getItem('currentDesign');
+                                
+                                // Lösche ALLES
+                                localStorage.clear();
+                                
+                                // Stelle wichtige Schlüssel wieder her
+                                if (localOptions) localStorage.setItem('localOptions', localOptions);
+                                if (storageManagement) localStorage.setItem('storageManagement', storageManagement);
+                                if (currentDesign) localStorage.setItem('currentDesign', currentDesign);
+                                
+                                showMessage(
+                                  'LocalStorage bereinigt',
+                                  'Alle Daten außer Konfigurationen wurden aus dem LocalStorage gelöscht. Die Seite wird neu geladen.',
+                                  'success'
+                                );
+                                
+                                // Lade Seite neu
+                                setTimeout(() => {
+                                  window.location.reload();
+                                }, 1500);
+                              } catch (error) {
+                                console.error('❌ Fehler beim Bereinigen des LocalStorage:', error);
+                                showMessage(
+                                  'Fehler',
+                                  'Beim Bereinigen des LocalStorage ist ein Fehler aufgetreten.',
+                                  'error'
+                                );
+                              }
+                            }
+                          }}
+                          style={{ fontSize: '0.8rem', padding: '2px 8px' }}
+                          title="Alle Daten aus dem LocalStorage löschen (außer Konfigurationen)"
+                        >
+                          <FaTrash className="me-1" />
+                          LocalStorage bereinigen
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6851,7 +7537,7 @@ const StorageManagement: React.FC = () => {
                           selectedStorageMode: 'local',
                           selectedCloudType: 'none',
                           selectedDataStorage: 'SQLite',
-                          selectedPictureStorage: 'LocalPath'
+                          selectedPictureStorage: 'FileSystem'
                         }
                       })}
                       style={{ marginTop: '4px' }}
@@ -6909,6 +7595,175 @@ const StorageManagement: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Lokaler Bildspeicher-Konfiguration */}
+          {storageManagement.selectedStorage.selectedStorageMode === 'local' && (
+            <div className={`card mb-4 storage-section`} style={{
+              backgroundColor: colors.card,
+              border: `1px solid ${colors.cardBorder}`,
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}>
+              <div className="card-header d-flex align-items-center" style={{ backgroundColor: colors.secondary }}>
+                <FaFolder className="me-2" style={{ color: colors.text }} />
+                <h5 className="mb-0" style={{ color: colors.text }}>
+                  Bildspeicher-Auswahl
+                </h5>
+              </div>
+              <div className="card-body" style={{ padding: '20px' }}>
+                <div className="grid grid-cols-1 gap-3">
+                  {/* LocalPath Option */}
+                  <div className="form-check" style={{
+                    padding: '16px',
+                    border: `1px solid ${colors.cardBorder}`,
+                    borderRadius: '6px',
+                    backgroundColor: storageManagement.selectedStorage.selectedPictureStorage === 'LocalPath'
+                      ? colors.secondary
+                      : colors.card,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="pictureStorage"
+                      id="localPath"
+                      checked={storageManagement.selectedStorage.selectedPictureStorage === 'LocalPath'}
+                      onChange={() => handleStorageManagementUpdate({
+                        selectedStorage: {
+                          ...storageManagement.selectedStorage,
+                          selectedPictureStorage: 'LocalPath'
+                        }
+                      })}
+                      style={{ marginTop: '4px' }}
+                    />
+                    <label className="form-check-label" htmlFor="localPath" style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
+                      <div className="flex items-center">
+                        <FaDatabase className="me-2" style={{ color: colors.accent, fontSize: '20px' }} />
+                        <div>
+                          <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Browser-Speicher (LocalStorage/IndexedDB)</strong>
+                          <br />
+                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
+                            Bilder werden im Browser gespeichert - begrenzte Kapazität (~5-10 MB), aber keine zusätzliche Konfiguration nötig
+                          </small>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* FileSystem Option */}
+                  <div className="form-check" style={{
+                    padding: '16px',
+                    border: `1px solid ${colors.cardBorder}`,
+                    borderRadius: '6px',
+                    backgroundColor: storageManagement.selectedStorage.selectedPictureStorage === 'FileSystem'
+                      ? colors.secondary
+                      : colors.card,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="pictureStorage"
+                      id="fileSystem"
+                      checked={storageManagement.selectedStorage.selectedPictureStorage === 'FileSystem'}
+                      onChange={() => handleStorageManagementUpdate({
+                        selectedStorage: {
+                          ...storageManagement.selectedStorage,
+                          selectedPictureStorage: 'FileSystem'
+                        }
+                      })}
+                      style={{ marginTop: '4px' }}
+                    />
+                    <label className="form-check-label" htmlFor="fileSystem" style={{ cursor: 'pointer', width: '100%', marginLeft: '8px' }}>
+                      <div className="flex items-center">
+                        <FaFolder className="me-2" style={{ color: colors.accent, fontSize: '20px' }} />
+                        <div style={{ flex: 1 }}>
+                          <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Dateisystem</strong>
+                          <br />
+                          <small style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
+                            Bilder werden direkt auf Ihrer Festplatte gespeichert - unbegrenzte Kapazität, Standardpfad: "Eigene Dateien\The Chef's Numbers"
+                          </small>
+                          {storageManagement.selectedStorage.selectedPictureStorage === 'FileSystem' && (
+                            <div className="mt-3">
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={async () => {
+                                  try {
+                                    if (!('showDirectoryPicker' in window)) {
+                                      alert('File System Access API wird von diesem Browser nicht unterstützt. Bitte verwenden Sie Chrome oder Edge.');
+                                      return;
+                                    }
+
+                                    console.log('📁 Öffne Verzeichnis-Auswahl...');
+                                    const handle = await (window as any).showDirectoryPicker({
+                                      mode: 'readwrite',
+                                      startIn: 'documents'
+                                    });
+
+                                    if (handle) {
+                                      console.log('✅ Verzeichnis ausgewählt:', handle.name);
+                                      setFileSystemDirectoryHandle(handle);
+                                      const path = handle.name || "The Chef's Numbers";
+                                      setCurrentFilePath(path);
+                                      
+                                      // Speichere Pfad (das Handle wird automatisch im FileSystemAdapter gespeichert)
+                                      handleStorageManagementUpdate({
+                                        currentStorage: {
+                                          ...storageManagement.currentStorage,
+                                          activeConnections: {
+                                            ...storageManagement.currentStorage.activeConnections || {},
+                                            filesystem: {
+                                              basePath: path
+                                              // rootDirectoryHandle wird automatisch im IndexedDB gespeichert
+                                            }
+                                          }
+                                        }
+                                      });
+
+                                      showMessage(
+                                        'Verzeichnis ausgewählt',
+                                        `Das Verzeichnis "${path}" wurde erfolgreich ausgewählt und gespeichert. Beim nächsten Start wird es automatisch geladen.`,
+                                        'success'
+                                      );
+                                    }
+                                  } catch (error: any) {
+                                    if (error.name === 'AbortError') {
+                                      console.log('❌ Benutzer hat Verzeichnis-Auswahl abgebrochen');
+                                    } else {
+                                      console.error('❌ Fehler beim Auswählen des Verzeichnisses:', error);
+                                      alert(`Fehler beim Auswählen des Verzeichnisses: ${error.message || 'Unbekannter Fehler'}`);
+                                    }
+                                  }
+                                }}
+                                disabled={!('showDirectoryPicker' in window)}
+                                style={{ marginRight: '8px' }}
+                              >
+                                <FaFolder className="me-2" />
+                                Verzeichnis auswählen
+                              </button>
+                              {currentFilePath && (
+                                <span style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
+                                  Aktueller Pfad: <strong style={{ color: colors.text }}>{currentFilePath}</strong>
+                                </span>
+                              )}
+                              {!('showDirectoryPicker' in window) && (
+                                <div className="mt-2 alert alert-warning" style={{ backgroundColor: '#ffc10720', borderColor: '#ffc107', padding: '8px', fontSize: '0.85rem' }}>
+                                  <FaExclamationTriangle className="me-2" />
+                                  File System Access API wird von diesem Browser nicht unterstützt. Bitte verwenden Sie Chrome oder Edge.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Cloud-Konfiguration */}
           {cloudSectionVisible && (
@@ -10129,24 +10984,34 @@ const StorageManagement: React.FC = () => {
             </div>
             <div className="card-body" style={{ color: colors.text }}>
               <div className="d-flex justify-content-between align-items-center">
-                {/* Links: Backup/Restore Button */}
-                <button
-                  className="btn btn-outline-info"
-                  onClick={() => setShowBackupModal(true)}
-                  title="Backup erstellen oder wiederherstellen"
-                >
-                  <FaDownload className="me-2" />
-                  Backup & Restore
-                </button>
+                {/* Links: Backup/Restore und App-Keys Buttons */}
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-outline-info"
+                    onClick={() => setShowBackupModal(true)}
+                    title="Backup erstellen oder wiederherstellen"
+                  >
+                    <FaDownload className="me-2" />
+                    Backup & Restore
+                  </button>
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={() => setShowAppKeysModal(true)}
+                    title="App-Keys exportieren oder importieren"
+                  >
+                    <FaKey className="me-2" />
+                    App-Keys
+                  </button>
+                </div>
 
                 {/* Rechts: Konfiguration übernehmen Button */}
                 <div className="d-flex justify-content-end">
                   <button
-                  className={`btn ${(storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
-                  disabled={!storageManagement.selectedStorage.isTested || !isConfigurationDifferent || isCloudHostedWithDockerConfig()}
+                  className={`btn ${(storageManagement?.selectedStorage?.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                  disabled={!storageManagement?.selectedStorage?.isTested || !isConfigurationDifferent || isCloudHostedWithDockerConfig()}
                   onClick={handleConfigApply}
                   style={{
-                    opacity: (storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 1 : 0.6,
+                    opacity: (storageManagement?.selectedStorage?.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 1 : 0.6,
                     cursor: (storageManagement.selectedStorage.isTested && isConfigurationDifferent && !isCloudHostedWithDockerConfig()) ? 'pointer' : 'not-allowed'
                   }}
                   title={
@@ -10192,7 +11057,17 @@ const StorageManagement: React.FC = () => {
         }
       `}</style>
 
-          {/* DockerSetupModal */}
+          {/* App-Keys Modal */}
+          {showAppKeysModal && (
+            <AppKeysModal
+              show={showAppKeysModal}
+              onClose={() => setShowAppKeysModal(false)}
+              colors={colors}
+              storageManagement={storageManagement}
+            />
+          )}
+
+      {/* DockerSetupModal */}
           <DockerSetupModal
             show={showDockerSetupModal}
             onClose={handleDockerSetupModalClose}
@@ -10751,7 +11626,7 @@ const StorageManagement: React.FC = () => {
                         <>
                           <input
                             type="file"
-                            accept=".json"
+                            accept=".json,.zip"
                             onChange={handleRestoreBackup}
                             style={{ display: 'none' }}
                             id="backup-file-input"
@@ -10797,6 +11672,123 @@ const StorageManagement: React.FC = () => {
                       Bitte warten...
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Storage-Kompatibilitäts-Modal */}
+          {storageCompatibilityInfo && storageCompatibilityInfo.showModal && (
+            <div 
+              className="fixed top-0 left-0 w-full h-full" 
+              style={{ 
+                background: 'rgba(0,0,0,0.5)', 
+                zIndex: 1080,
+                top: 56,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setStorageCompatibilityInfo(null);
+                }
+              }}
+            >
+              <div 
+                className="card" 
+                style={{ 
+                  backgroundColor: colors.card, 
+                  border: `2px solid ${colors.accent}`,
+                  maxWidth: '600px',
+                  width: '90%',
+                  maxHeight: '90vh',
+                  overflow: 'hidden'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: colors.accent + '20', borderBottom: `2px solid ${colors.accent}` }}>
+                  <h5 className="mb-0 form-label-themed" style={{ flex: 1, color: colors.accent }}>
+                    <FaExclamationTriangle className="me-2" />
+                    Storage-Typ-Kompatibilität
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0"
+                    onClick={() => setStorageCompatibilityInfo(null)}
+                    style={{ color: colors.text, textDecoration: 'none', flexShrink: 0, marginLeft: 'auto' }}
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+                <div className="card-body" style={{ color: colors.text, padding: '2rem' }}>
+                  <div className="mb-4">
+                    <div className="p-3 rounded mb-3" style={{ backgroundColor: colors.accent + '10', border: `1px solid ${colors.accent}` }}>
+                      <div className="d-flex align-items-start">
+                        <FaExclamationTriangle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0, fontSize: '1.5rem' }} />
+                        <div>
+                          <strong style={{ color: colors.text, fontSize: '1.1rem' }}>Backup stammt aus anderem Storage-Typ</strong>
+                          <p className="mt-2 mb-0" style={{ color: colors.textSecondary }}>
+                            Das Backup wurde mit einem anderen Storage-Typ erstellt als derzeit aktiv ist.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="row mb-3">
+                        <div className="col-6">
+                          <div className="p-3 rounded text-center" style={{ backgroundColor: colors.secondary, border: `1px solid ${colors.cardBorder}` }}>
+                            <div style={{ fontSize: '0.9rem', color: colors.textSecondary, marginBottom: '0.5rem' }}>Backup von</div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: colors.accent }}>
+                              {storageCompatibilityInfo.backupStorageType}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <div className="p-3 rounded text-center" style={{ backgroundColor: colors.secondary, border: `1px solid ${colors.cardBorder}` }}>
+                            <div style={{ fontSize: '0.9rem', color: colors.textSecondary, marginBottom: '0.5rem' }}>Aktuell</div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: colors.text }}>
+                              {storageCompatibilityInfo.currentStorageType}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded" style={{ backgroundColor: colors.secondary + '80', border: `1px solid ${colors.cardBorder}` }}>
+                        <div className="d-flex align-items-start">
+                          <FaInfoCircle className="me-2 mt-1" style={{ color: colors.accent, flexShrink: 0 }} />
+                          <div style={{ color: colors.textSecondary, fontSize: '0.95rem' }}>
+                            <strong style={{ color: colors.text }}>Um das Backup wiederherzustellen:</strong>
+                            <ol className="mt-2 mb-0" style={{ paddingLeft: '1.5rem' }}>
+                              <li className="mb-2">Stellen Sie den Storage-Typ aus dem Backup wieder her</li>
+                              <li className="mb-2">Starten Sie die App neu</li>
+                              <li>Starten Sie dann das Restore erneut</li>
+                            </ol>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-footer d-flex justify-content-end gap-2" style={{ borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.card }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setStorageCompatibilityInfo(null)}
+                  >
+                    <FaTimes className="me-2" />
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ backgroundColor: colors.accent, color: colors.card }}
+                    onClick={restoreCurrentStorage}
+                  >
+                    <FaSync className="me-2" />
+                    Storage-Typ wiederherstellen
+                  </button>
                 </div>
               </div>
             </div>

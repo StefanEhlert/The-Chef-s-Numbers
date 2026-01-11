@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { FaCode, FaPrint, FaImage, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaCode, FaPrint, FaImage, FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
 
 interface TaxAccountTotal {
   accountNumber: string;
@@ -743,17 +743,41 @@ const ReceiptImageViewer: React.FC<ReceiptImageViewerProps> = ({
               />
             </div>
           ) : !isPDF ? (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              height: '100%',
-              color: colors.text 
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <p>Bild wird geladen...</p>
+            imageUrl ? (
+              // Bild wird geladen
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '100%',
+                color: colors.text 
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p>Bild wird geladen...</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              // Kein Bild vorhanden - Fallback-Anzeige
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '100%',
+                color: colors.text,
+                padding: '2rem',
+                textAlign: 'center'
+              }}>
+                <div>
+                  <FaImage style={{ fontSize: '3rem', color: colors.textSecondary || colors.text, opacity: 0.5, marginBottom: '1rem' }} />
+                  <p style={{ marginBottom: '0.5rem', fontWeight: 'bold' }}>Kein Belegbild vorhanden</p>
+                  <p style={{ fontSize: '0.9rem', color: colors.textSecondary || colors.text, opacity: 0.8 }}>
+                    Der Beleg wurde gespeichert, aber das Bild konnte nicht geladen werden.
+                    <br />
+                    Sie können den Beleg trotzdem bearbeiten.
+                  </p>
+                </div>
+              </div>
+            )
           ) : null}
         </div>
 

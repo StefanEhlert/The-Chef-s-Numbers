@@ -5,8 +5,7 @@
  */
 
 import { OCRResult } from './ocrTypes';
-import { storageLayer } from './storageLayer';
-import { OCRApiConfig, AccountingSettings } from '../types';
+import { OCRApiConfig } from '../types';
 
 const AZURE_MODEL = 'prebuilt-receipt';
 
@@ -15,39 +14,24 @@ const DEFAULT_AZURE_ENDPOINT = process.env.REACT_APP_AZURE_ENDPOINT || 'https://
 const DEFAULT_AZURE_API_KEY = process.env.REACT_APP_AZURE_API_KEY || '';
 
 /**
- * Lädt die Azure API-Konfiguration aus den Einstellungen
+ * Lädt die Azure API-Konfiguration aus localOptions/KI-Provider
  */
 async function loadAzureConfig(): Promise<{ endpoint: string; apiKey: string }> {
   try {
-    // Lade aus accountingSettings
-    const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
-    if (settings && settings.length > 0) {
-      const firstSettings = settings[0];
-      if (firstSettings.ocrApiConfigs && firstSettings.ocrApiConfigs.length > 0) {
-        const azureConfig = firstSettings.ocrApiConfigs.find((config) => config.provider === 'azure' && config.isActive);
-        if (azureConfig && azureConfig.apiEndpoint && azureConfig.apiKey) {
-          return {
-            endpoint: azureConfig.apiEndpoint,
-            apiKey: azureConfig.apiKey
-          };
-        }
-      }
-    }
+    // Migration: Versuche bestehende Configs aus accountingSettings zu migrieren
+    const { migrateKIProviderConfigsFromAccountingSettings } = await import('../utils/kiProviderConfig');
+    await migrateKIProviderConfigsFromAccountingSettings();
     
-    // Migration: Prüfe alte ocrApiConfigs (kann später entfernt werden)
-    try {
-      const oldConfigs = await storageLayer.load<OCRApiConfig>('ocrApiConfigs');
-      if (oldConfigs && oldConfigs.length > 0) {
-        const azureConfig = oldConfigs.find((config) => config.provider === 'azure' && config.isActive);
-        if (azureConfig && azureConfig.apiEndpoint && azureConfig.apiKey) {
-          return {
-            endpoint: azureConfig.apiEndpoint,
-            apiKey: azureConfig.apiKey
-          };
-        }
-      }
-    } catch (e) {
-      // Ignoriere Fehler bei Migration
+    // Lade aus localOptions/KI-Provider
+    const { loadKIProviderConfigs } = await import('../utils/kiProviderConfig');
+    const configs = loadKIProviderConfigs();
+    
+    const azureConfig = configs.find((config) => config.provider === 'azure' && config.isActive);
+    if (azureConfig && azureConfig.apiEndpoint && azureConfig.apiKey) {
+      return {
+        endpoint: azureConfig.apiEndpoint,
+        apiKey: azureConfig.apiKey
+      };
     }
   } catch (error) {
     console.warn('⚠️ Fehler beim Laden der Azure API-Konfiguration, verwende Fallback-Werte:', error);

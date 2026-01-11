@@ -630,64 +630,22 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
   }, [formState.id, allAccounts, resetForm]);
 
   // OCR API-Konfiguration Funktionen
-  // Hilfsfunktion zum Speichern von OCR-Konfigurationen in accountingSettings
-  const saveOcrApiConfigsToSettings = useCallback(async (configs: OCRApiConfig[]) => {
-    try {
-      const existingSettings = await storageLayer.load<AccountingSettings>('accountingSettings');
-      let settings: AccountingSettings;
-      
-      if (existingSettings && existingSettings.length > 0) {
-        settings = {
-          ...existingSettings[0],
-          ocrApiConfigs: configs,
-          updatedAt: new Date()
-        };
-      } else {
-        settings = {
-          id: generateId(),
-          ocrApiConfigs: configs,
-          updatedAt: new Date()
-        };
-      }
-      
-      await storageLayer.save('accountingSettings', [settings]);
-    } catch (error) {
-      logger.error('AccountingOptions', 'OCR-Konfigurationen in Settings speichern fehlgeschlagen', error as Error);
-      throw error;
-    }
-  }, []);
-
+  // Verwende localOptions/KI-Provider für Speicherung (unabhängig von Datenbank)
   const loadOcrApiConfigs = useCallback(async () => {
     try {
-      // Lade aus accountingSettings
-      const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
-      if (settings && settings.length > 0) {
-        const firstSettings = settings[0];
-        if (firstSettings.ocrApiConfigs && firstSettings.ocrApiConfigs.length > 0) {
-          setOcrApiConfigs(firstSettings.ocrApiConfigs);
-          return;
-        }
-      }
+      // Migration: Versuche bestehende Configs aus accountingSettings zu migrieren
+      const { migrateKIProviderConfigsFromAccountingSettings } = await import('../utils/kiProviderConfig');
+      await migrateKIProviderConfigsFromAccountingSettings();
       
-      // Migration: Prüfe alte ocrApiConfigs (kann später entfernt werden)
-      try {
-        const oldConfigs = await storageLayer.load<OCRApiConfig>('ocrApiConfigs');
-        if (oldConfigs && oldConfigs.length > 0) {
-          // Migriere zu accountingSettings
-          await saveOcrApiConfigsToSettings(oldConfigs);
-          setOcrApiConfigs(oldConfigs);
-          return;
-        }
-      } catch (e) {
-        // Ignoriere Fehler bei Migration
-      }
-      
-      setOcrApiConfigs([]);
+      // Lade aus localOptions/KI-Provider
+      const { loadKIProviderConfigs } = await import('../utils/kiProviderConfig');
+      const configs = loadKIProviderConfigs();
+      setOcrApiConfigs(configs);
     } catch (error) {
       logger.error('AccountingOptions', 'OCR API-Konfigurationen laden fehlgeschlagen', error as Error);
       setOcrStatusMessage('API-Konfigurationen konnten nicht geladen werden.');
     }
-  }, [saveOcrApiConfigsToSettings]);
+  }, []);
 
   const handleOcrProviderSelect = useCallback((provider: OCRApiProvider) => {
     setSelectedOcrProvider(provider);
@@ -736,6 +694,8 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
     }
 
     try {
+      const { saveKIProviderConfigs } = await import('../utils/kiProviderConfig');
+      
       const existingConfig = ocrApiConfigs.find((config) => config.provider === selectedOcrProvider);
       const configId = existingConfig?.id || generateId();
       
@@ -753,8 +713,8 @@ const AccountingOptions: React.FC<AccountingOptionsProps> = ({ colors }) => {
         ? ocrApiConfigs.map((c) => (c.id === configId ? config : c))
         : [...ocrApiConfigs, config];
 
-      // Speichere in accountingSettings statt ocrApiConfigs
-      await saveOcrApiConfigsToSettings(updatedConfigs);
+      // Speichere in localOptions/KI-Provider (unabhängig von Datenbank)
+      saveKIProviderConfigs(updatedConfigs);
       setOcrApiConfigs(updatedConfigs);
       setOcrStatusMessage('API-Konfiguration wurde gespeichert.');
       logger.info('AccountingOptions', 'OCR API-Konfiguration gespeichert', { provider: selectedOcrProvider });

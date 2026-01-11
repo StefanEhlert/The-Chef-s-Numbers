@@ -1143,6 +1143,14 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
   // Initialisiere editedArticles beim Öffnen
   useEffect(() => {
     if (show) {
+      console.log('📋 [ReceiptReviewModal] Modal geöffnet, initialisiere Daten:', {
+        receiptId: receiptId,
+        hasReceiptData: !!receiptData,
+        articleCount: receiptData?.articles?.length || 0,
+        receiptDataKeys: receiptData ? Object.keys(receiptData) : [],
+        articles: receiptData?.articles?.slice(0, 3) || []
+      });
+      
       const isFirstInit = !isInitializedRef.current;
       isInitializedRef.current = true;
       
@@ -1188,7 +1196,9 @@ const ReceiptReviewModal: React.FC<ReceiptReviewModalProps> = ({
       setPricePerUnitInput('0,00');
       
       // Verwende Artikel direkt aus receiptData (keine Normalisierung mehr)
-      setEditedArticles(receiptData.articles);
+      const articlesToSet = receiptData?.articles || [];
+      console.log('📋 [ReceiptReviewModal] Setze editedArticles:', articlesToSet.length, 'Artikel');
+      setEditedArticles(articlesToSet);
       setSelectedArticleIndex(0);
       
       // Setze Belegdatum und Belegnummer aus receiptData

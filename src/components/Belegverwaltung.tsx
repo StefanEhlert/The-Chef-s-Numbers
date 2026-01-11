@@ -56,7 +56,7 @@ interface BelegverwaltungProps {
   handleBulkMarkAsPaid: () => void | Promise<void>;
   handleBulkMarkAsOpen: () => void | Promise<void>;
   onCreateReceipt: () => Promise<Receipt> | Receipt;
-  onUpdateReceipt: (receipt: Receipt) => void | Promise<void>;
+  onUpdateReceipt: (receipt: Receipt, options?: { suppressQuotaError?: boolean }) => void | Promise<void>;
   formatPrice: (value: number | undefined) => string;
   getSupplierName: (supplierId: string) => string;
 }
@@ -82,29 +82,56 @@ const ReceiptReviewModalWithImage: React.FC<{
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [imageExtension, setImageExtension] = useState<string | undefined>(undefined);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false); // Markiert fehlgeschlagenes Laden
+  const loadingRef = useRef<string | null>(null); // Verhindert doppeltes Laden
 
   useEffect(() => {
     const loadImage = async () => {
       if (!receiptImagePath) {
-        console.log('📄 [ReceiptReviewModalWithImage] Kein receiptImagePath vorhanden');
         setImageUrl(undefined);
+        setImageLoadFailed(false);
         return;
       }
 
-      // console.log('📄 [ReceiptReviewModalWithImage] Starte Bild-Laden für:', receiptImagePath);
+      // Verhindere doppeltes Laden: Prüfe ob bereits für diesen Pfad geladen wird
+      if (loadingRef.current === receiptImagePath) {
+        return; // Bereits am Laden für diesen Pfad
+      }
+
+      loadingRef.current = receiptImagePath;
       setIsLoadingImage(true);
+      setImageLoadFailed(false); // Reset bei neuem Laden-Versuch
       try {
         const result = await storageLayer.loadImage(receiptImagePath);
-        // console.log('📄 [ReceiptReviewModalWithImage] loadImage Ergebnis:', result ? 'URL erhalten' : 'null');
         if (result) {
           setImageUrl(result.url);
           setImageExtension(result.extension);
-          // console.log('✅ [ReceiptReviewModalWithImage] Belegbild geladen:', receiptImagePath, 'Endung:', result.extension);
-          // console.log('📷 [ReceiptReviewModalWithImage] Vollständige URL:', result.url);
+          setImageLoadFailed(false);
           
           // Aktualisiere receiptImagePath im Receipt mit der gefundenen Endung, falls noch nicht vorhanden
-          if (result.extension && !receiptImagePath.endsWith(`.${result.extension}`) && onUpdateReceiptImagePath) {
-            const updatedPath = `${receiptImagePath}.${result.extension}`;
+          // WICHTIG: Normalisiere Pfad zuerst (entferne falsche Extensions)
+          const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+          let normalizedPath = receiptImagePath;
+          
+          // Entferne doppelte Pfad-Teile
+          if (normalizedPath.includes('.pictures/')) {
+            normalizedPath = normalizedPath.substring(0, normalizedPath.indexOf('.pictures/'));
+          }
+          
+          // Entferne ungültige Extensions
+          const lastDotIndex = normalizedPath.lastIndexOf('.');
+          if (lastDotIndex > 0 && normalizedPath.lastIndexOf('/') < lastDotIndex) {
+            const potentialExt = normalizedPath.substring(lastDotIndex + 1).toLowerCase();
+            if (!validExtensions.includes(potentialExt)) {
+              normalizedPath = normalizedPath.substring(0, lastDotIndex);
+            }
+          }
+          
+          // Prüfe ob Extension bereits vorhanden ist (nur gültige Extensions prüfen)
+          const hasValidExtension = validExtensions.some(ext => normalizedPath.toLowerCase().endsWith(`.${ext}`));
+          
+          if (result.extension && validExtensions.includes(result.extension.toLowerCase()) && !hasValidExtension && onUpdateReceiptImagePath) {
+            const updatedPath = `${normalizedPath}.${result.extension}`;
             console.log('💾 [ReceiptReviewModalWithImage] Aktualisiere receiptImagePath mit Endung:', updatedPath);
             // Aktualisiere Receipt im Hintergrund (nicht-blockierend)
             onUpdateReceiptImagePath(updatedPath).catch(err => {
@@ -112,31 +139,63 @@ const ReceiptReviewModalWithImage: React.FC<{
             });
           }
         } else {
-          console.warn('⚠️ [ReceiptReviewModalWithImage] Belegbild konnte nicht geladen werden:', receiptImagePath);
+          // Bild nicht gefunden - markiere als fehlgeschlagen
           setImageUrl(undefined);
+          setImageLoadFailed(true);
         }
       } catch (error) {
         console.error('❌ [ReceiptReviewModalWithImage] Fehler beim Laden des Belegbildes:', error);
         setImageUrl(undefined);
+        setImageLoadFailed(true);
       } finally {
         setIsLoadingImage(false);
+        loadingRef.current = null; // Reset nach Abschluss
       }
     };
 
+    // Lade Bild nur wenn receiptImagePath vorhanden ist
     if (props.show && receiptImagePath) {
-      // console.log('📄 [ReceiptReviewModalWithImage] Modal geöffnet, lade Bild...');
       loadImage();
     } else {
-      console.log('📄 [ReceiptReviewModalWithImage] Modal geschlossen oder kein receiptImagePath');
       setImageUrl(undefined);
+      setImageLoadFailed(false);
+      loadingRef.current = null; // Reset wenn Modal geschlossen oder kein Pfad
     }
-  }, [props.show, receiptImagePath]);
+  }, [props.show, receiptImagePath, onUpdateReceiptImagePath]);
 
+  // Normalisiere Pfad vor Anzeige (entferne falsche Extensions)
+  const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+  
+  // Prüfe ob receiptImagePath vorhanden ist - wenn nicht, zeige Modal trotzdem (Fallback)
+  if (!receiptImagePath) {
+    // Modal wird auch ohne Bild angezeigt - Fallback-Modus
+    return (
+      <ReceiptReviewModal
+        {...props}
+        receiptImage={undefined} // Kein Bild vorhanden
+        receiptImagePath={undefined}
+      />
+    );
+  }
+  
+  let displayPath: string = receiptImagePath;
+  
+  // Entferne doppelte Pfad-Teile
+  if (displayPath.includes('.pictures/')) {
+    displayPath = displayPath.substring(0, displayPath.indexOf('.pictures/'));
+  }
+  
+  // Füge Extension nur hinzu, wenn gültig und noch nicht vorhanden
+  const hasValidExtension = validExtensions.some(ext => displayPath.toLowerCase().endsWith(`.${ext}`));
+  const finalPath = (imageExtension && validExtensions.includes(imageExtension.toLowerCase()) && !hasValidExtension)
+    ? `${displayPath}.${imageExtension}`
+    : displayPath;
+  
   return (
     <ReceiptReviewModal
       {...props}
       receiptImage={imageUrl}
-      receiptImagePath={imageExtension ? `${receiptImagePath}.${imageExtension}` : receiptImagePath}
+      receiptImagePath={imageLoadFailed ? undefined : finalPath} // Entferne receiptImagePath wenn Laden fehlgeschlagen ist
     />
   );
 };
@@ -240,9 +299,15 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
     if (!receipt.isCompleted) {
       let processedData = receipt.processedOcrData;
       
-      // Wenn processedOcrData fehlt, aber ocrResult vorhanden ist, erstelle processedOcrData
-      if (!processedData && receipt.ocrResult) {
-        console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id);
+      // Prüfe, ob processedOcrData fehlt oder leer ist (articles: [] oder kein articles-Array)
+      const hasEmptyProcessedData = !processedData || 
+        !processedData.articles || 
+        !Array.isArray(processedData.articles) || 
+        processedData.articles.length === 0;
+      
+      // Wenn processedOcrData fehlt oder leer ist, aber ocrResult vorhanden ist, erstelle processedOcrData
+      if (hasEmptyProcessedData && receipt.ocrResult) {
+        console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id, '(processedOcrData fehlt oder ist leer)');
         try {
           // Lade selectedChartId aus accountingSettings
           let selectedChartId: AccountingChartId = 'skr03';
@@ -274,13 +339,103 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
           
           // Verwende den aktualisierten Beleg
           receipt = updatedReceipt;
+          console.log('✅ processedOcrData erfolgreich erstellt mit', processedData.articles?.length || 0, 'Artikeln');
         } catch (error) {
           console.error('❌ Fehler beim Erstellen von processedOcrData:', error);
         }
       }
+      // Fallback: Wenn processedOcrData leer ist, aber receiptDetails.lineItems vorhanden ist, konvertiere lineItems zu articles
+      else if (hasEmptyProcessedData && receipt.receiptDetails?.lineItems && receipt.receiptDetails.lineItems.length > 0) {
+        console.log('📝 Konvertiere receiptDetails.lineItems zu processedOcrData.articles für Beleg:', receipt.id, `(${receipt.receiptDetails.lineItems.length} lineItems gefunden)`);
+        try {
+          // Konvertiere ReceiptLineItem[] zu ReceiptArticle[]
+          const restoredArticles = receipt.receiptDetails.lineItems.map((lineItem) => {
+            const unit = lineItem.unit || 'Stück';
+            return {
+              name: lineItem.description || '',
+              nameOCR: lineItem.description || '',
+              price: lineItem.total || 0,
+              quantity: lineItem.quantity || 1,
+              unit: unit,
+              category: '',
+              supplierId: receipt.supplierId || processedData?.supplierId || '',
+              supplierArticleNumber: '',
+              bundleUnit: unit,
+              bundlePrice: lineItem.total || 0,
+              bundleEanCode: '',
+              content: 1,
+              contentUnit: unit,
+              contentEanCode: '',
+              pricePerUnit: lineItem.unitPrice || 0,
+              vatRate: lineItem.vatRate || 19,
+              taxAccount: lineItem.taxAccount,
+              allergens: [],
+              additives: [],
+              ingredients: '',
+              nutrition: {
+                calories: 0,
+                kilojoules: 0,
+                protein: 0,
+                fat: 0,
+                carbohydrates: 0,
+                fiber: 0,
+                sugar: 0,
+                salt: 0,
+                alcohol: undefined
+              },
+              openFoodFactsCode: '',
+              notes: '',
+              linkedArticleId: lineItem.articleId
+            };
+          });
+          
+          // Aktualisiere processedOcrData mit wiederhergestellten Artikeln
+          const totalAmount = restoredArticles.reduce((sum, article) => sum + (article.price || 0), 0);
+          processedData = {
+            ...(processedData || {}),
+            articles: restoredArticles,
+            totalArticles: restoredArticles.length,
+            totalAmount: totalAmount,
+            supplierId: receipt.supplierId || processedData?.supplierId,
+            date: receipt.receiptDate || processedData?.date,
+            receiptNumber: receipt.receiptNumber || processedData?.receiptNumber,
+            vat7: processedData?.vat7 || 0,
+            vat19: processedData?.vat19 || 0,
+            isCompleted: processedData?.isCompleted || false
+          };
+          
+          // Aktualisiere den Beleg mit wiederhergestelltem processedOcrData
+          const updatedReceipt: Receipt = {
+            ...receipt,
+            processedOcrData: processedData,
+            isDirty: true
+          };
+          await onUpdateReceipt(updatedReceipt);
+          
+          // Verwende den aktualisierten Beleg
+          receipt = updatedReceipt;
+          console.log('✅ processedOcrData erfolgreich aus lineItems wiederhergestellt mit', restoredArticles.length, 'Artikeln');
+        } catch (error) {
+          console.error('❌ Fehler beim Wiederherstellen von processedOcrData aus lineItems:', error);
+        }
+      }
+      
+      // Stelle sicher, dass processedOcrData mindestens ein leeres Objekt ist (für reduziert gespeicherte Belege ohne ocrResult und ohne lineItems)
+      if (!receipt.processedOcrData) {
+        receipt.processedOcrData = {
+          articles: [],
+          totalArticles: 0,
+          totalAmount: 0,
+          vat7: 0,
+          vat19: 0,
+          isCompleted: false
+        };
+        console.warn('⚠️ processedOcrData wurde als leeres Objekt erstellt (kein ocrResult und keine lineItems verfügbar)');
+      }
       
       // Öffne ReceiptReviewModal für nicht abgeschlossene Belege
-      console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id, 'isCompleted:', receipt.isCompleted);
+      const articleCount = receipt.processedOcrData?.articles?.length || 0;
+      console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id, 'isCompleted:', receipt.isCompleted, 'hasProcessedOcrData:', !!receipt.processedOcrData, 'articleCount:', articleCount);
       setReviewReceipt(receipt);
       setShowReceiptReview(true);
       // Stelle sicher, dass BelegModal geschlossen ist
@@ -328,9 +483,15 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
   const handleEditReceipt = async (receipt: Receipt) => {
     let processedData = receipt.processedOcrData;
     
-    // Wenn processedOcrData fehlt, aber ocrResult vorhanden ist, erstelle processedOcrData
-    if (!processedData && receipt.ocrResult) {
-      console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id);
+    // Prüfe, ob processedOcrData fehlt oder leer ist (articles: [] oder kein articles-Array)
+    const hasEmptyProcessedData = !processedData || 
+      !processedData.articles || 
+      !Array.isArray(processedData.articles) || 
+      processedData.articles.length === 0;
+    
+    // Wenn processedOcrData fehlt oder leer ist, aber ocrResult vorhanden ist, erstelle processedOcrData
+    if (hasEmptyProcessedData && receipt.ocrResult) {
+      console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id, '(processedOcrData fehlt oder ist leer)');
       try {
         // Lade selectedChartId aus accountingSettings
         let selectedChartId: AccountingChartId = 'skr03';
@@ -362,13 +523,15 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         
         // Verwende den aktualisierten Beleg
         receipt = updatedReceipt;
+        console.log('✅ processedOcrData erfolgreich erstellt mit', processedData.articles?.length || 0, 'Artikeln');
       } catch (error) {
         console.error('❌ Fehler beim Erstellen von processedOcrData:', error);
       }
     }
     
     // Öffne ReceiptReviewModal
-    console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id);
+    const articleCount = receipt.processedOcrData?.articles?.length || 0;
+    console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id, 'articleCount:', articleCount);
     setReviewReceipt(receipt);
     setShowReceiptReview(true);
     // Stelle sicher, dass BelegModal geschlossen ist
@@ -379,9 +542,15 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
   const handleOpenReceiptReview = async (receipt: Receipt) => {
     let processedData = receipt.processedOcrData;
     
-    // Wenn processedOcrData fehlt, aber ocrResult vorhanden ist, erstelle processedOcrData
-    if (!processedData && receipt.ocrResult) {
-      console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id);
+    // Prüfe, ob processedOcrData fehlt oder leer ist (articles: [] oder kein articles-Array)
+    const hasEmptyProcessedData = !processedData || 
+      !processedData.articles || 
+      !Array.isArray(processedData.articles) || 
+      processedData.articles.length === 0;
+    
+    // Wenn processedOcrData fehlt oder leer ist, aber ocrResult vorhanden ist, erstelle processedOcrData
+    if (hasEmptyProcessedData && receipt.ocrResult) {
+      console.log('📝 Erstelle processedOcrData aus ocrResult für Beleg:', receipt.id, '(processedOcrData fehlt oder ist leer)');
       try {
         // Lade selectedChartId aus accountingSettings
         let selectedChartId: AccountingChartId = 'skr03';
@@ -413,13 +582,15 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
         
         // Verwende den aktualisierten Beleg
         receipt = updatedReceipt;
+        console.log('✅ processedOcrData erfolgreich erstellt mit', processedData.articles?.length || 0, 'Artikeln');
       } catch (error) {
         console.error('❌ Fehler beim Erstellen von processedOcrData:', error);
       }
     }
     
     // Öffne ReceiptReviewModal direkt
-    console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id);
+    const articleCount = receipt.processedOcrData?.articles?.length || 0;
+    console.log('📝 Öffne ReceiptReviewModal für Beleg:', receipt.id, 'articleCount:', articleCount);
     setReviewReceipt(receipt);
     setShowReceiptReview(true);
     // Stelle sicher, dass BelegModal geschlossen ist
@@ -477,26 +648,26 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
     setSortField(event.target.value as BelegverwaltungProps['sortField']);
   };
 
-  // Lade verfügbare OCR-Provider
+  // Lade verfügbare OCR-Provider aus localOptions/KI-Provider (unabhängig von Datenbank)
   const loadAvailableProviders = useCallback(async () => {
     try {
-      const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
-      if (settings && settings.length > 0) {
-        const firstSettings = settings[0];
-        if (firstSettings.ocrApiConfigs && firstSettings.ocrApiConfigs.length > 0) {
-          // Filtere nur Provider mit vollständiger Konfiguration
-          const configuredProviders = firstSettings.ocrApiConfigs.filter(
-            (config) => 
-              config.isActive && 
-              config.apiEndpoint && 
-              config.apiEndpoint.trim() !== '' && 
-              config.apiKey && 
-              config.apiKey.trim() !== ''
-          );
-          setAvailableProviders(configuredProviders);
-        } else {
-          setAvailableProviders([]);
-        }
+      // Migration: Versuche bestehende Configs aus accountingSettings zu migrieren
+      const { loadKIProviderConfigs, migrateKIProviderConfigsFromAccountingSettings } = await import('../utils/kiProviderConfig');
+      await migrateKIProviderConfigsFromAccountingSettings();
+      
+      const ocrConfigs = loadKIProviderConfigs();
+      
+      if (ocrConfigs && ocrConfigs.length > 0) {
+        // Filtere nur Provider mit vollständiger Konfiguration
+        const configuredProviders = ocrConfigs.filter(
+          (config) => 
+            config.isActive && 
+            config.apiEndpoint && 
+            config.apiEndpoint.trim() !== '' && 
+            config.apiKey && 
+            config.apiKey.trim() !== ''
+        );
+        setAvailableProviders(configuredProviders);
       } else {
         setAvailableProviders([]);
       }
@@ -772,19 +943,31 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
       updatedAt: today
     };
 
-    // Speichere Belegbild
+    // Speichere Belegbild (versuche es, aber blockiere nicht, wenn es fehlschlägt)
     try {
       const imagePath = `pictures/receipts/${receiptId}`;
       const imageSaved = await storageLayer.saveImage(imagePath, file);
       if (imageSaved) {
         newReceipt.receiptImagePath = imagePath;
+        console.log('✅ [OCR] Belegbild erfolgreich gespeichert:', imagePath);
+      } else {
+        console.warn('⚠️ [OCR] Belegbild konnte nicht gespeichert werden, aber Beleg wird trotzdem gespeichert');
       }
     } catch (imageError) {
       console.error('❌ [OCR] Fehler beim Speichern des Belegbildes:', imageError);
+      console.warn('⚠️ [OCR] Beleg wird trotzdem ohne Bild gespeichert');
+      // Beleg wird auch ohne Bild gespeichert - das ist beabsichtigt
     }
 
-    // Speichere Beleg
-    await onUpdateReceipt(newReceipt);
+    // Speichere Beleg (immer, auch ohne Bild)
+    // Unterdrücke Fehlermeldung beim ersten Speichern nach OCR
+    try {
+      await onUpdateReceipt(newReceipt, { suppressQuotaError: true });
+      console.log('✅ [OCR] Beleg erfolgreich gespeichert (mit oder ohne Bild)');
+    } catch (receiptError) {
+      console.error('❌ [OCR] Fehler beim Speichern des Belegs:', receiptError);
+      throw receiptError; // Beleg-Speicherung ist kritisch - Fehler weiterwerfen
+    }
     
     // Öffne automatisch ReceiptReviewModal für Bearbeitung
     setReviewReceipt(newReceipt);
@@ -1366,15 +1549,34 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
       />
 
       {/* ReceiptReviewModal für Belege in Bearbeitung */}
-      {reviewReceipt && reviewReceipt.processedOcrData && (
-        <ReceiptReviewModalWithImage
-          show={showReceiptReview}
-          onClose={() => {
-            setShowReceiptReview(false);
-            setReviewReceipt(null);
-          }}
-          receiptData={reviewReceipt.processedOcrData}
-          suppliers={suppliers.map(s => ({
+      {reviewReceipt && (() => {
+        const processedData = reviewReceipt.processedOcrData || {
+          articles: [],
+          totalArticles: 0,
+          totalAmount: 0,
+          vat7: 0,
+          vat19: 0,
+          isCompleted: false
+        };
+        const articleCount = processedData.articles?.length || 0;
+        console.log('📋 [Belegverwaltung] Übergebe Daten an ReceiptReviewModal:', {
+          receiptId: reviewReceipt.id,
+          hasProcessedOcrData: !!reviewReceipt.processedOcrData,
+          articleCount: articleCount,
+          hasOcrResult: !!reviewReceipt.ocrResult,
+          processedDataKeys: Object.keys(processedData)
+        });
+        
+        return (
+          <ReceiptReviewModalWithImage
+            key={reviewReceipt.id}
+            show={showReceiptReview}
+            onClose={() => {
+              setShowReceiptReview(false);
+              setReviewReceipt(null);
+            }}
+            receiptData={processedData}
+            suppliers={suppliers.map(s => ({
             id: s.id,
             name: s.name,
             contactPerson: s.contactPerson || '',
@@ -1398,27 +1600,36 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
           receiptId={reviewReceipt.id}
           originalOcrResult={reviewReceipt.ocrResult}
           onUpdateReceiptImagePath={async (newPath: string) => {
-            // Aktualisiere receiptImagePath im Receipt
+            // Aktualisiere receiptImagePath nur lokal im State (kein persistentes Speichern)
+            // Das Bild wurde bereits beim ersten Speichern nach OCR gespeichert
+            // Diese Aktualisierung dient nur zur Pfad-Ergänzung mit Extension
             const updatedReceipt: Receipt = {
               ...reviewReceipt,
-              receiptImagePath: newPath,
-              isDirty: true,
-              updatedAt: new Date()
+              receiptImagePath: newPath
             };
-            await onUpdateReceipt(updatedReceipt);
+            // Nur lokal speichern, kein persistentes Speichern (verhindert unnötige Speichervorgänge)
             setReviewReceipt(updatedReceipt);
+            console.log('💾 [ReceiptReviewModalWithImage] receiptImagePath lokal aktualisiert (ohne persistentes Speichern):', newPath);
           }}
           onUpdateReceiptData={async (updatedData) => {
-            // Aktualisiere processedOcrData im Receipt
+            // Aktualisiere processedOcrData nur lokal im State (kein persistentes Speichern)
+            // Finales Speichern erfolgt nur über onSaveReceipt beim Schließen
             const updatedReceipt: Receipt = {
               ...reviewReceipt,
-              processedOcrData: updatedData,
-              isDirty: true
+              processedOcrData: updatedData
             };
-            await onUpdateReceipt(updatedReceipt);
+            // Nur lokal speichern, kein persistentes Speichern (verhindert unnötige Speichervorgänge)
             setReviewReceipt(updatedReceipt);
+            console.log('💾 [ReceiptReviewModalWithImage] processedOcrData lokal aktualisiert (ohne persistentes Speichern)');
           }}
           onSaveReceipt={async (receiptUpdate) => {
+            // Finales Speichern beim Schließen des Modals - HIER wird die Fehlermeldung angezeigt
+            console.log('💾 [Belegverwaltung] onSaveReceipt aufgerufen:', {
+              receiptId: reviewReceipt.id,
+              hasProcessedOcrData: !!receiptUpdate.processedOcrData,
+              articleCount: receiptUpdate.processedOcrData?.articles?.length || 0,
+              hasReceiptDetails: !!receiptUpdate.receiptDetails
+            });
             // Aktualisiere Receipt mit den neuen Daten
             const updatedReceipt: Receipt = {
               ...reviewReceipt,
@@ -1439,7 +1650,8 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
               updatedAt: new Date()
             };
             
-            await onUpdateReceipt(updatedReceipt);
+            // Finales persistentes Speichern - Fehlermeldung wird hier angezeigt (wenn nötig)
+            await onUpdateReceipt(updatedReceipt, { suppressQuotaError: false });
             setReviewReceipt(updatedReceipt);
             
             // Wenn abgeschlossen, schließe Modal
@@ -1449,7 +1661,8 @@ const Belegverwaltung: React.FC<BelegverwaltungProps> = ({
             }
           }}
         />
-      )}
+        );
+      })()}
 
       {/* Versteckter File Input für OCR */}
       <input

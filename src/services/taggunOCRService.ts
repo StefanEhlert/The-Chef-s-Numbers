@@ -4,47 +4,31 @@
  */
 
 import { OCRResult } from './ocrTypes';
-import { storageLayer } from './storageLayer';
-import { OCRApiConfig, AccountingSettings } from '../types';
+import { OCRApiConfig } from '../types';
 
 // Fallback-Werte (falls keine Konfiguration vorhanden)
 const DEFAULT_TAGGUN_API_URL = 'https://api.taggun.io/api/receipt/v1/verbose/file';
 const DEFAULT_TAGGUN_API_KEY = '16eef5da037146c29b2d638777c40137';
 
 /**
- * Lädt die Taggun API-Konfiguration aus den Einstellungen
+ * Lädt die Taggun API-Konfiguration aus localOptions/KI-Provider
  */
 async function loadTaggunConfig(): Promise<{ apiUrl: string; apiKey: string }> {
   try {
-    // Lade aus accountingSettings
-    const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
-    if (settings && settings.length > 0) {
-      const firstSettings = settings[0];
-      if (firstSettings.ocrApiConfigs && firstSettings.ocrApiConfigs.length > 0) {
-        const taggunConfig = firstSettings.ocrApiConfigs.find((config) => config.provider === 'taggun' && config.isActive);
-        if (taggunConfig && taggunConfig.apiEndpoint && taggunConfig.apiKey) {
-          return {
-            apiUrl: taggunConfig.apiEndpoint,
-            apiKey: taggunConfig.apiKey
-          };
-        }
-      }
-    }
+    // Migration: Versuche bestehende Configs aus accountingSettings zu migrieren
+    const { migrateKIProviderConfigsFromAccountingSettings } = await import('../utils/kiProviderConfig');
+    await migrateKIProviderConfigsFromAccountingSettings();
     
-    // Migration: Prüfe alte ocrApiConfigs (kann später entfernt werden)
-    try {
-      const oldConfigs = await storageLayer.load<OCRApiConfig>('ocrApiConfigs');
-      if (oldConfigs && oldConfigs.length > 0) {
-        const taggunConfig = oldConfigs.find((config) => config.provider === 'taggun' && config.isActive);
-        if (taggunConfig && taggunConfig.apiEndpoint && taggunConfig.apiKey) {
-          return {
-            apiUrl: taggunConfig.apiEndpoint,
-            apiKey: taggunConfig.apiKey
-          };
-        }
-      }
-    } catch (e) {
-      // Ignoriere Fehler bei Migration
+    // Lade aus localOptions/KI-Provider
+    const { loadKIProviderConfigs } = await import('../utils/kiProviderConfig');
+    const configs = loadKIProviderConfigs();
+    
+    const taggunConfig = configs.find((config) => config.provider === 'taggun' && config.isActive);
+    if (taggunConfig && taggunConfig.apiEndpoint && taggunConfig.apiKey) {
+      return {
+        apiUrl: taggunConfig.apiEndpoint,
+        apiKey: taggunConfig.apiKey
+      };
     }
   } catch (error) {
     console.warn('⚠️ Fehler beim Laden der Taggun API-Konfiguration, verwende Fallback-Werte:', error);

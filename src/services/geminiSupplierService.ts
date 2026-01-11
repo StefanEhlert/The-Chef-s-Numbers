@@ -4,8 +4,6 @@
  */
 
 import { Supplier } from '../types';
-import { storageLayer } from './storageLayer';
-import { AccountingSettings } from '../types/accounting';
 
 // Gemini API Konfiguration
 interface GeminiConfig {
@@ -43,27 +41,25 @@ export interface GeminiSupplierData {
 }
 
 /**
- * Lädt die Gemini API-Konfiguration aus den Einstellungen
+ * Lädt die Gemini API-Konfiguration aus localOptions/KI-Provider
  */
 async function loadGeminiConfig(): Promise<GeminiConfig | null> {
   try {
-    const settings = await storageLayer.load<AccountingSettings>('accountingSettings');
-    if (settings && settings.length > 0) {
-      const firstSettings = settings[0];
-      
-      // Prüfe ob Gemini-Config in ocrApiConfigs vorhanden ist
-      if (firstSettings.ocrApiConfigs && firstSettings.ocrApiConfigs.length > 0) {
-        const geminiConfig = firstSettings.ocrApiConfigs.find(
-          (config) => config.provider === 'gemini' && config.isActive
-        );
-        if (geminiConfig && geminiConfig.apiKey) {
-          return {
-            apiKey: geminiConfig.apiKey,
-            apiUrl: geminiConfig.apiEndpoint || 'https://generativelanguage.googleapis.com/v1beta',
-            model: geminiConfig.apiEndpoint?.includes('v1beta') ? 'gemini-2.0-flash' : 'gemini-pro' // gemini-2.0-flash für v1beta, gemini-pro für andere Versionen
-          };
-        }
-      }
+    // Migration: Versuche bestehende Configs aus accountingSettings zu migrieren
+    const { migrateKIProviderConfigsFromAccountingSettings } = await import('../utils/kiProviderConfig');
+    await migrateKIProviderConfigsFromAccountingSettings();
+    
+    // Lade aus localOptions/KI-Provider
+    const { loadKIProviderConfigs } = await import('../utils/kiProviderConfig');
+    const configs = loadKIProviderConfigs();
+    
+    const geminiConfig = configs.find((config) => config.provider === 'gemini' && config.isActive);
+    if (geminiConfig && geminiConfig.apiKey) {
+      return {
+        apiKey: geminiConfig.apiKey,
+        apiUrl: geminiConfig.apiEndpoint || 'https://generativelanguage.googleapis.com/v1beta',
+        model: geminiConfig.apiEndpoint?.includes('v1beta') ? 'gemini-2.0-flash' : 'gemini-pro' // gemini-2.0-flash für v1beta, gemini-pro für andere Versionen
+      };
     }
     
     return null;
